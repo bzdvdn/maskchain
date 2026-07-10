@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/detector"
-	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 )
 
 type memStorage struct {
@@ -48,21 +47,12 @@ func (s *memStorage) Delete(_ context.Context, maskID string) error {
 	return nil
 }
 
-type mockDetector struct {
-	results []detector.DetectorResult
-}
-
-func (d *mockDetector) Scan(_ context.Context, _ string) ([]detector.DetectorResult, error) {
-	return d.results, nil
-}
-
-// @sk-test 22-shield-mask-storage#T2.2: Empty text returns empty replacements
-func TestMaskText_EmptyText(t *testing.T) {
+// @sk-test 22-shield-mask-storage#T2.2: Empty results returns empty replacements
+func TestMaskFromResults_EmptyResults(t *testing.T) {
 	store := newMemStorage()
-	reg := detector.NewDetectorRegistry()
-	uc := NewMaskUseCase(reg, store)
+	uc := NewMaskUseCase(nil, store)
 
-	masked, entry, err := uc.MaskText(context.Background(), "", "test-id")
+	masked, entry, err := uc.MaskFromResults(context.Background(), "", "test-id", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,13 +64,12 @@ func TestMaskText_EmptyText(t *testing.T) {
 	}
 }
 
-// @sk-test 22-shield-mask-storage#T2.2: No detectors leaves text unchanged
-func TestMaskText_NoDetectors(t *testing.T) {
+// @sk-test 22-shield-mask-storage#T2.2: Empty results leaves text unchanged
+func TestMaskFromResults_NoResults(t *testing.T) {
 	store := newMemStorage()
-	reg := detector.NewDetectorRegistry()
-	uc := NewMaskUseCase(reg, store)
+	uc := NewMaskUseCase(nil, store)
 
-	masked, entry, err := uc.MaskText(context.Background(), "hello world", "test-id")
+	masked, entry, err := uc.MaskFromResults(context.Background(), "hello world", "test-id", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,33 +96,27 @@ func TestNewUUIDv7_Format(t *testing.T) {
 }
 
 // @sk-test 22-shield-mask-storage#T2.2: Duplicate mask_id returns conflict
-func TestMaskText_MaskIDConflict(t *testing.T) {
+func TestMaskFromResults_MaskIDConflict(t *testing.T) {
 	store := newMemStorage()
 	store.data["dup"] = &MaskEntry{MaskID: "dup", Replacements: map[string]string{}}
-	reg := detector.NewDetectorRegistry()
-	uc := NewMaskUseCase(reg, store)
+	uc := NewMaskUseCase(nil, store)
 
-	_, _, err := uc.MaskText(context.Background(), "hello", "dup")
+	_, _, err := uc.MaskFromResults(context.Background(), "hello", "dup", nil)
 	if !errors.Is(err, ErrMaskIDConflict) {
 		t.Errorf("expected ErrMaskIDConflict, got %v", err)
 	}
 }
 
 // @sk-test 22-shield-mask-storage#T2.2: Single detector replacement with placeholder
-func TestMaskText_SingleReplacement(t *testing.T) {
+func TestMaskFromResults_SingleReplacement(t *testing.T) {
 	store := newMemStorage()
-	reg := detector.NewDetectorRegistry()
-	err := reg.Register(entity.DetectorTypeRegex, &mockDetector{
-		results: []detector.DetectorResult{
+	uc := NewMaskUseCase(nil, store)
+
+	masked, entry, err := uc.MaskFromResults(context.Background(), "Hi test@example.com!", "abc",
+		[]detector.DetectorResult{
 			{DetectorType: "email", Fragment: "test@example.com", StartPos: 3, EndPos: 19, Confidence: 1.0},
 		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	uc := NewMaskUseCase(reg, store)
-
-	masked, entry, err := uc.MaskText(context.Background(), "Hi test@example.com!", "abc")
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,20 +153,15 @@ func TestUnmaskText_Single(t *testing.T) {
 // @sk-test 22-shield-mask-storage#T2.2: Mask then unmask returns original text
 func TestMaskUnmask_RoundTrip(t *testing.T) {
 	store := newMemStorage()
-	reg := detector.NewDetectorRegistry()
-	err := reg.Register(entity.DetectorTypeRegex, &mockDetector{
-		results: []detector.DetectorResult{
+	uc := NewMaskUseCase(nil, store)
+	original := "Contact: john@example.com, Phone: +1-555-1234"
+
+	masked, _, err := uc.MaskFromResults(context.Background(), original, "rt",
+		[]detector.DetectorResult{
 			{DetectorType: "email", Fragment: "john@example.com", StartPos: 9, EndPos: 25, Confidence: 1.0},
 			{DetectorType: "phone", Fragment: "+1-555-1234", StartPos: 34, EndPos: 45, Confidence: 1.0},
 		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	uc := NewMaskUseCase(reg, store)
-	original := "Contact: john@example.com, Phone: +1-555-1234"
-
-	masked, _, err := uc.MaskText(context.Background(), original, "rt")
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,21 +205,16 @@ func TestMaskText_MultipleMaskIDs(t *testing.T) {
 }
 
 // @sk-test 22-shield-mask-storage#T2.2: Overlapping results filtered, longer wins
-func TestMaskText_OverlapFilter(t *testing.T) {
+func TestMaskFromResults_OverlapFilter(t *testing.T) {
 	store := newMemStorage()
-	reg := detector.NewDetectorRegistry()
-	err := reg.Register(entity.DetectorTypeRegex, &mockDetector{
-		results: []detector.DetectorResult{
+	uc := NewMaskUseCase(nil, store)
+
+	masked, entry, err := uc.MaskFromResults(context.Background(), "john@example.com", "ov",
+		[]detector.DetectorResult{
 			{DetectorType: "email", Fragment: "john@example.com", StartPos: 0, EndPos: 16, Confidence: 1.0},
 			{DetectorType: "domain", Fragment: "example.com", StartPos: 5, EndPos: 16, Confidence: 1.0},
 		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	uc := NewMaskUseCase(reg, store)
-
-	masked, entry, err := uc.MaskText(context.Background(), "john@example.com", "ov")
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

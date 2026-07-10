@@ -2,21 +2,25 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/detector"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/mask"
 )
 
 // @sk-task 22-shield-mask-storage#T4.1: Implement MaskHandler (AC-002, AC-003, AC-006)
+// @sk-task 23-shield-reactions#T1.2: Migrate handler from MaskText to MaskFromResults
 type MaskHandler struct {
-	useCase *mask.MaskUseCase
+	useCase  *mask.MaskUseCase
+	registry *detector.DetectorRegistry
 }
 
-func NewMaskHandler(useCase *mask.MaskUseCase) *MaskHandler {
-	return &MaskHandler{useCase: useCase}
+func NewMaskHandler(useCase *mask.MaskUseCase, registry *detector.DetectorRegistry) *MaskHandler {
+	return &MaskHandler{useCase: useCase, registry: registry}
 }
 
 func (h *MaskHandler) HandleMask(c *gin.Context) {
@@ -33,7 +37,21 @@ func (h *MaskHandler) HandleMask(c *gin.Context) {
 		return
 	}
 
-	maskedText, _, err := h.useCase.MaskText(c.Request.Context(), string(body), maskID)
+	var allResults []detector.DetectorResult
+	for _, typ := range h.registry.Types() {
+		d := h.registry.Get(typ)
+		if d == nil {
+			continue
+		}
+		results, scanErr := d.Scan(c.Request.Context(), string(body))
+		if scanErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("detector %s: %s", typ, scanErr)})
+			return
+		}
+		allResults = append(allResults, results...)
+	}
+
+	maskedText, _, err := h.useCase.MaskFromResults(c.Request.Context(), string(body), maskID, allResults)
 	if err != nil {
 		if errors.Is(err, mask.ErrMaskIDConflict) {
 			c.JSON(http.StatusConflict, gin.H{"error": "mask_id already exists"})

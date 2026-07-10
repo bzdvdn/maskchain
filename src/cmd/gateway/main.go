@@ -52,7 +52,7 @@ func main() {
 	vkRepo := maskrepo.NewValkeyMaskRepo(vkClient, maskTTL)
 	maskStorage := maskrepo.NewCachedMaskRepo(pgRepo, vkRepo)
 	maskUseCase := domainMask.NewMaskUseCase(registry, maskStorage)
-	maskHandler := api.NewMaskHandler(maskUseCase)
+	maskHandler := api.NewMaskHandler(maskUseCase, registry)
 
 	srv := api.New(cfg.Server, logger)
 	srv.RegisterMaskHandler(maskHandler)

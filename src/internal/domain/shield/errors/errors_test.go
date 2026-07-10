@@ -6,6 +6,7 @@ import (
 )
 
 // @sk-test 20-shield-domain#T5.1: Test sentinel errors are distinct (AC-007)
+// @sk-test 23-shield-reactions#T4.1: ErrBlockedByPolicy is distinct (AC-001)
 func TestSentinelErrors(t *testing.T) {
 	errs := []error{
 		ErrProfileNotFound,
@@ -13,6 +14,7 @@ func TestSentinelErrors(t *testing.T) {
 		ErrInvalidSlug,
 		ErrDetectorFailed,
 		ErrDuplicateSlug,
+		ErrBlockedByPolicy,
 	}
 
 	for i, a := range errs {
@@ -25,6 +27,7 @@ func TestSentinelErrors(t *testing.T) {
 }
 
 // @sk-test 20-shield-domain#T5.1: Test sentinel errors are identifiable via errors.Is (AC-007)
+// @sk-test 23-shield-reactions#T4.1: ErrBlockedByPolicy is identifiable (AC-001)
 func TestSentinelErrors_Is(t *testing.T) {
 	if !errors.Is(ErrProfileNotFound, ErrProfileNotFound) {
 		t.Error("ErrProfileNotFound should identify itself")
@@ -40,5 +43,8 @@ func TestSentinelErrors_Is(t *testing.T) {
 	}
 	if !errors.Is(ErrDuplicateSlug, ErrDuplicateSlug) {
 		t.Error("ErrDuplicateSlug should identify itself")
+	}
+	if !errors.Is(ErrBlockedByPolicy, ErrBlockedByPolicy) {
+		t.Error("ErrBlockedByPolicy should identify itself")
 	}
 }

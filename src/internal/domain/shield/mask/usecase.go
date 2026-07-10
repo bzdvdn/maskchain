@@ -23,47 +23,35 @@ func NewMaskUseCase(registry *detector.DetectorRegistry, storage MaskStorage) *M
 	}
 }
 
-func (uc *MaskUseCase) MaskText(ctx context.Context, text string, maskID string) (maskedText string, entry *MaskEntry, err error) {
-	var allResults []detector.DetectorResult
-	for _, typ := range uc.registry.Types() {
-		d := uc.registry.Get(typ)
-		if d == nil {
-			continue
-		}
-		results, scanErr := d.Scan(ctx, text)
-		if scanErr != nil {
-			return "", nil, fmt.Errorf("detector %s: %w", typ, scanErr)
-		}
-		allResults = append(allResults, results...)
-	}
-
+// @sk-task 23-shield-reactions#T1.2: Implement MaskFromResults (DEC-002)
+func (uc *MaskUseCase) MaskFromResults(ctx context.Context, text string, maskID string, results []detector.DetectorResult) (maskedText string, entry *MaskEntry, err error) {
 	entry = &MaskEntry{
 		MaskID:       maskID,
 		Replacements: make(map[string]string),
 		CreatedAt:    time.Now(),
 	}
 
-	if len(allResults) == 0 {
+	if len(results) == 0 {
 		if saveErr := uc.storage.Save(ctx, entry); saveErr != nil {
 			return "", nil, fmt.Errorf("save mask entry: %w", saveErr)
 		}
 		return text, entry, nil
 	}
 
-	sort.Slice(allResults, func(i, j int) bool {
-		lenI := allResults[i].EndPos - allResults[i].StartPos
-		lenJ := allResults[j].EndPos - allResults[j].StartPos
+	sort.Slice(results, func(i, j int) bool {
+		lenI := results[i].EndPos - results[i].StartPos
+		lenJ := results[j].EndPos - results[j].StartPos
 		if lenI != lenJ {
 			return lenI > lenJ
 		}
-		if allResults[i].StartPos != allResults[j].StartPos {
-			return allResults[i].StartPos < allResults[j].StartPos
+		if results[i].StartPos != results[j].StartPos {
+			return results[i].StartPos < results[j].StartPos
 		}
-		return allResults[i].EndPos > allResults[j].EndPos
+		return results[i].EndPos > results[j].EndPos
 	})
 
 	var kept []detector.DetectorResult
-	for _, r := range allResults {
+	for _, r := range results {
 		overlap := false
 		for _, k := range kept {
 			if r.StartPos < k.EndPos && r.EndPos > k.StartPos {

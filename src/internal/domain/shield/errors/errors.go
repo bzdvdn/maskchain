@@ -9,4 +9,7 @@ var (
 	ErrInvalidSlug     = errors.New("invalid profile slug")
 	ErrDetectorFailed  = errors.New("detector execution failed")
 	ErrDuplicateSlug   = errors.New("duplicate profile slug")
+
+	// @sk-task 23-shield-reactions#T1.1: Add ErrBlockedByPolicy sentinel (RQ-006)
+	ErrBlockedByPolicy = errors.New("request blocked by content shield policy")
 )
