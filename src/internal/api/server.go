@@ -8,8 +8,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"github.com/bzdvdn/maskchain/src/internal/infra/config"
+	"github.com/bzdvdn/maskchain/src/internal/api/handler/profile"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
+	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 )
 
 // @sk-task 10-gateway-skeleton#T2.1: Implement Server struct with New/Start/Shutdown (AC-001, AC-002, AC-003, AC-005)
@@ -28,6 +29,7 @@ func New(cfg *config.ServerConfig, log *zap.Logger) *Server {
 	engine.Use(middleware.Logger(log))
 	engine.Use(middleware.Recovery(log))
 	engine.Use(middleware.CORS(cfg.CORSOrigins))
+	engine.Use(middleware.ErrorHandler())
 
 	engine.GET("/health", healthHandler("ok"))
 	engine.GET("/ready", healthHandler("ok"))
@@ -50,6 +52,17 @@ func healthHandler(status string) gin.HandlerFunc {
 func (s *Server) RegisterMaskHandler(h *MaskHandler) {
 	s.engine.POST("/api/v1/shield/mask", h.HandleMask)
 	s.engine.POST("/api/v1/shield/unmask", h.HandleUnmask)
+}
+
+// @sk-task 40-profiles-api#T4.1: Register profile routes (AC-001..AC-011)
+func (s *Server) RegisterProfileHandler(h *profile.ProfileHandler) {
+	group := s.engine.Group("/api/v1/profiles")
+	group.POST("", h.CreateProfile)
+	group.GET("", h.ListProfiles)
+	group.GET("/:slug", h.GetProfile)
+	group.PUT("/:slug", h.UpdateProfile)
+	group.DELETE("/:slug", h.DeleteProfile)
+	group.PATCH("/:slug/dictionary", h.PatchDictionary)
 }
 
 func (s *Server) Start() error {
