@@ -15,16 +15,31 @@ type LogConfig struct {
 	Level string `mapstructure:"level" yaml:"level" validate:"required"`
 }
 
+type ServerConfig struct {
+	Port            int      `mapstructure:"port" yaml:"port"`
+	ShutdownTimeout int      `mapstructure:"shutdown_timeout" yaml:"shutdown_timeout"`
+	CORSOrigins     []string `mapstructure:"cors_origins" yaml:"cors_origins"`
+}
+
+// @sk-task 10-gateway-skeleton#T1.2: Add ServerConfig to Config struct (AC-001, AC-005, AC-008)
 type Config struct {
-	Log *LogConfig `mapstructure:"log" yaml:"log"`
+	Log    *LogConfig    `mapstructure:"log" yaml:"log"`
+	Server *ServerConfig `mapstructure:"server" yaml:"server"`
 }
 
 const defaultLogLevel = "info"
+const defaultPort = 8080
+const defaultShutdownTimeout = 10
 
+// @sk-task 10-gateway-skeleton#T1.2: Set ServerConfig defaults in DefaultConfig (AC-001, AC-005)
 func DefaultConfig() *Config {
 	return &Config{
 		Log: &LogConfig{
 			Level: defaultLogLevel,
+		},
+		Server: &ServerConfig{
+			Port:            defaultPort,
+			ShutdownTimeout: defaultShutdownTimeout,
 		},
 	}
 }
