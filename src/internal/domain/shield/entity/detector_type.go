@@ -4,7 +4,9 @@ package entity
 type DetectorType string
 
 const (
-	DetectorTypeRegex    DetectorType = "regex"
-	DetectorTypeKeyword  DetectorType = "keyword"
-	DetectorTypePresidio DetectorType = "presidio"
+	DetectorTypeRegex       DetectorType = "regex"
+	DetectorTypeKeyword     DetectorType = "keyword"
+	DetectorTypePresidio    DetectorType = "presidio"
+	// @sk-task 24-shield-dictionaries#T2.2: Add Dictionary DetectorType (AC-007)
+	DetectorTypeDictionary  DetectorType = "dictionary"
 )

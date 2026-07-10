@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/api"
+	dictionaryrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/dictionary"
 	maskrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/mask"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/detector"
 	domainMask "github.com/bzdvdn/maskchain/src/internal/domain/shield/mask"
@@ -45,7 +46,8 @@ func main() {
 		logger.Fatal("failed to init valkey", zap.Error(err))
 	}
 
-	registry := initDetectors(logger)
+	dictRepo := dictionaryrepo.NewPostgresDictionaryRepo(pgPool)
+	registry := initDetectors(logger, dictRepo)
 
 	maskTTL := time.Duration(cfg.Mask.CacheTTLSec) * time.Second
 	pgRepo := maskrepo.NewPostgresMaskRepo(pgPool)
@@ -112,7 +114,7 @@ func initValkey(vkCfg *config.ValkeyConfig, log *zap.Logger) (valkey.Client, err
 }
 
 // @sk-task 22-shield-mask-storage#T5.2: Init detectors with CompositeDetector (AC-011)
-func initDetectors(log *zap.Logger) *detector.DetectorRegistry {
+func initDetectors(log *zap.Logger, dictRepo *dictionaryrepo.PostgresDictionaryRepo) *detector.DetectorRegistry {
 	registry := detector.NewDetectorRegistry()
 
 	pii, err := detector.NewPIIDetector()
@@ -131,6 +133,14 @@ func initDetectors(log *zap.Logger) *detector.DetectorRegistry {
 	combined := detector.NewCompositeDetector(pii, secrets, financial)
 	if err := registry.Register(entity.DetectorTypeRegex, combined); err != nil {
 		log.Fatal("register composite regex detector", zap.Error(err))
+	}
+
+	// @sk-task 24-shield-dictionaries#T5.1: Register dictionary detector type (AC-007)
+	// DictionaryDetector is created per-profile at request time with the profile's dictionary.
+	// A nil-safe placeholder allows the type to be registered for future use.
+	placeholder := detector.NewDictionaryDetector(nil)
+	if err := registry.Register(entity.DetectorTypeDictionary, placeholder); err != nil {
+		log.Fatal("register dictionary detector", zap.Error(err))
 	}
 
 	return registry

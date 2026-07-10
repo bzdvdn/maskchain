@@ -3,6 +3,7 @@ package entity
 import (
 	"time"
 
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/dictionary"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
 
@@ -14,6 +15,7 @@ type Profile struct {
 	name        string
 	description *string
 	detectors   []Detector
+	dictionaries []*dictionary.Dictionary
 	enabled     bool
 	createdAt   time.Time
 	updatedAt   time.Time
@@ -31,6 +33,11 @@ func WithDetectors(detectors []Detector) ProfileOption {
 
 func WithEnabled(enabled bool) ProfileOption {
 	return func(p *Profile) { p.enabled = enabled }
+}
+
+// @sk-task 24-shield-dictionaries#T2.2: Add WithDictionaries option (AC-006)
+func WithDictionaries(dicts []*dictionary.Dictionary) ProfileOption {
+	return func(p *Profile) { p.dictionaries = dicts }
 }
 
 func NewProfile(id value.ProfileID, slug value.ProfileSlug, tenantID value.TenantID, name string, opts ...ProfileOption) *Profile {
@@ -57,5 +64,6 @@ func (p *Profile) Name() string                   { return p.name }
 func (p *Profile) Description() *string           { return p.description }
 func (p *Profile) Detectors() []Detector          { return p.detectors }
 func (p *Profile) Enabled() bool                  { return p.enabled }
-func (p *Profile) CreatedAt() time.Time           { return p.createdAt }
-func (p *Profile) UpdatedAt() time.Time           { return p.updatedAt }
+func (p *Profile) Dictionaries() []*dictionary.Dictionary { return p.dictionaries }
+func (p *Profile) CreatedAt() time.Time                  { return p.createdAt }
+func (p *Profile) UpdatedAt() time.Time                  { return p.updatedAt }
