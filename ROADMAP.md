@@ -87,7 +87,26 @@
 
 ---
 
-### 22-shield-reactions
+### 22-shield-mask-storage
+
+**Цель:** Хранение цепочек маскинга для обратимого template-based replacement. `/mask` сохраняет найденные детекторами фрагменты в PG + Valkey, `/unmask` достаёт и восстанавливает оригинальный текст.
+
+**Ключевые артефакты:**
+- `mask_entries` таблица в PG: `mask_id UUID PK, profile_id, fragments JSONB [{fragment, position, detector_type}], original_text TEXT, request_id, created_at`
+- Valkey-кэш: `mask:<mask_id> → JSON цепочки`, TTL конфигурируемый
+- Write-through: при `/mask` пишем в PG → вскидываем в Valkey
+- Read-through: при `/unmask` читаем Valkey first, PG fallback → обновляем кэш
+- `/mask` endpoint: `POST /api/v1/shield/mask?mask_id=<uuid>` body: prompt → сканирование детекторами → template-замена → сохранение цепочки → ответ с `X-Mask-ID`
+- `/unmask` endpoint: `POST /api/v1/shield/unmask?mask_ids=id1,id2` body: masked_text → резолв цепочек → замена template-ссылок → восстановленный текст
+- mask_id — UUIDv7, text, уникален глобально. User может передать свой mask_id (если занят — 409). Привязка к профилю опционально (тогда уникальность `(profile_id, mask_id)`).
+- Пакет `src/internal/domain/shield/mask/` — MaskEntry entity, MaskStorage interface, MaskUseCase
+- Пакет `src/internal/adapters/repository/mask/` — PostgresMaskRepo + ValkeyMaskRepo
+
+**Зависимости:** 21, 01
+
+---
+
+### 23-shield-reactions
 
 **Цель:** Механизм реакций при обнаружении sensitive data: block, redact, mask, alert.
 
@@ -104,7 +123,7 @@
 
 ---
 
-### 23-shield-dictionaries
+### 24-shield-dictionaries
 
 **Цель:** Словари — именованные списки значений (ключ + список строк), привязанные к профилю через БД. Словарь существует ТОЛЬКО в контексте профиля. Покрывает кейсы: запрещённые имена, внутренние коды, конкурентные продукты, IP-адреса, домены.
 
@@ -122,11 +141,11 @@
 - Хранится в БД: таблица `dictionary_entries` (profile_slug → entries[])
 - Профиль загружается целиком со словарями через ProfileRepository
 
-**Зависимости:** 20, 22
+**Зависимости:** 20, 23
 
 ---
 
-### 24-shield-preprocessors
+### 25-shield-preprocessors
 
 **Цель:** Препроцессоры CSV/JSON для структурированных данных внутри AI-запросов. Позволяют маскировать колонки CSV и JSON-поля по имени/пути до того, как данные попадут в детекторы. Препроцессор — inline-часть профиля, хранится в БД. Адаптация из RELAY.
 
@@ -172,7 +191,7 @@
 - Connection pool config, транзакционный репозиторий
 - Unit-тесты (mock) + integration-тесты (testcontainers)
 
-**Зависимости:** 20, 23, 24, 01
+**Зависимости:** 20, 24, 25, 01
 
 ---
 
@@ -233,7 +252,7 @@
 - Placeholder-based masking: `{{csv.ns.N}}`, `{{json.ns.N}}`, `{{p.ns.N}}`, `{{dict.ns.N}}`
 - Интеграционные тесты: полный pipeline (препроцессор → словарь → детектор → реакция → результат)
 
-**Зависимости:** 20, 21, 22, 23, 24, 30
+**Зависимости:** 20, 21, 22, 23, 24, 25, 30
 
 ---
 
@@ -398,8 +417,8 @@
 ## Порядок разработки
 
 ```
-00 → 01 → 10 → 20 → 21 → 22 → 23 → 24
-                                    ↓
+00 → 01 → 10 → 20 → 21 → 22 → 23 → 24 → 25
+                                             ↓
 30 → 40 → 41 → 50 → 51 → 60 → 61
                                     ↓
 70 → 71 → 80 → 81 → 82 → 90
