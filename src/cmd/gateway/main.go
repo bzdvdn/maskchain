@@ -19,6 +19,7 @@ import (
 	domainMask "github.com/bzdvdn/maskchain/src/internal/domain/shield/mask"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
+	"github.com/bzdvdn/maskchain/ui"
 )
 
 // @sk-task 30-shield-persistence#T2.4: Wire pool, migrations, and new repos in main
@@ -64,6 +65,7 @@ func main() {
 
 	srv := api.New(cfg.Server, logger)
 	srv.RegisterMaskHandler(maskHandler)
+	srv.RegisterStaticFiles(ui.DistFiles)
 
 	go func() {
 		if err := srv.Start(); err != nil {

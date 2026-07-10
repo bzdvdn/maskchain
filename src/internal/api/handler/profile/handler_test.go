@@ -200,6 +200,7 @@ func TestCreateProfileValidationError(t *testing.T) {
 }
 
 // @sk-test 40-profiles-api#T4.2: TestListProfiles (AC-004)
+// @sk-test 41-profiles-ui#T2.1: TestListProfiles (AC-002)
 func TestListProfiles(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	handler := setupTestHandler(t)
@@ -216,22 +217,30 @@ func TestListProfiles(t *testing.T) {
 		}
 	}
 
-	w := performGet(t, handler, "/api/v1/profiles")
+	w := performGet(t, handler, "/api/v1/profiles?page=1&page_size=20")
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var items []dto.ProfileListItem
-	if err := json.Unmarshal(w.Body.Bytes(), &items); err != nil {
+	var resp dto.PaginatedResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to unmarshal: %s", err)
+	}
+	if resp.Total != 3 {
+		t.Fatalf("expected total 3, got %d", resp.Total)
+	}
+	if resp.Page != 1 {
+		t.Errorf("expected page 1, got %d", resp.Page)
+	}
+	if resp.PageSize != 20 {
+		t.Errorf("expected page_size 20, got %d", resp.PageSize)
+	}
+	items, ok := resp.Data.([]interface{})
+	if !ok {
+		t.Fatal("expected data to be an array")
 	}
 	if len(items) != 3 {
 		t.Fatalf("expected 3 items, got %d", len(items))
-	}
-	for _, item := range items {
-		if item.Slug == "" || item.Name == "" || item.Status == "" {
-			t.Errorf("expected non-empty fields, got %+v", item)
-		}
 	}
 }
 

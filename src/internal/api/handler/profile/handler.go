@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -101,8 +102,18 @@ func (h *ProfileHandler) CreateProfile(c *gin.Context) {
 }
 
 // @sk-task 40-profiles-api#T2.2: Implement ListProfiles and GetProfile handlers (AC-004, AC-005, AC-006)
+// @sk-task 41-profiles-ui#T2.1: Add pagination to ListProfiles (AC-002)
 func (h *ProfileHandler) ListProfiles(c *gin.Context) {
 	tenantID := tenantIDFromContext(c)
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
 
 	profiles, err := h.repo.ListByTenant(c.Request.Context(), tenantID)
 	if err != nil {
@@ -110,12 +121,27 @@ func (h *ProfileHandler) ListProfiles(c *gin.Context) {
 		return
 	}
 
+	total := len(profiles)
+	start := (page - 1) * pageSize
+	if start > total {
+		start = total
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+
 	items := make([]dto.ProfileListItem, 0, len(profiles))
 	for _, p := range profiles {
 		items = append(items, toProfileListItem(p))
 	}
 
-	c.JSON(http.StatusOK, items)
+	c.JSON(http.StatusOK, dto.PaginatedResponse{
+		Data:     items[start:end],
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	})
 }
 
 // @sk-task 40-profiles-api#T2.2: Implement ListProfiles and GetProfile handlers (AC-004, AC-005, AC-006)

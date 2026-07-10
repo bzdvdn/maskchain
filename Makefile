@@ -3,9 +3,9 @@ GOFLAGS := -ldflags="-s -w"
 GOCMD := go
 GOPATH := $(shell $(GOCMD) env GOPATH)
 
-.PHONY: build test lint clean docker-build check-structure
+.PHONY: build test lint clean ui-build ui-dev docker-build check-structure
 
-build:
+build: ui-build
 	@mkdir -p bin
 	@$(GOCMD) build $(GOFLAGS) -o $(BINARY) ./src/cmd/gateway/
 	@echo "built $(BINARY)"
@@ -21,8 +21,18 @@ lint:
 	fi
 
 clean:
-	@rm -rf bin/
+	@rm -rf bin/ ui/dist/
 	@echo "cleaned"
+
+# @sk-task 41-profiles-ui#T1.3: Add UI build and dev targets (AC-008, AC-009)
+ui-build:
+	@echo "building UI..."
+	@cd ui && npm run build
+	@echo "UI built"
+
+ui-dev:
+	@echo "starting Vite dev server (API proxy -> localhost:8080)..."
+	@cd ui && npm run dev
 
 docker-build:
 	@if command -v docker >/dev/null 2>&1; then \

@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -63,6 +65,26 @@ func (s *Server) RegisterProfileHandler(h *profile.ProfileHandler) {
 	group.PUT("/:slug", h.UpdateProfile)
 	group.DELETE("/:slug", h.DeleteProfile)
 	group.PATCH("/:slug/dictionary", h.PatchDictionary)
+}
+
+// @sk-task 41-profiles-ui#T1.2: Register SPA static files handler (AC-001)
+func (s *Server) RegisterStaticFiles(fsys fs.FS) {
+	sub, err := fs.Sub(fsys, "dist")
+	if err != nil {
+		s.log.Fatal("failed to create static sub-filesystem", zap.Error(err))
+	}
+	root := http.FS(sub)
+	fileServer := http.FileServer(root)
+	s.engine.NoRoute(func(c *gin.Context) {
+		path := strings.TrimPrefix(c.Request.URL.Path, "/")
+		f, err := root.Open(path)
+		if err != nil {
+			c.Request.URL.Path = "/"
+		} else {
+			f.Close()
+		}
+		fileServer.ServeHTTP(c.Writer, c.Request)
+	})
 }
 
 func (s *Server) Start() error {

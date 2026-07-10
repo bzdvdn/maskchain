@@ -12,7 +12,11 @@
 - `src/internal/infra/` — infrastructure: config, logging, metrics, egress dialers
 - `src/internal/api/` — HTTP/gRPC handlers, middleware, request/response types
 - `src/pkg/` — shared utilities (future)
-- `ui/` — React frontend (planned, placeholder)
+- `ui/` — Vite + React + TypeScript frontend (profiles management)
+  - `ui/embed.go` — Go embed для встраивания статики в gateway
+  - `ui/src/pages/Profiles/` — ProfileList, ProfileDetail, ProfileForm
+  - `ui/src/components/` — DictionaryEditor, PreprocessorEditor, ErrorBoundary
+  - `ui/src/api/profiles.ts` — API client для `/api/v1/profiles/*`
 - `specs/active/` — active spec artifacts (speckeep-managed)
 - `deployments/` — Docker, migrations, docker-compose configs
 
@@ -27,9 +31,13 @@
   - `src/internal/adapters/repository/mask/` — Postgres, Valkey, Cached mask repos
 - `src/internal/api/` — HTTP handlers, middleware, request/response types
   - `src/internal/api/mask_handler.go` — POST /api/v1/shield/mask and /unmask handlers
+  - `src/internal/api/handler/profile/` — Profile CRUD handlers (list, get, create, update, delete, patch dictionary)
+  - `src/internal/api/dto/` — request/response DTOs (ProfileResponse, PaginatedResponse, DictionaryDTO)
 - `src/internal/infra/config/` — cobra/viper config loading, validation, defaults
 - `specs/active/22-shield-mask-storage/` — mask storage phase: spec, plan, tasks
+- `specs/active/41-profiles-ui/` — profiles UI phase: spec, plan, tasks, inspect
 - `deployments/docker-compose/` — local dev environment (PostgreSQL, Valkey)
+- `Dockerfile` — multi-stage Docker build (node → golang → distroless)
 - `src/internal/infra/migrations/` — SQL migrations (001_mask_entries.sql)
 - `Dockerfile` — multistage Docker build (golang:1.26-alpine → distroless)
 - `Makefile` — build, test, lint, docker-build, clean, check-structure targets
