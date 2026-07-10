@@ -1,0 +1,228 @@
+# Конституция проекта MaskChain
+
+## Назначение
+
+Построение production-grade платформы для маршрутизации, обеспечения безопасности (Content Shield) и управления AI-трафиком с возможностью сохранения и управления профилями справочников для политик безопасности.
+
+Миссия — предоставить организациям единый gateway для AI-трафика с встроенным Content Shield (AI DLP): обнаружение и реагирование на PII, secrets, финансовые данные в промптах и ответах. Профили справочников позволяют гибко настраивать политики обнаружения per-tenant, per-model, per-provider.
+
+## Ключевые принципы
+
+### I. Content Shield — Core Domain
+
+Content Shield (AI DLP) — основной домен системы, а не дополнительная функция. Gateway обязан перехватывать AI-запросы и ответы и анализировать их на наличие:
+- PII (персональные данные: email, телефон, SSN, паспортные данные)
+- Secrets (API keys, private keys, JWT, tokens)
+- Финансовых данных (номера карт с Luhn, IBAN, SWIFT)
+- Protected health information (PHI)
+
+Действия при обнаружении: block, redact, mask, alert. Политики настраиваются через профили справочников.
+
+### II. Profile-Driven Policy Management
+
+Политики Content Shield управляются через профили справочников — переиспользуемые конфигурации детекторов, реакций и исключений. Профили хранятся в PostgreSQL, управляются через REST API и React UI. Поддерживается версионирование, импорт/экспорт, tenant-specific overrides.
+
+### III. Infrastructure, Not Chatbot
+
+Проект — инфраструктурный gateway, а не chatbot, prompt playground, AI IDE или low-code workflow. Фокус: networking, security, traffic management, policy enforcement, observability.
+
+### IV. AI Traffic Is Network Traffic
+
+AI-запросы обрабатываются как HTTP/gRPC трафик с пониманием AI-семантики: token economics, prompt semantics, provider health, inference latency, model capabilities, compliance.
+
+### V. Runtime Before Platform
+
+Runtime гейтвея должен существовать до Kubernetes-абстракций. Порядок разработки: Runtime → Routing → Shield → Policies → Egress → API → UI → Operator. Envoy-режим — PostMVP.
+
+### VI. Native-Only Data Plane (MVP)
+
+Текущий data plane — встроенный Go runtime (native). Один бинарник: Gin HTTP server + `http.Client` + egress dialers. Никаких external зависимостей для обработки запросов. Envoy-режим — PostMVP (не планируется до стабилизации native-режима).
+
+### VII. Local Development Matters
+
+Каждая major feature запускаема локально через Docker Compose. React UI — через dev-режим (Vite/HMR) или compose-сервис. Native-режим runtime — основной deployment для локальной разработки.
+
+### VIII. Streaming — обязательное требование
+
+SSE, chunk forwarding, streaming retries, cancellation propagation, low-latency token delivery. Streaming должен быть стабильным через retries, failover, observability.
+
+### IX. Наблюдаемость обязательна
+
+Каждый запрос должен быть наблюдаем: distributed traces, metrics, structured logs, token accounting, shield visibility, provider health. Никаких чёрных ящиков.
+
+### X. Extensibility Over Hardcoding
+
+Предпочтение: plugins, interfaces, adapters, declarative policies, расширяемые детекторы для Content Shield. Избегать: provider-specific hacks, giant monolith logic, tightly coupled integrations.
+
+## Непересматриваемые правила
+
+- Реализация `MUST` идти по активным spec/plan/tasks и оставаться в заявленном scope.
+- Работа `MUST NOT` продолжаться из неоднозначных требований или placeholder-контента.
+- Изменения публичного поведения `MUST` отражаться в spec/tasks до merge.
+- Если реализация конфликтует с конституцией, сначала обновляется конституция.
+
+## Ограничения
+
+- Content Shield — обязательная возможность gateway, а не opt-in.
+- Профили справочников хранятся в PostgreSQL; Valkey — только для кэширования.
+- React UI — только для управления профилями и просмотра логов/инцидентов; не является панелью управления AI-трафиком в реальном времени.
+- Envoy-режим — PostMVP; native-режим единственный до стабилизации core-доменов.
+- No chatbot UI, no prompt playground, no agent framework, no low-code platform.
+- Система должна работать в enterprise-сетях с outbound proxy и air-gapped окружениями.
+- Gateway и возможный будущий Operator — раздельные компоненты.
+- Каждая major feature должна быть запускаема локально (Docker Compose).
+
+## Технологический стек
+
+- **Язык:** Go (backend)
+- **Web framework:** Gin
+- **Config:** viper + cobra
+- **Архитектура:** DDD, Clean Architecture (ports/adapters)
+- **UI:** React (TypeScript, Vite)
+- **Data Plane:** Native (Go, in-process). Envoy — PostMVP.
+- **Content Shield / AI DLP:** Microsoft Presidio (PII detection), custom patterns engine (secrets, API keys, financial data)
+- **Observability:** OpenTelemetry, Prometheus, Grafana, Loki, Tempo
+- **Persistence:** PostgreSQL (profiles, audit, incidents)
+- **Cache:** Valkey (Redis-compatible)
+- **Локальная разработка:** Docker Compose, mock-провайдеры
+
+## Основная архитектура
+
+```
+Client → Gateway Runtime → Shield Engine → Routing → Egress → AI Providers
+                            ↕
+                   Profile Repository (PG)
+                            ↕
+                      React UI (profiles, logs)
+```
+
+### Gateway Runtime
+HTTP API, streaming, retries, failover, routing execution, observability. In-process Go: Gin HTTP server, `http.Client` с egress dialer wrappers, in-process SSE streaming. Single binary, zero external dependencies.
+
+### Shield Engine
+Content inspection pipeline: PII redaction, secrets detection, AI DLP. Проверяет входящие промпты и исходящие ответы. Управляется профилями справочников из Profile Repository.
+
+### Profile Repository
+Хранилище профилей справочников для Content Shield:
+- Profiles: именованные наборы правил детекции
+- Detectors: PII, secrets, financial, PHI, custom regex
+- Reactions: block, redact, mask, alert
+- Tenants: isolation профилей по tenant
+- Versioning: история изменений профилей
+
+### Routing Engine
+Model selection, provider selection, fallback decisions, semantic routing.
+
+### Egress Engine
+Outbound proxy routing, retry orchestration, timeout management.
+
+### Observability Layer
+OpenTelemetry, Prometheus, structured logging, distributed tracing.
+
+### React UI
+Управление профилями справочников, просмотр инцидентов Shield, логи аудита.
+
+## Языковая политика
+
+- Язык документации: русский
+- Язык общения с агентом: русский
+- Язык комментариев в коде: английский
+
+## Процесс разработки
+
+- Каждая фича ДОЛЖНА разрабатываться в отдельной git-ветке.
+- Именование веток SHOULD следовать `feature/<slug>`.
+- Реализация SHOULD начинаться с явной спецификации до начала кодинга.
+- Планы и задачи SHOULD выводиться из актуальной спецификации и оставаться с ней согласованными.
+- Реализация, спецификации, планы и задачи ДОЛЖНЫ соответствовать этой конституции.
+- Если работа выявляет конфликт с этой конституцией, конституция ДОЛЖНА быть изменена до продолжения несовместимой реализации.
+
+## Definition of Done
+
+- Задача считается завершенной только при observable proof: измененные файлы, вывод целевых тестов или результат команды.
+- Для нетривиальных правок обязательны traceability-маркеры:
+  - код: `@sk-task <slug>#<TASK_ID>: <short> (<AC_ID>)`
+  - тесты: `@sk-test <slug>#<TASK_ID>: <TestName> (<AC_ID>)`
+  - если одну задачу подтверждают несколько тестов/кейсов, `@sk-test <slug>#<TASK_ID>` должен стоять на каждом таком тесте/кейсе, а не только на одном representative тесте.
+- Правило размещения маркеров:
+  - размещайте trace-маркеры на объявлениях функций/методов/структур/классов (или на заголовках поведенческих блоков), а не на строках полей.
+  - запрещено ставить trace-маркеры на уровень `package`, `import` или file-header comment; маркер должен принадлежать конкретному owning symbol.
+  - если язык поддерживает именованные объявления, ставьте маркер непосредственно над тем объявлением, которое реализует или проверяет поведение.
+- Примеры размещения и стиля по языкам:
+  - Go: `//` непосредственно над `func`, method receiver, `type`, `func Test...`; если несколько `Test...` проверяют одну задачу, `@sk-test` нужен на каждом таком тесте.
+  - Python: `#` первой строкой внутри тела `def` / `async def` / `class` / `def test_*`; не в module docstring и не над `import`. Если одну задачу покрывают несколько test functions, маркер нужен внутри каждой из них.
+  - JavaScript / TypeScript: `//` над `function`, `async function`, class method, `class`; для `test(...)`/`it(...)` — первой строкой внутри callback/body. Если кейсов несколько, маркер нужен в каждом `test/it`.
+  - Shell / Bash: `#` над `function name()` или первой строкой именованного behavior/test block; не в file header только ради trace.
+  - SQL / migrations: `--` или `/* */` непосредственно над `CREATE FUNCTION|PROCEDURE|TRIGGER|VIEW` или первой строкой явно именованного migration block; не в верхнем комментарии файла без привязки к изменению.
+- Существующие trace-маркеры сохраняются; покрытие новой задачи добавляется доп. маркерами (без перезаписи).
+- Если один метод/тест покрывает несколько задач, на нем одновременно остаются несколько маркеров.
+- Перед archive в verify должна быть подтверждена покрываемость acceptance criteria.
+
+## Политика Repository Map
+
+- `REPOSITORY_MAP.md` — компактный индекс навигации по коду, а не процессный документ.
+- Карта обновляется только при существенном изменении структуры/навигации кода.
+- Обновление карты выполняется in-place с минимальным diff; неизменные секции не переписываются.
+- Операционные/spec-артефакты исключаются из индексации согласно политике проекта.
+
+## DDD и Clean Architecture
+
+### Domain Boundaries
+
+Core domains: shield (content security, PII detection, secrets detection), profiles (справочники политик), routing, providers, egress, streaming, observability, tenants. Архитектура организуется вокруг доменов, а не вокруг провайдеров.
+
+### Clean Architecture
+
+Следовать ports/adapters, dependency inversion, явным границам, изолированной domain logic. Domain logic не должен зависеть от HTTP-фреймворков, БД, Redis, React. Всё это — за портами.
+
+## Структура репозитория
+
+```
+/src
+    cmd/
+        gateway/      — entrypoint runtime гейтвея
+    internal/
+        domain/       — domain logic (бизнес-сущности, value objects, domain services)
+        app/          — application layer (use cases, application services)
+        ports/        — port interfaces (inbound/outbound)
+        adapters/     — adapter implementations (providers, persistence, shield detectors)
+        infra/        — infrastructure (config, logging, metrics, tracing)
+        api/          — API handlers и middleware
+    pkg/              — переиспользуемые публичные библиотеки
+
+/ui                   — React frontend (Vite + TypeScript)
+
+/specs
+    active/           — активные спецификации
+    archived/         — архивированные спецификации
+
+/deployments
+    docker-compose/   — локальные окружения
+    kubernetes/       — манифесты (PostMVP)
+
+/docs
+    en/               — документация на английском
+    ru/               — документация на русском
+    architecture/     — архитектурные документы
+    adr/              — Architecture Decision Records
+
+/examples             — примеры использования
+/bin                  — артефакты сборки
+```
+
+## Управление
+
+- Эта конституция является авторитетным источником для проектных решений.
+- Изменения архитектуры, спецификаций, планов и задач ДОЛЖНЫ соответствовать этим принципам.
+- Если реализация конфликтует с конституцией, приоритет у конституции, пока она явно не изменена.
+- Изменяйте этот файл patch-обновлениями, сохраняя обязательные секции и делая правила конкретными и проверяемыми.
+
+## Метаданные конституции
+
+- Version: 1.0.0
+- Ratified: 2026-07-10
+- Last Amended: 2026-07-10
+
+## Последнее обновление
+
+2026-07-10 — начальная версия конституции MaskChain. Фокус: Content Shield (AI DLP), профили справочников, native-only data plane, React UI.
