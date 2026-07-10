@@ -4,21 +4,23 @@ import (
 	"time"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/dictionary"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/preprocessor"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
 
 // @sk-task 20-shield-domain#T2.1: Implement Profile entity (AC-001, AC-002)
 type Profile struct {
-	id          value.ProfileID
-	slug        value.ProfileSlug
-	tenantID    value.TenantID
-	name        string
-	description *string
-	detectors   []Detector
-	dictionaries []*dictionary.Dictionary
-	enabled     bool
-	createdAt   time.Time
-	updatedAt   time.Time
+	id            value.ProfileID
+	slug          value.ProfileSlug
+	tenantID      value.TenantID
+	name          string
+	description   *string
+	detectors     []Detector
+	dictionaries  []*dictionary.Dictionary
+	preprocessors []preprocessor.PreprocessorDef
+	enabled       bool
+	createdAt     time.Time
+	updatedAt     time.Time
 }
 
 type ProfileOption func(*Profile)
@@ -40,6 +42,11 @@ func WithDictionaries(dicts []*dictionary.Dictionary) ProfileOption {
 	return func(p *Profile) { p.dictionaries = dicts }
 }
 
+// @sk-task 25-shield-preprocessors#T1.2: Add WithPreprocessors option (AC-008)
+func WithPreprocessors(preprocessors []preprocessor.PreprocessorDef) ProfileOption {
+	return func(p *Profile) { p.preprocessors = preprocessors }
+}
+
 func NewProfile(id value.ProfileID, slug value.ProfileSlug, tenantID value.TenantID, name string, opts ...ProfileOption) *Profile {
 	p := &Profile{
 		id:        id,
@@ -57,13 +64,14 @@ func NewProfile(id value.ProfileID, slug value.ProfileSlug, tenantID value.Tenan
 	return p
 }
 
-func (p *Profile) ID() value.ProfileID           { return p.id }
-func (p *Profile) Slug() value.ProfileSlug        { return p.slug }
-func (p *Profile) TenantID() value.TenantID       { return p.tenantID }
-func (p *Profile) Name() string                   { return p.name }
-func (p *Profile) Description() *string           { return p.description }
-func (p *Profile) Detectors() []Detector          { return p.detectors }
-func (p *Profile) Enabled() bool                  { return p.enabled }
-func (p *Profile) Dictionaries() []*dictionary.Dictionary { return p.dictionaries }
-func (p *Profile) CreatedAt() time.Time                  { return p.createdAt }
-func (p *Profile) UpdatedAt() time.Time                  { return p.updatedAt }
+func (p *Profile) ID() value.ProfileID                           { return p.id }
+func (p *Profile) Slug() value.ProfileSlug                       { return p.slug }
+func (p *Profile) TenantID() value.TenantID                      { return p.tenantID }
+func (p *Profile) Name() string                                  { return p.name }
+func (p *Profile) Description() *string                          { return p.description }
+func (p *Profile) Detectors() []Detector                         { return p.detectors }
+func (p *Profile) Enabled() bool                                 { return p.enabled }
+func (p *Profile) Dictionaries() []*dictionary.Dictionary        { return p.dictionaries }
+func (p *Profile) Preprocessors() []preprocessor.PreprocessorDef { return p.preprocessors }
+func (p *Profile) CreatedAt() time.Time                          { return p.createdAt }
+func (p *Profile) UpdatedAt() time.Time                          { return p.updatedAt }
