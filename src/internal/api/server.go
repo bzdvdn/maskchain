@@ -46,6 +46,12 @@ func healthHandler(status string) gin.HandlerFunc {
 	}
 }
 
+// @sk-task 22-shield-mask-storage#T4.2: Register mask routes (AC-002, AC-003)
+func (s *Server) RegisterMaskHandler(h *MaskHandler) {
+	s.engine.POST("/api/v1/shield/mask", h.HandleMask)
+	s.engine.POST("/api/v1/shield/unmask", h.HandleUnmask)
+}
+
 func (s *Server) Start() error {
 	addr := fmt.Sprintf(":%d", s.cfg.Port)
 	s.http = &http.Server{

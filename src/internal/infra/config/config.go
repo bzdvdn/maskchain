@@ -21,15 +21,38 @@ type ServerConfig struct {
 	CORSOrigins     []string `mapstructure:"cors_origins" yaml:"cors_origins"`
 }
 
+// @sk-task 22-shield-mask-storage#T5.1: Add Database/Valkey/Mask config (AC-all)
+type DatabaseConfig struct {
+	DSN string `mapstructure:"dsn" yaml:"dsn"`
+}
+
+// @sk-task 22-shield-mask-storage#T5.1: Add Valkey config section (AC-all)
+type ValkeyConfig struct {
+	Addr     string `mapstructure:"addr" yaml:"addr"`
+	Password string `mapstructure:"password" yaml:"password"`
+	TTLSec   int    `mapstructure:"ttl_sec" yaml:"ttl_sec"`
+}
+
+// @sk-task 22-shield-mask-storage#T5.1: Add Mask config section (AC-all)
+type MaskConfig struct {
+	CacheTTLSec int `mapstructure:"cache_ttl_sec" yaml:"cache_ttl_sec"`
+}
+
 // @sk-task 10-gateway-skeleton#T1.2: Add ServerConfig to Config struct (AC-001, AC-005, AC-008)
 type Config struct {
 	Log    *LogConfig    `mapstructure:"log" yaml:"log"`
 	Server *ServerConfig `mapstructure:"server" yaml:"server"`
+	DB     *DatabaseConfig `mapstructure:"database" yaml:"database"`
+	Valkey *ValkeyConfig   `mapstructure:"valkey" yaml:"valkey"`
+	Mask   *MaskConfig     `mapstructure:"mask" yaml:"mask"`
 }
 
 const defaultLogLevel = "info"
 const defaultPort = 8080
 const defaultShutdownTimeout = 10
+const defaultValkeyAddr = "localhost:6379"
+const defaultValkeyTTL = 3600
+const defaultMaskCacheTTL = 3600
 
 // @sk-task 10-gateway-skeleton#T1.2: Set ServerConfig defaults in DefaultConfig (AC-001, AC-005)
 func DefaultConfig() *Config {
@@ -40,6 +63,13 @@ func DefaultConfig() *Config {
 		Server: &ServerConfig{
 			Port:            defaultPort,
 			ShutdownTimeout: defaultShutdownTimeout,
+		},
+		Valkey: &ValkeyConfig{
+			Addr:   defaultValkeyAddr,
+			TTLSec: defaultValkeyTTL,
+		},
+		Mask: &MaskConfig{
+			CacheTTLSec: defaultMaskCacheTTL,
 		},
 	}
 }

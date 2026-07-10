@@ -14,16 +14,23 @@
 - `src/pkg/` — shared utilities (future)
 - `ui/` — React frontend (planned, placeholder)
 - `specs/active/` — active spec artifacts (speckeep-managed)
+- `deployments/` — Docker, migrations, docker-compose configs
 
 ## Key Paths
-- `src/cmd/gateway/main.go` — gateway binary entrypoint (currently `os.Exit(0)`)
+- `src/cmd/gateway/main.go` — gateway binary entrypoint (DI wiring for all components)
 - `src/internal/domain/` — core business logic: Content Shield, profiles, policies
+  - `src/internal/domain/shield/mask/` — mask entry entity, storage interface, use case, UUIDv7
+  - `src/internal/domain/shield/detector/` — detector interface, registry, composite detector
 - `src/internal/app/` — use case orchestration
 - `src/internal/ports/` — inbound (REST, gRPC) and outbound (repository, provider) interfaces
 - `src/internal/adapters/` — repository impl (PostgreSQL), provider clients (OpenAI, Anthropic, etc.)
+  - `src/internal/adapters/repository/mask/` — Postgres, Valkey, Cached mask repos
+- `src/internal/api/` — HTTP handlers, middleware, request/response types
+  - `src/internal/api/mask_handler.go` — POST /api/v1/shield/mask and /unmask handlers
 - `src/internal/infra/config/` — cobra/viper config loading, validation, defaults
-- `specs/active/00-project-foundation/` — foundation phase: struct, build, lint, Docker
+- `specs/active/22-shield-mask-storage/` — mask storage phase: spec, plan, tasks
 - `deployments/docker-compose/` — local dev environment (PostgreSQL, Valkey)
+- `src/internal/infra/migrations/` — SQL migrations (001_mask_entries.sql)
 - `Dockerfile` — multistage Docker build (golang:1.26-alpine → distroless)
 - `Makefile` — build, test, lint, docker-build, clean, check-structure targets
 - `.golangci.yml` — linter configuration (gofmt, govet, staticcheck, errcheck, unused)
