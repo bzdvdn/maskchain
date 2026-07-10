@@ -60,3 +60,26 @@ func TestLoadConfig_CustomConfigPath(t *testing.T) {
 		t.Errorf("expected log.level=info, got %q", cfg.Log.Level)
 	}
 }
+
+// @sk-test 30-shield-persistence#T1.3: TestDatabaseConfig_PoolDefaults (AC-005)
+func TestDatabaseConfig_PoolDefaults(t *testing.T) {
+	t.Setenv("CONFIG_LOG_LEVEL", "debug")
+	t.Setenv("CONFIG_DATABASE_DSN", "postgres://localhost:5432/test")
+
+	cfg, err := ParseAndLoadConfig([]string{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DB == nil {
+		t.Fatal("expected DB config, got nil")
+	}
+	if cfg.DB.MaxConns != 25 {
+		t.Errorf("expected MaxConns=25, got %d", cfg.DB.MaxConns)
+	}
+	if cfg.DB.MinConns != 1 {
+		t.Errorf("expected MinConns=1, got %d", cfg.DB.MinConns)
+	}
+	if cfg.DB.MaxConnLifetime != 30*60_000_000_000 {
+		t.Errorf("expected MaxConnLifetime=30m, got %v", cfg.DB.MaxConnLifetime)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -22,8 +23,12 @@ type ServerConfig struct {
 }
 
 // @sk-task 22-shield-mask-storage#T5.1: Add Database/Valkey/Mask config (AC-all)
+// @sk-task 30-shield-persistence#T1.3: Add pool params to DatabaseConfig (AC-005)
 type DatabaseConfig struct {
-	DSN string `mapstructure:"dsn" yaml:"dsn"`
+	DSN             string        `mapstructure:"dsn" yaml:"dsn"`
+	MaxConns        int           `mapstructure:"max_conns" yaml:"max_conns"`
+	MinConns        int           `mapstructure:"min_conns" yaml:"min_conns"`
+	MaxConnLifetime time.Duration `mapstructure:"max_conn_lifetime" yaml:"max_conn_lifetime"`
 }
 
 // @sk-task 22-shield-mask-storage#T5.1: Add Valkey config section (AC-all)
@@ -53,6 +58,9 @@ const defaultShutdownTimeout = 10
 const defaultValkeyAddr = "localhost:6379"
 const defaultValkeyTTL = 3600
 const defaultMaskCacheTTL = 3600
+const defaultMaxDBConns = 25
+const defaultMinDBConns = 1
+const defaultMaxDBConnLifetimeMinutes = 30
 
 // @sk-task 10-gateway-skeleton#T1.2: Set ServerConfig defaults in DefaultConfig (AC-001, AC-005)
 func DefaultConfig() *Config {
@@ -63,6 +71,11 @@ func DefaultConfig() *Config {
 		Server: &ServerConfig{
 			Port:            defaultPort,
 			ShutdownTimeout: defaultShutdownTimeout,
+		},
+		DB: &DatabaseConfig{
+			MaxConns:        defaultMaxDBConns,
+			MinConns:        defaultMinDBConns,
+			MaxConnLifetime: time.Duration(defaultMaxDBConnLifetimeMinutes) * time.Minute,
 		},
 		Valkey: &ValkeyConfig{
 			Addr:   defaultValkeyAddr,

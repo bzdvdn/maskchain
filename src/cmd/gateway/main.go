@@ -12,8 +12,8 @@ import (
 	"github.com/valkey-io/valkey-go"
 	"go.uber.org/zap"
 
+	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
 	"github.com/bzdvdn/maskchain/src/internal/api"
-	dictionaryrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/dictionary"
 	maskrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/mask"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/detector"
 	domainMask "github.com/bzdvdn/maskchain/src/internal/domain/shield/mask"
@@ -21,6 +21,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 )
 
+// @sk-task 30-shield-persistence#T2.4: Wire pool, migrations, and new repos in main
 func main() {
 	cfg := config.MustLoadConfig()
 
@@ -41,13 +42,18 @@ func main() {
 		logger.Fatal("failed to init postgres", zap.Error(err))
 	}
 
+	if pgPool != nil {
+		if err := postgres.RunMigrations(cfg.DB.DSN); err != nil {
+			logger.Fatal("failed to run migrations", zap.Error(err))
+		}
+	}
+
 	vkClient, err := initValkey(cfg.Valkey, logger)
 	if err != nil {
 		logger.Fatal("failed to init valkey", zap.Error(err))
 	}
 
-	dictRepo := dictionaryrepo.NewPostgresDictionaryRepo(pgPool)
-	registry := initDetectors(logger, dictRepo)
+	registry := initDetectors(logger)
 
 	maskTTL := time.Duration(cfg.Mask.CacheTTLSec) * time.Second
 	pgRepo := maskrepo.NewPostgresMaskRepo(pgPool)
@@ -82,17 +88,14 @@ func main() {
 }
 
 // @sk-task 22-shield-mask-storage#T5.2: Init PG with nil-safe DSN (AC-012)
+// @sk-task 30-shield-persistence#T2.4: Use NewPool from postgres package (AC-005)
 func initPG(ctx context.Context, dbCfg *config.DatabaseConfig, log *zap.Logger) (*pgxpool.Pool, error) {
-	if dbCfg == nil || dbCfg.DSN == "" {
-		log.Warn("no database configured, mask persistence disabled")
-		return nil, nil
-	}
-	pool, err := pgxpool.New(ctx, dbCfg.DSN)
+	pool, err := postgres.NewPool(ctx, dbCfg)
 	if err != nil {
-		return nil, fmt.Errorf("pgxpool: %w", err)
+		return nil, fmt.Errorf("init pool: %w", err)
 	}
-	if err := pool.Ping(ctx); err != nil {
-		return nil, fmt.Errorf("pg ping: %w", err)
+	if pool == nil {
+		log.Warn("no database configured, persistence disabled")
 	}
 	return pool, nil
 }
@@ -114,7 +117,7 @@ func initValkey(vkCfg *config.ValkeyConfig, log *zap.Logger) (valkey.Client, err
 }
 
 // @sk-task 22-shield-mask-storage#T5.2: Init detectors with CompositeDetector (AC-011)
-func initDetectors(log *zap.Logger, dictRepo *dictionaryrepo.PostgresDictionaryRepo) *detector.DetectorRegistry {
+func initDetectors(log *zap.Logger) *detector.DetectorRegistry {
 	registry := detector.NewDetectorRegistry()
 
 	pii, err := detector.NewPIIDetector()
@@ -136,8 +139,6 @@ func initDetectors(log *zap.Logger, dictRepo *dictionaryrepo.PostgresDictionaryR
 	}
 
 	// @sk-task 24-shield-dictionaries#T5.1: Register dictionary detector type (AC-007)
-	// DictionaryDetector is created per-profile at request time with the profile's dictionary.
-	// A nil-safe placeholder allows the type to be registered for future use.
 	placeholder := detector.NewDictionaryDetector(nil)
 	if err := registry.Register(entity.DetectorTypeDictionary, placeholder); err != nil {
 		log.Fatal("register dictionary detector", zap.Error(err))
