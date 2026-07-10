@@ -1,3 +1,7 @@
-# >>> speckeep: skills checkouts >>>
-.speckeep/skills/checkouts/
-# <<< speckeep: skills checkouts <<<
+bin/
+.idea/
+.env
+*.exe
+*.test
+coverage.out
+/gateway
