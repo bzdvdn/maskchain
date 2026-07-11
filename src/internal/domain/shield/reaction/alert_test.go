@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
@@ -36,6 +37,10 @@ func (r *mockIncidentRepo) ListByProfile(_ context.Context, _ value.ProfileID) (
 
 func (r *mockIncidentRepo) ListByTenant(_ context.Context, _ value.TenantID) ([]*entity.Incident, error) {
 	return nil, errors.New("not implemented")
+}
+
+func (r *mockIncidentRepo) List(_ context.Context, _ shield.IncidentFilter) ([]*entity.Incident, int, error) {
+	return nil, 0, errors.New("not implemented")
 }
 
 // @sk-test 23-shield-reactions#T2.4: Test AlertReaction logs incidents without modifying text (AC-004)

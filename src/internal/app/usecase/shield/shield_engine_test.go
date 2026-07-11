@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	shielddomain "github.com/bzdvdn/maskchain/src/internal/domain/shield"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/detector"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/dictionary"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
@@ -319,6 +320,10 @@ func (r *stubIncidentRepo) ListByProfile(_ context.Context, _ value.ProfileID) (
 
 func (r *stubIncidentRepo) ListByTenant(_ context.Context, _ value.TenantID) ([]*entity.Incident, error) {
 	return nil, fmt.Errorf("not implemented")
+}
+
+func (r *stubIncidentRepo) List(_ context.Context, _ shielddomain.IncidentFilter) ([]*entity.Incident, int, error) {
+	return nil, 0, fmt.Errorf("not implemented")
 }
 
 // small helpers

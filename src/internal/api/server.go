@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"github.com/bzdvdn/maskchain/src/internal/api/handler/incident"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/profile"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
@@ -54,6 +55,14 @@ func healthHandler(status string) gin.HandlerFunc {
 func (s *Server) RegisterMaskHandler(h *MaskHandler) {
 	s.engine.POST("/api/v1/shield/mask", h.HandleMask)
 	s.engine.POST("/api/v1/shield/unmask", h.HandleUnmask)
+}
+
+// @sk-task 60-audit-incidents#T2.3: Register incident routes with /export before /:id (AC-001, AC-002, AC-003)
+func (s *Server) RegisterIncidentHandler(h *incident.Handler) {
+	group := s.engine.Group("/api/v1/incidents")
+	group.GET("/export", h.ExportIncidents)
+	group.GET("", h.ListIncidents)
+	group.GET("/:id", h.GetIncident)
 }
 
 // @sk-task 40-profiles-api#T4.1: Register profile routes (AC-001..AC-011)

@@ -9,6 +9,7 @@ import (
 )
 
 // @sk-task 23-shield-reactions#T2.4: Implement AlertReaction (AC-004)
+// @sk-task 60-audit-incidents#T4.1: AlertReaction uses repo.Save with PromptSnippetRedacted (AC-001)
 type AlertReaction struct {
 	repo shield.IncidentRepository
 }

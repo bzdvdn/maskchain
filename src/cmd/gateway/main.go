@@ -14,6 +14,7 @@ import (
 
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
 	"github.com/bzdvdn/maskchain/src/internal/api"
+	"github.com/bzdvdn/maskchain/src/internal/api/handler/incident"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
 	maskrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/mask"
@@ -95,6 +96,12 @@ func main() {
 		shieldMw := middleware.ShieldMiddleware(shieldEngine, profileRepo, cfg.Shield, logger)
 		srv.RegisterProxyRoute(shieldMw)
 		logger.Info("shield middleware registered")
+
+		// @sk-task 60-audit-incidents#T2.3: Wire incident handler (AC-001, AC-002)
+		incidentRepo := postgres.NewPostgresIncidentRepo(pgPool)
+		incidentHandler := incident.New(incidentRepo)
+		srv.RegisterIncidentHandler(incidentHandler)
+		logger.Info("incident handler registered")
 	} else {
 		logger.Warn("no database configured, shield middleware disabled")
 	}

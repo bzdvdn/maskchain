@@ -92,7 +92,7 @@ func TestProfileDeleteCascade(t *testing.T) {
 		t.Fatalf("Save profile: %v", err)
 	}
 
-	inc := entity.NewAuditIncident("", slug.String(), "req-1", "regex", nil, value.SeverityHigh, "block", nil, time.Now())
+	inc := entity.NewAuditIncident("", slug.String(), "req-1", "regex", nil, value.SeverityHigh, "block", nil, nil, tenant.String(), time.Now())
 	if err := incidentRepo.Save(ctx, inc); err != nil {
 		t.Fatalf("Save incident: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestIncidentSaveAndList(t *testing.T) {
 	}
 
 	for i := 0; i < 3; i++ {
-		inc := entity.NewAuditIncident("", slug.String(), "req-1", "regex", nil, value.SeverityHigh, "block", nil, time.Now())
+		inc := entity.NewAuditIncident("", slug.String(), "req-1", "regex", nil, value.SeverityHigh, "block", nil, nil, tenant.String(), time.Now())
 		if err := incidentRepo.Save(ctx, inc); err != nil {
 			t.Fatalf("Save incident %d: %v", i, err)
 		}
