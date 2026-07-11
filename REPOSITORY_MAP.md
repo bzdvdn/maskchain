@@ -26,6 +26,7 @@
   - `src/internal/domain/shield/mask/` — mask entry entity, storage interface, use case, UUIDv7
   - `src/internal/domain/shield/detector/` — detector interface, registry, composite detector
 - `src/internal/app/` — use case orchestration
+  - `src/internal/app/usecase/shield/` — ShieldEngine, ScanUseCase, ScanPipelineFactory, ApplyPolicyUseCase
 - `src/internal/ports/` — inbound (REST, gRPC) and outbound (repository, provider) interfaces
 - `src/internal/adapters/` — repository impl (PostgreSQL), provider clients (OpenAI, Anthropic, etc.)
   - `src/internal/adapters/repository/mask/` — Postgres, Valkey, Cached mask repos
@@ -36,6 +37,7 @@
 - `src/internal/infra/config/` — cobra/viper config loading, validation, defaults
 - `specs/active/22-shield-mask-storage/` — mask storage phase: spec, plan, tasks
 - `specs/active/41-profiles-ui/` — profiles UI phase: spec, plan, tasks, inspect
+- `specs/active/50-shield-engine/` — shield engine orchestration: spec, plan, tasks, inspect
 - `deployments/docker-compose/` — local dev environment (PostgreSQL, Valkey)
 - `Dockerfile` — multi-stage Docker build (node → golang → distroless)
 - `src/internal/infra/migrations/` — SQL migrations (001_mask_entries.sql)
