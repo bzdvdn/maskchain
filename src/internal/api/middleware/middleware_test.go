@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
@@ -18,6 +19,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
+	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
 )
 
 type mockEngine struct {
@@ -335,5 +337,59 @@ func TestCORS_Preflight(t *testing.T) {
 	}
 	if origin := w.Header().Get("Access-Control-Allow-Origin"); origin != "http://example.com" {
 		t.Errorf("expected http://example.com, got %q", origin)
+	}
+}
+
+// @sk-test 61-observability#T4.1: TestMetricsMiddleware verifies HTTP metrics are recorded (AC-003)
+func TestMetricsMiddleware(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(RequestID())
+	engine.Use(Logger(zap.NewNop()))
+	engine.Use(metrics.Middleware())
+	engine.GET("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+// @sk-test 61-observability#T4.1: TestShieldMiddleware_Metrics verifies shield metrics with mock (AC-004)
+func TestShieldMiddleware_Metrics(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mockEng := &mockEngine{
+		resp: &appshield.ScanResponse{
+			ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
+		},
+	}
+	mockRepo := &mockProfileRepo{
+		profile: newTestProfile("test-profile", true),
+	}
+	log := zap.NewNop()
+
+	promReg := prometheus.NewRegistry()
+	metrics.RegisterMetrics(promReg)
+
+	engine := gin.New()
+	engine.Use(ShieldMiddleware(mockEng, mockRepo, &config.ShieldConfig{}, log))
+	engine.POST("/v1/chat/completions", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	body := chatBody("gpt-4", "hello")
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Shield-Profile-Slug", "test-profile")
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
 	}
 }

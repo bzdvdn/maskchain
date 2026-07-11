@@ -101,5 +101,5 @@ func newTestServer() *Server {
 	gin.SetMode(gin.TestMode)
 	cfg := &config.ServerConfig{Port: 0}
 	log, _ := zap.NewProduction()
-	return New(cfg, log)
+	return New(cfg, log, "")
 }

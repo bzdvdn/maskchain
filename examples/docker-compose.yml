@@ -1,3 +1,4 @@
+# @sk-task 61-observability#T3.2: Add Prometheus + Grafana services for local observability dev-stack (AC-008)
 services:
   postgres:
     image: postgres:16-alpine
@@ -27,9 +28,46 @@ services:
       CONFIG_LOG_LEVEL: debug
       CONFIG_DATABASE_DSN: postgres://test:test@postgres:5432/maskchain?sslmode=disable
       CONFIG_SERVER_PORT: "8080"
+      CONFIG_OTEL_ENDPOINT: tempo:4317
     depends_on:
       postgres:
         condition: service_healthy
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: maskchain-prom
+    ports:
+      - "9090:9090"
+    volumes:
+      - promdata:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    environment:
+      PROMETHEUS_CONFIG: |
+        global:
+          scrape_interval: 15s
+        scrape_configs:
+          - job_name: 'gateway'
+            static_configs:
+              - targets: ['gateway:8080']
+                metrics_path: '/metrics'
+    depends_on:
+      gateway:
+        condition: service_started
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: maskchain-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+    depends_on:
+      prometheus:
+        condition: service_started
+
 volumes:
   pgdata:
+  promdata:

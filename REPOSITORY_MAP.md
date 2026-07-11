@@ -38,13 +38,17 @@
    - `src/internal/api/handler/incident/` — Incident read/export handlers (list, get, export CSV/JSON)
    - `src/internal/api/dto/` — request/response DTOs (ProfileResponse, PaginatedResponse, DictionaryDTO, IncidentResponse)
 - `src/internal/infra/config/` — cobra/viper config loading, validation, defaults
+- `src/internal/infra/telemetry/` — OTel SDK init, TracerProvider, MeterProvider, OTLP exporters
+- `src/internal/infra/metrics/` — Prometheus metric definitions (HTTP, shield), /metrics handler
+- `src/internal/infra/logging/` — slog adapter with OTel trace_id/span_id enrichment
+- `src/internal/infra/migrations/` — SQL migrations (001_mask_entries.sql, 002_incidents.sql)
 - `specs/active/22-shield-mask-storage/` — mask storage phase: spec, plan, tasks
 - `specs/active/41-profiles-ui/` — profiles UI phase: spec, plan, tasks, inspect
 - `specs/active/50-shield-engine/` — shield engine orchestration: spec, plan, tasks, inspect
 - `specs/active/60-audit-incidents/` — audit incidents viewer: spec, plan, tasks, inspect, data-model
+- `specs/active/61-observability/` — observability phase: spec, plan, tasks, inspect, data-model
 - `deployments/docker-compose/` — local dev environment (PostgreSQL, Valkey)
 - `Dockerfile` — multi-stage Docker build (node → golang → distroless)
-- `src/internal/infra/migrations/` — SQL migrations (001_mask_entries.sql, 002_incidents.sql)
 - `Dockerfile` — multistage Docker build (golang:1.26-alpine → distroless)
 - `Makefile` — build, test, lint, docker-build, clean, check-structure targets
 - `.golangci.yml` — linter configuration (gofmt, govet, staticcheck, errcheck, unused)
@@ -56,6 +60,7 @@
 - New use case / feature — `src/internal/app/` + `src/internal/ports/` + `src/internal/adapters/`
 - New API endpoint — `src/internal/api/` + `src/internal/ports/` (inbound interface)
 - Configuration changes — `src/internal/infra/config/`
+- Observability/telemetry changes — `src/internal/infra/telemetry/`, `src/internal/infra/metrics/`, `src/internal/infra/logging/`
 - Frontend changes — `ui/` (when implemented)
 - Spec/plan/tasks changes — `specs/active/<slug>/`
 - Build/CI changes — `Makefile`, `Dockerfile`, `.golangci.yml`

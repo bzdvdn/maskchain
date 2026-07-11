@@ -8,40 +8,51 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/incident"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/profile"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
+	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
 )
 
 // @sk-task 10-gateway-skeleton#T2.1: Implement Server struct with New/Start/Shutdown (AC-001, AC-002, AC-003, AC-005)
+// @sk-task 61-observability#T2.1: Add OTel and metrics middleware (AC-001, AC-002, AC-003)
 type Server struct {
-	engine *gin.Engine
-	http   *http.Server
-	cfg    *config.ServerConfig
-	log    *zap.Logger
+	engine         *gin.Engine
+	http           *http.Server
+	cfg            *config.ServerConfig
+	log            *zap.Logger
+	serviceName    string
+	metricsHandler gin.HandlerFunc
 }
 
-func New(cfg *config.ServerConfig, log *zap.Logger) *Server {
+// @sk-task 61-observability#T2.1: Add OTel and metrics middleware to server (AC-001, AC-002, AC-003)
+func New(cfg *config.ServerConfig, log *zap.Logger, serviceName string) *Server {
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
 
+	engine.Use(otelgin.Middleware(serviceName, otelgin.WithFilter(func(req *http.Request) bool {
+		return req.URL.Path != "/metrics"
+	})))
 	engine.Use(middleware.RequestID())
 	engine.Use(middleware.Logger(log))
 	engine.Use(middleware.Recovery(log))
 	engine.Use(middleware.CORS(cfg.CORSOrigins))
 	engine.Use(middleware.ErrorHandler())
+	engine.Use(metrics.Middleware())
 
 	engine.GET("/health", healthHandler("ok"))
 	engine.GET("/ready", healthHandler("ok"))
 	engine.GET("/live", healthHandler("alive"))
 
 	return &Server{
-		engine: engine,
-		cfg:    cfg,
-		log:    log,
+		engine:      engine,
+		cfg:         cfg,
+		log:         log,
+		serviceName: serviceName,
 	}
 }
 
@@ -49,6 +60,11 @@ func healthHandler(status string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": status})
 	}
+}
+
+// @sk-task 61-observability#T2.1: Register metrics route (AC-002)
+func (s *Server) RegisterMetricsRoute(handler gin.HandlerFunc) {
+	s.engine.GET("/metrics", handler)
 }
 
 // @sk-task 22-shield-mask-storage#T4.2: Register mask routes (AC-002, AC-003)

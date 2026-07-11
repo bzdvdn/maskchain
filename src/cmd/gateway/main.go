@@ -3,12 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/valkey-io/valkey-go"
 	"go.uber.org/zap"
 
@@ -25,10 +28,14 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/service"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
+	"github.com/bzdvdn/maskchain/src/internal/infra/logging"
+	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
+	"github.com/bzdvdn/maskchain/src/internal/infra/telemetry"
 	"github.com/bzdvdn/maskchain/ui"
 )
 
 // @sk-task 30-shield-persistence#T2.4: Wire pool, migrations, and new repos in main
+// @sk-task 61-observability#T2.2: Wire OTel telemetry, metrics, and logging (AC-001, AC-002, AC-003, AC-005, AC-006)
 func main() {
 	cfg := config.MustLoadConfig()
 
@@ -40,6 +47,33 @@ func main() {
 	defer logger.Sync()
 
 	logger.Debug("config loaded", zap.Any("config", cfg))
+
+	slogLogger := logging.NewLogger(io.Discard, slog.LevelInfo)
+
+	serviceName := "maskchain-gateway"
+	if cfg.OTel != nil && cfg.OTel.ServiceName != "" {
+		serviceName = cfg.OTel.ServiceName
+	}
+
+	otelShutdown := noopShutdown
+	if cfg.OTel != nil {
+		shutdown, err := telemetry.InitProvider(
+			context.Background(),
+			cfg.OTel.Endpoint,
+			serviceName,
+			cfg.OTel.Environment,
+			cfg.OTel.SamplingRatio,
+			slogLogger,
+		)
+		if err != nil {
+			slogLogger.Warn("telemetry init", "error", err)
+		}
+		otelShutdown = shutdown
+	}
+
+	promRegistry := prometheus.NewRegistry()
+	metrics.RegisterMetrics(promRegistry)
+	metricsHandler := metrics.Handler(promRegistry)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -60,26 +94,26 @@ func main() {
 		logger.Fatal("failed to init valkey", zap.Error(err))
 	}
 
-	registry := initDetectors(logger)
+	detectorRegistry := initDetectors(logger)
 
 	maskTTL := time.Duration(cfg.Mask.CacheTTLSec) * time.Second
 	pgRepo := maskrepo.NewPostgresMaskRepo(pgPool)
 	vkRepo := maskrepo.NewValkeyMaskRepo(vkClient, maskTTL)
 	maskStorage := maskrepo.NewCachedMaskRepo(pgRepo, vkRepo)
-	maskUseCase := domainMask.NewMaskUseCase(registry, maskStorage)
-	maskHandler := api.NewMaskHandler(maskUseCase, registry)
+	maskUseCase := domainMask.NewMaskUseCase(detectorRegistry, maskStorage)
+	maskHandler := api.NewMaskHandler(maskUseCase, detectorRegistry)
 
-	srv := api.New(cfg.Server, logger)
+	srv := api.New(cfg.Server, logger, serviceName)
+	srv.RegisterMetricsRoute(metricsHandler)
 	srv.RegisterMaskHandler(maskHandler)
 	srv.RegisterStaticFiles(ui.DistFiles)
 
-	// @sk-task 51-shield-gateway-integration#T3.1: Wire ShieldEngine and register proxy routes in main (AC-001, AC-007)
 	if pgPool != nil {
 		dictRepo := postgres.NewPostgresDictionaryRepo(pgPool)
 		txMgr := postgres.NewPGXTransactionManager(pgPool)
 		profileRepo := postgres.NewPostgresProfileRepo(pgPool, dictRepo, txMgr)
 
-		pipelineFactory := appshield.NewScanPipelineFactory(registry)
+		pipelineFactory := appshield.NewScanPipelineFactory(detectorRegistry)
 		policyEval := service.NewPolicyEvaluator()
 		blockExec := reaction.NewBlockReaction()
 		redactExec := reaction.NewRedactReaction()
@@ -121,12 +155,18 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), time.Duration(cfg.Server.ShutdownTimeout)*time.Second)
 	defer shutdownCancel()
 
+	if err := otelShutdown(shutdownCtx); err != nil {
+		logger.Error("otel shutdown error", zap.Error(err))
+	}
+
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("shutdown error", zap.Error(err))
 		os.Exit(1)
 	}
 	logger.Info("server stopped")
 }
+
+func noopShutdown(_ context.Context) error { return nil }
 
 // @sk-task 22-shield-mask-storage#T5.2: Init PG with nil-safe DSN (AC-012)
 // @sk-task 30-shield-persistence#T2.4: Use NewPool from postgres package (AC-005)

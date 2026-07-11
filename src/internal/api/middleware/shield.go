@@ -12,12 +12,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
 	domshield "github.com/bzdvdn/maskchain/src/internal/domain/shield"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
+	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
 )
 
 const maxBodySize = 1 << 20 // 1MB
@@ -43,6 +46,7 @@ type Scanner interface {
 }
 
 // @sk-task 51-shield-gateway-integration#T2.1: Implement ShieldMiddleware (AC-001, AC-002, AC-003, AC-004, AC-005, AC-006)
+// @sk-task 61-observability#T3.1: Instrument shield middleware with span attributes and metrics (AC-004)
 func ShieldMiddleware(engine Scanner, profileRepo domshield.ProfileRepository, cfg *config.ShieldConfig, log *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -123,8 +127,19 @@ func ShieldMiddleware(engine Scanner, profileRepo domshield.ProfileRepository, c
 
 		duration := time.Since(start)
 
+		span := trace.SpanFromContext(c.Request.Context())
+		span.SetAttributes(
+			attribute.String("shield.profile", profileSlug.String()),
+			attribute.String("shield.status", string(resp.Status())),
+			attribute.String("shield.incident_id", incidentID),
+		)
+
+		scanStatus := string(resp.Status())
+		metrics.ShieldScanDuration.WithLabelValues(profileSlug.String(), scanStatus).Observe(float64(duration.Milliseconds()))
+		metrics.ShieldProfilesEvaluated.WithLabelValues(profileSlug.String()).Inc()
+
 		log.Info("shield scan",
-			zap.String("shield_status", string(resp.Status())),
+			zap.String("shield_status", scanStatus),
 			zap.String("profile_slug", profileSlug.String()),
 			zap.String("model", chatReq.Model),
 			zap.Duration("latency", duration),
@@ -133,6 +148,7 @@ func ShieldMiddleware(engine Scanner, profileRepo domshield.ProfileRepository, c
 
 		switch resp.Status() {
 		case value.ScanStatusBlocked:
+			metrics.ShieldIncidentsBySeverity.WithLabelValues("blocked").Inc()
 			c.Header("X-Shield-Status", "blocked")
 			c.Header("X-Shield-Incident-ID", incidentID)
 			c.AbortWithStatusJSON(http.StatusForbidden, shieldResponse{
@@ -142,9 +158,11 @@ func ShieldMiddleware(engine Scanner, profileRepo domshield.ProfileRepository, c
 			})
 
 		case value.ScanStatusError:
+			metrics.ShieldIncidentsBySeverity.WithLabelValues("error").Inc()
 			abortWithShieldError(c, http.StatusBadGateway, "shield scan error", profileSlug.String())
 
 		case value.ScanStatusSuspicious:
+			metrics.ShieldIncidentsBySeverity.WithLabelValues("suspicious").Inc()
 			if cfg != nil && cfg.ActionOnSuspicious == "block" {
 				c.Header("X-Shield-Status", "blocked")
 				c.Header("X-Shield-Incident-ID", incidentID)
@@ -159,6 +177,7 @@ func ShieldMiddleware(engine Scanner, profileRepo domshield.ProfileRepository, c
 			}
 
 		default:
+			metrics.ShieldIncidentsBySeverity.WithLabelValues("clean").Inc()
 			setShieldCleanHeaders(c, incidentID)
 			c.Next()
 		}

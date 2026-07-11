@@ -49,6 +49,14 @@ type ShieldConfig struct {
 	TenantModelMapping map[string]map[string]string `mapstructure:"tenant_model_mapping" yaml:"tenant_model_mapping"`
 }
 
+// @sk-task 61-observability#T1.2: Add OtelConfig section (AC-001, AC-006, AC-007)
+type OtelConfig struct {
+	Endpoint      string  `mapstructure:"endpoint" yaml:"endpoint"`
+	ServiceName   string  `mapstructure:"service_name" yaml:"service_name"`
+	Environment   string  `mapstructure:"environment" yaml:"environment"`
+	SamplingRatio float64 `mapstructure:"sampling_ratio" yaml:"sampling_ratio"`
+}
+
 // @sk-task 10-gateway-skeleton#T1.2: Add ServerConfig to Config struct (AC-001, AC-005, AC-008)
 type Config struct {
 	Log    *LogConfig    `mapstructure:"log" yaml:"log"`
@@ -57,6 +65,7 @@ type Config struct {
 	Valkey *ValkeyConfig   `mapstructure:"valkey" yaml:"valkey"`
 	Mask   *MaskConfig     `mapstructure:"mask" yaml:"mask"`
 	Shield *ShieldConfig   `mapstructure:"shield" yaml:"shield"`
+	OTel   *OtelConfig     `mapstructure:"otel" yaml:"otel"`
 }
 
 const defaultLogLevel = "info"
@@ -69,6 +78,10 @@ const defaultMaxDBConns = 25
 const defaultMinDBConns = 1
 const defaultMaxDBConnLifetimeMinutes = 30
 const defaultShieldActionOnSuspicious = "block"
+const defaultOtelEndpoint = "localhost:4317"
+const defaultOtelServiceName = "maskchain-gateway"
+const defaultOtelEnvironment = "development"
+const defaultOtelSamplingRatio = 1.0
 
 // @sk-task 10-gateway-skeleton#T1.2: Set ServerConfig defaults in DefaultConfig (AC-001, AC-005)
 func DefaultConfig() *Config {
@@ -94,6 +107,12 @@ func DefaultConfig() *Config {
 		},
 		Shield: &ShieldConfig{
 			ActionOnSuspicious: defaultShieldActionOnSuspicious,
+		},
+		OTel: &OtelConfig{
+			Endpoint:      defaultOtelEndpoint,
+			ServiceName:   defaultOtelServiceName,
+			Environment:   defaultOtelEnvironment,
+			SamplingRatio: defaultOtelSamplingRatio,
 		},
 	}
 }
