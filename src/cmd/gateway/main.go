@@ -14,10 +14,15 @@ import (
 
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
 	"github.com/bzdvdn/maskchain/src/internal/api"
+	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
+	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
 	maskrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/mask"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/detector"
 	domainMask "github.com/bzdvdn/maskchain/src/internal/domain/shield/mask"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/reaction"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/service"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 	"github.com/bzdvdn/maskchain/ui"
 )
@@ -66,6 +71,33 @@ func main() {
 	srv := api.New(cfg.Server, logger)
 	srv.RegisterMaskHandler(maskHandler)
 	srv.RegisterStaticFiles(ui.DistFiles)
+
+	// @sk-task 51-shield-gateway-integration#T3.1: Wire ShieldEngine and register proxy routes in main (AC-001, AC-007)
+	if pgPool != nil {
+		dictRepo := postgres.NewPostgresDictionaryRepo(pgPool)
+		txMgr := postgres.NewPGXTransactionManager(pgPool)
+		profileRepo := postgres.NewPostgresProfileRepo(pgPool, dictRepo, txMgr)
+
+		pipelineFactory := appshield.NewScanPipelineFactory(registry)
+		policyEval := service.NewPolicyEvaluator()
+		blockExec := reaction.NewBlockReaction()
+		redactExec := reaction.NewRedactReaction()
+		alertExec := reaction.NewAlertReaction(nil)
+		reactionPipeline := reaction.NewDefaultReactionPipeline(blockExec, redactExec, alertExec)
+
+		tenantID, err := value.NewTenantID("default")
+		if err != nil {
+			logger.Fatal("failed to create tenant ID", zap.Error(err))
+		}
+
+		scanUseCase := appshield.NewScanUseCase(profileRepo, pipelineFactory, policyEval, reactionPipeline, tenantID)
+		shieldEngine := appshield.NewShieldEngine(scanUseCase)
+		shieldMw := middleware.ShieldMiddleware(shieldEngine, profileRepo, cfg.Shield, logger)
+		srv.RegisterProxyRoute(shieldMw)
+		logger.Info("shield middleware registered")
+	} else {
+		logger.Warn("no database configured, shield middleware disabled")
+	}
 
 	go func() {
 		if err := srv.Start(); err != nil {

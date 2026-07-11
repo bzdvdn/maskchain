@@ -67,6 +67,13 @@ func (s *Server) RegisterProfileHandler(h *profile.ProfileHandler) {
 	group.PATCH("/:slug/dictionary", h.PatchDictionary)
 }
 
+// @sk-task 51-shield-gateway-integration#T3.1: Register proxy routes with shield middleware (AC-001, AC-007)
+func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc) {
+	group := s.engine.Group("/v1")
+	group.POST("/chat/completions", shieldMiddleware, ProxyChatCompletionHandler)
+	group.POST("/completions", shieldMiddleware, ProxyCompletionHandler)
+}
+
 // @sk-task 41-profiles-ui#T1.2: Register SPA static files handler (AC-001)
 func (s *Server) RegisterStaticFiles(fsys fs.FS) {
 	sub, err := fs.Sub(fsys, "dist")

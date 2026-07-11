@@ -43,6 +43,12 @@ type MaskConfig struct {
 	CacheTTLSec int `mapstructure:"cache_ttl_sec" yaml:"cache_ttl_sec"`
 }
 
+// @sk-task 51-shield-gateway-integration#T1.1: Add ShieldConfig section (AC-001, AC-002)
+type ShieldConfig struct {
+	ActionOnSuspicious string              `mapstructure:"action_on_suspicious" yaml:"action_on_suspicious"`
+	TenantModelMapping map[string]map[string]string `mapstructure:"tenant_model_mapping" yaml:"tenant_model_mapping"`
+}
+
 // @sk-task 10-gateway-skeleton#T1.2: Add ServerConfig to Config struct (AC-001, AC-005, AC-008)
 type Config struct {
 	Log    *LogConfig    `mapstructure:"log" yaml:"log"`
@@ -50,6 +56,7 @@ type Config struct {
 	DB     *DatabaseConfig `mapstructure:"database" yaml:"database"`
 	Valkey *ValkeyConfig   `mapstructure:"valkey" yaml:"valkey"`
 	Mask   *MaskConfig     `mapstructure:"mask" yaml:"mask"`
+	Shield *ShieldConfig   `mapstructure:"shield" yaml:"shield"`
 }
 
 const defaultLogLevel = "info"
@@ -61,6 +68,7 @@ const defaultMaskCacheTTL = 3600
 const defaultMaxDBConns = 25
 const defaultMinDBConns = 1
 const defaultMaxDBConnLifetimeMinutes = 30
+const defaultShieldActionOnSuspicious = "block"
 
 // @sk-task 10-gateway-skeleton#T1.2: Set ServerConfig defaults in DefaultConfig (AC-001, AC-005)
 func DefaultConfig() *Config {
@@ -83,6 +91,9 @@ func DefaultConfig() *Config {
 		},
 		Mask: &MaskConfig{
 			CacheTTLSec: defaultMaskCacheTTL,
+		},
+		Shield: &ShieldConfig{
+			ActionOnSuspicious: defaultShieldActionOnSuspicious,
 		},
 	}
 }

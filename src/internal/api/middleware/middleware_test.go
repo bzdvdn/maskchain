@@ -1,16 +1,85 @@
 package middleware
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
+
+	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
+	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 )
+
+type mockEngine struct {
+	resp *appshield.ScanResponse
+	err  error
+}
+
+func (m *mockEngine) Scan(_ context.Context, _ appshield.ScanRequest) (*appshield.ScanResponse, error) {
+	return m.resp, m.err
+}
+
+type mockProfileRepo struct {
+	profile *entity.Profile
+	err     error
+}
+
+func (m *mockProfileRepo) Save(_ context.Context, _ *entity.Profile) error {
+	return nil
+}
+
+func (m *mockProfileRepo) FindByID(_ context.Context, _ value.ProfileID) (*entity.Profile, error) {
+	return m.profile, m.err
+}
+
+func (m *mockProfileRepo) FindBySlug(_ context.Context, _ value.TenantID, _ value.ProfileSlug) (*entity.Profile, error) {
+	return m.profile, m.err
+}
+
+func (m *mockProfileRepo) ListByTenant(_ context.Context, _ value.TenantID) ([]*entity.Profile, error) {
+	return nil, nil
+}
+
+func (m *mockProfileRepo) Delete(_ context.Context, _ value.ProfileID) error {
+	return nil
+}
+
+func newTestProfile(slug string, enabled bool) *entity.Profile {
+	s, _ := value.NewProfileSlug(slug)
+	tid, _ := value.NewTenantID("default")
+	pid, _ := value.NewProfileID(uuid.New().String())
+	return entity.NewProfile(pid, s, tid, "test-profile", entity.WithEnabled(enabled))
+}
+
+func setupTest(t *testing.T) (*gin.Engine, *mockEngine, *mockProfileRepo, *zap.Logger) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	mockEng := &mockEngine{}
+	mockRepo := &mockProfileRepo{}
+	log, _ := zap.NewProduction()
+	return engine, mockEng, mockRepo, log
+}
+
+func chatBody(model, content string) string {
+	b, _ := json.Marshal(map[string]interface{}{
+		"model": model,
+		"messages": []map[string]string{
+			{"role": "user", "content": content},
+		},
+	})
+	return string(b)
+}
 
 // @sk-test 10-gateway-skeleton#T4.2: TestRequestID generates UUID (AC-004)
 func TestRequestID(t *testing.T) {
@@ -184,6 +253,67 @@ func TestCORS_Wildcard(t *testing.T) {
 	if origin := w.Header().Get("Access-Control-Allow-Origin"); origin != "*" {
 		t.Errorf("expected *, got %q", origin)
 	}
+}
+
+// @sk-test 51-shield-gateway-integration#T3.2: TestShieldIntegration full cycle blocked and clean (AC-007)
+func TestShieldIntegration(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	log, _ := zap.NewProduction()
+
+	mockEng := &mockEngine{}
+	mockRepo := &mockProfileRepo{
+		profile: newTestProfile("test-profile", true),
+	}
+
+	engine := gin.New()
+	engine.Use(ShieldMiddleware(mockEng, mockRepo, &config.ShieldConfig{}, log))
+	engine.POST("/v1/chat/completions", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"choices": []gin.H{
+				{"message": gin.H{"role": "assistant", "content": "ok"}},
+			},
+		})
+	})
+
+	t.Run("blocked", func(t *testing.T) {
+		mockEng.resp = &appshield.ScanResponse{
+			ScanResult: entity.NewScanResult(value.ScanStatusBlocked, nil),
+		}
+
+		w := httptest.NewRecorder()
+		body := chatBody("gpt-4", "my SSN is 123-45-6789")
+		req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Shield-Profile-Slug", "test-profile")
+		engine.ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("expected 403, got %d", w.Code)
+		}
+		if w.Header().Get("X-Shield-Status") != "blocked" {
+			t.Errorf("expected X-Shield-Status: blocked, got %s", w.Header().Get("X-Shield-Status"))
+		}
+	})
+
+	t.Run("clean", func(t *testing.T) {
+		mockEng.resp = &appshield.ScanResponse{
+			ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
+		}
+
+		w := httptest.NewRecorder()
+		body := chatBody("gpt-4", "hello")
+		req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Shield-Profile-Slug", "test-profile")
+		engine.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d", w.Code)
+		}
+		if w.Header().Get("X-Shield-Status") != "clean" {
+			t.Errorf("expected X-Shield-Status: clean, got %s", w.Header().Get("X-Shield-Status"))
+		}
+	})
 }
 
 // @sk-test 10-gateway-skeleton#T4.2: TestCORS handles preflight (AC-008)
