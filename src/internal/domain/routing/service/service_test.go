@@ -188,6 +188,13 @@ func (m *mockProviderClient) Call(_ context.Context, req *ports.ProviderRequest)
 	}, nil
 }
 
+func (m *mockProviderClient) Stream(_ context.Context, _ *ports.ProviderRequest) (<-chan ports.ProviderChunk, error) {
+	ch := make(chan ports.ProviderChunk, 1)
+	ch <- ports.ProviderChunk{Done: true}
+	close(ch)
+	return ch, nil
+}
+
 func TestFallbackHandler(t *testing.T) {
 	clients := map[string]ports.ProviderClient{
 		"p1": &mockProviderClient{name: "p1", statusCode: http.StatusOK},

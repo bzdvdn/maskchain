@@ -37,6 +37,13 @@ func (m *mockPortClient) Call(_ context.Context, req *ports.ProviderRequest) (*p
 	}, nil
 }
 
+func (m *mockPortClient) Stream(_ context.Context, _ *ports.ProviderRequest) (<-chan ports.ProviderChunk, error) {
+	ch := make(chan ports.ProviderChunk, 1)
+	ch <- ports.ProviderChunk{Done: true}
+	close(ch)
+	return ch, nil
+}
+
 // @sk-test 70-routing-engine#T4.2: TestRoutingHandlerFallbackIntegration (AC-002)
 func TestRoutingHandlerFallbackIntegration(t *testing.T) {
 	cfg := &config.RoutingConfig{

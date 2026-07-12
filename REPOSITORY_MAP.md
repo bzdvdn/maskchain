@@ -32,10 +32,11 @@
 - `src/internal/app/` — use case orchestration
   - `src/internal/app/usecase/shield/` — ShieldEngine, ScanUseCase, ScanPipelineFactory, ApplyPolicyUseCase
 - `src/internal/ports/` — inbound (REST, gRPC) and outbound (repository, provider) interfaces
-  - `src/internal/ports/provider.go` — ProviderClient port interface (outbound, LLM provider abstraction)
+  - `src/internal/ports/provider.go` — ProviderClient port interface (outbound, LLM provider abstraction), ProviderChunk type, Stream() method
 - `src/internal/adapters/` — repository impl (PostgreSQL), provider clients (OpenAI, Anthropic, etc.)
   - `src/internal/adapters/repository/mask/` — Postgres, Valkey, Cached mask repos
   - `src/internal/adapters/provider/` — provider adapter stubs (OpenAI, Anthropic, etc.)
+  - `src/internal/adapters/egress/` — egress HTTP/HTTPS client with proxy dialer, SSE streaming, retry, connection pooling (implements ProviderClient with Call + Stream)
 - `src/internal/api/` — HTTP handlers, middleware, request/response types
   - `src/internal/api/mask_handler.go` — POST /api/v1/shield/mask and /unmask handlers
   - `src/internal/api/provider_handler.go` — RoutingProxyHandler (proxy to LLM providers), legacy stubs

@@ -81,6 +81,15 @@ type OtelConfig struct {
 	SamplingRatio float64 `mapstructure:"sampling_ratio" yaml:"sampling_ratio"`
 }
 
+// @sk-task 71-egress-streaming#T1.2: Add EgressConfig section (AC-002, AC-004, AC-006, AC-007)
+type EgressConfig struct {
+	MaxIdleConns    int           `mapstructure:"max_idle_conns" yaml:"max_idle_conns"`
+	IdleTimeout     time.Duration `mapstructure:"idle_timeout" yaml:"idle_timeout"`
+	MaxRetries      int           `mapstructure:"max_retries" yaml:"max_retries"`
+	BaseBackoff     time.Duration `mapstructure:"base_backoff" yaml:"base_backoff"`
+	RetryOn5xx      bool          `mapstructure:"retry_on_5xx" yaml:"retry_on_5xx"`
+}
+
 // @sk-task 10-gateway-skeleton#T1.2: Add ServerConfig to Config struct (AC-001, AC-005, AC-008)
 type Config struct {
 	Log    *LogConfig    `mapstructure:"log" yaml:"log"`
@@ -91,6 +100,7 @@ type Config struct {
 	Shield *ShieldConfig   `mapstructure:"shield" yaml:"shield"`
 	Routing *RoutingConfig `mapstructure:"routing" yaml:"routing"`
 	OTel   *OtelConfig     `mapstructure:"otel" yaml:"otel"`
+	Egress *EgressConfig   `mapstructure:"egress" yaml:"egress"`
 }
 
 const defaultLogLevel = "info"
@@ -107,6 +117,11 @@ const defaultOtelEndpoint = "localhost:4317"
 const defaultOtelServiceName = "maskchain-gateway"
 const defaultOtelEnvironment = "development"
 const defaultOtelSamplingRatio = 1.0
+const defaultEgressMaxIdleConns = 10
+const defaultEgressIdleTimeout = 30 * time.Second
+const defaultEgressMaxRetries = 3
+const defaultEgressBaseBackoff = 100 * time.Millisecond
+const defaultEgressRetryOn5xx = false
 
 // @sk-task 10-gateway-skeleton#T1.2: Set ServerConfig defaults in DefaultConfig (AC-001, AC-005)
 func DefaultConfig() *Config {
@@ -138,6 +153,13 @@ func DefaultConfig() *Config {
 			ServiceName:   defaultOtelServiceName,
 			Environment:   defaultOtelEnvironment,
 			SamplingRatio: defaultOtelSamplingRatio,
+		},
+		Egress: &EgressConfig{
+			MaxIdleConns: defaultEgressMaxIdleConns,
+			IdleTimeout:  defaultEgressIdleTimeout,
+			MaxRetries:   defaultEgressMaxRetries,
+			BaseBackoff:  defaultEgressBaseBackoff,
+			RetryOn5xx:   defaultEgressRetryOn5xx,
 		},
 	}
 }

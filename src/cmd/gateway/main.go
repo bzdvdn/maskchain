@@ -10,14 +10,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/valkey-io/valkey-go"
 	"go.uber.org/zap"
 
+	"github.com/bzdvdn/maskchain/src/internal/adapters/egress"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
 	"github.com/bzdvdn/maskchain/src/internal/api"
-	"github.com/gin-gonic/gin"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/incident"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
@@ -39,6 +40,7 @@ import (
 
 // @sk-task 30-shield-persistence#T2.4: Wire pool, migrations, and new repos in main
 // @sk-task 61-observability#T2.2: Wire OTel telemetry, metrics, and logging (AC-001, AC-002, AC-003, AC-005, AC-006)
+// @sk-task 71-egress-streaming#T5.1: Wire egress client in main for all configured providers (AC-001, AC-002, AC-004, AC-005)
 func main() {
 	cfg := config.MustLoadConfig()
 
@@ -57,6 +59,12 @@ func main() {
 	}
 	selector := routingDomain.NewRouteSelector(registry)
 	clients := make(map[string]ports.ProviderClient)
+	if cfg.Egress != nil {
+		egClient := egress.NewClient(cfg.Egress)
+		for _, p := range registry.List() {
+			clients[p.Name] = egClient
+		}
+	}
 	fallbackHandler := routingDomain.NewFallbackHandler(clients)
 	routingHandler := api.NewRoutingProxyHandler(selector, fallbackHandler)
 

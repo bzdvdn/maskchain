@@ -24,6 +24,14 @@ func NewStubClient(name string) *StubClient {
 	}
 }
 
+// @sk-task 71-egress-streaming#T1.3: Add Stream() stub to StubClient (AC-003)
+func (c *StubClient) Stream(ctx context.Context, req *ports.ProviderRequest) (<-chan ports.ProviderChunk, error) {
+	ch := make(chan ports.ProviderChunk, 1)
+	ch <- ports.ProviderChunk{Done: true}
+	close(ch)
+	return ch, nil
+}
+
 func (c *StubClient) Call(ctx context.Context, req *ports.ProviderRequest) (*ports.ProviderResponse, error) {
 	if c.FailWithError != nil {
 		return nil, c.FailWithError
