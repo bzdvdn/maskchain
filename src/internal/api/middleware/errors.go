@@ -16,7 +16,10 @@ const (
 	ErrorCodeValidationError ErrorCode = "VALIDATION_ERROR"
 	ErrorCodeInternal        ErrorCode = "INTERNAL_ERROR"
 	// @sk-task 80-tenant-isolation#T2.1: Add unauthorized error code (AC-001, AC-002, AC-003)
-	ErrorCodeUnauthorized    ErrorCode = "UNAUTHORIZED"
+	ErrorCodeUnauthorized ErrorCode = "UNAUTHORIZED"
+	// @sk-task rate-limiting-budgets#T2.2: Add rate limit error codes (AC-001)
+	ErrorCodeRateLimitExceeded   ErrorCode = "RATE_LIMIT_EXCEEDED"
+	ErrorCodeTokenBudgetExceeded ErrorCode = "TOKEN_BUDGET_EXCEEDED"
 )
 
 // @sk-task 40-profiles-api#T1.1: Implement error middleware and helpers (AC-011)

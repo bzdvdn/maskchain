@@ -18,6 +18,8 @@ func RegisterMetrics(reg *prometheus.Registry) {
 	reg.MustRegister(ShieldScanDuration)
 	reg.MustRegister(ShieldIncidentsBySeverity)
 	reg.MustRegister(ShieldProfilesEvaluated)
+	reg.MustRegister(RateLimitExceededTotal)
+	reg.MustRegister(RateLimitRemaining)
 }
 
 // @sk-task 61-observability#T2.1: Middleware returns gin middleware that records HTTP request metrics (AC-003)
@@ -95,5 +97,25 @@ var (
 			Help:      "Number of profiles evaluated by shield",
 		},
 		[]string{"profile"},
+	)
+
+	// @sk-task rate-limiting-budgets#T3.3: Add rate limit Prometheus metrics (AC-007)
+	RateLimitExceededTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "rate_limited_total",
+			Help:      "Total number of rate-limited requests",
+		},
+		[]string{"tenant", "reason"},
+	)
+
+	// @sk-task rate-limiting-budgets#T3.3: Add rate limit remaining gauge (AC-007)
+	RateLimitRemaining = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "rate_limit_remaining",
+			Help:      "Remaining requests in current window",
+		},
+		[]string{"tenant"},
 	)
 )

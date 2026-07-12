@@ -90,6 +90,20 @@ type TenantConfig struct {
 	APIKeys     []string `mapstructure:"api_keys" yaml:"api_keys" validate:"required"`
 }
 
+// @sk-task rate-limiting-budgets#T1.1: Add RateLimitConfig with defaults (AC-006)
+type RateLimitConfig struct {
+	DefaultRatePerWindow int                           `mapstructure:"default_rate_per_window" yaml:"default_rate_per_window"`
+	DefaultWindowSec     int                           `mapstructure:"default_window_sec" yaml:"default_window_sec"`
+	DefaultTokenBudget   map[string]int64              `mapstructure:"default_token_budget" yaml:"default_token_budget"`
+	TenantOverrides      map[string]*RateLimitOverride `mapstructure:"tenant_overrides" yaml:"tenant_overrides"`
+}
+
+type RateLimitOverride struct {
+	RatePerWindow *int              `mapstructure:"rate_per_window" yaml:"rate_per_window"`
+	WindowSec     *int              `mapstructure:"window_sec" yaml:"window_sec"`
+	TokenBudget   map[string]int64  `mapstructure:"token_budget" yaml:"token_budget"`
+}
+
 // @sk-task 71-egress-streaming#T1.2: Add EgressConfig section (AC-002, AC-004, AC-006, AC-007)
 type EgressConfig struct {
 	MaxIdleConns    int           `mapstructure:"max_idle_conns" yaml:"max_idle_conns"`
@@ -109,8 +123,9 @@ type Config struct {
 	Shield *ShieldConfig   `mapstructure:"shield" yaml:"shield"`
 	Routing *RoutingConfig `mapstructure:"routing" yaml:"routing"`
 	OTel   *OtelConfig     `mapstructure:"otel" yaml:"otel"`
-	Egress *EgressConfig   `mapstructure:"egress" yaml:"egress"`
-	Tenants map[string]*TenantConfig `mapstructure:"tenants" yaml:"tenants"`
+	RateLimit *RateLimitConfig `mapstructure:"ratelimit" yaml:"ratelimit"`
+	Egress    *EgressConfig    `mapstructure:"egress" yaml:"egress"`
+	Tenants   map[string]*TenantConfig `mapstructure:"tenants" yaml:"tenants"`
 }
 
 const defaultLogLevel = "info"
@@ -132,6 +147,8 @@ const defaultEgressIdleTimeout = 30 * time.Second
 const defaultEgressMaxRetries = 3
 const defaultEgressBaseBackoff = 100 * time.Millisecond
 const defaultEgressRetryOn5xx = false
+const defaultRateLimitRate = 100
+const defaultRateLimitWindowSec = 60
 
 // @sk-task 10-gateway-skeleton#T1.2: Set ServerConfig defaults in DefaultConfig (AC-001, AC-005)
 func DefaultConfig() *Config {
