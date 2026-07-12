@@ -24,20 +24,26 @@
 
 ## Key Paths
 - `src/cmd/gateway/main.go` — gateway binary entrypoint (DI wiring for all components)
-- `src/internal/domain/` — core business logic: Content Shield, profiles, policies
+- `src/internal/domain/` — core business logic: Content Shield, profiles, policies, routing
   - `src/internal/domain/shield/mask/` — mask entry entity, storage interface, use case, UUIDv7
   - `src/internal/domain/shield/detector/` — detector interface, registry, composite detector
+  - `src/internal/domain/routing/` — routing domain entities (Provider, Route, RoutingRule, HealthStatus)
+  - `src/internal/domain/routing/service/` — routing services (ProviderRegistry, RouteSelector, FallbackHandler, HealthChecker)
 - `src/internal/app/` — use case orchestration
   - `src/internal/app/usecase/shield/` — ShieldEngine, ScanUseCase, ScanPipelineFactory, ApplyPolicyUseCase
 - `src/internal/ports/` — inbound (REST, gRPC) and outbound (repository, provider) interfaces
+  - `src/internal/ports/provider.go` — ProviderClient port interface (outbound, LLM provider abstraction)
 - `src/internal/adapters/` — repository impl (PostgreSQL), provider clients (OpenAI, Anthropic, etc.)
   - `src/internal/adapters/repository/mask/` — Postgres, Valkey, Cached mask repos
+  - `src/internal/adapters/provider/` — provider adapter stubs (OpenAI, Anthropic, etc.)
 - `src/internal/api/` — HTTP handlers, middleware, request/response types
   - `src/internal/api/mask_handler.go` — POST /api/v1/shield/mask and /unmask handlers
-   - `src/internal/api/handler/profile/` — Profile CRUD handlers (list, get, create, update, delete, patch dictionary)
-   - `src/internal/api/handler/incident/` — Incident read/export handlers (list, get, export CSV/JSON)
-   - `src/internal/api/dto/` — request/response DTOs (ProfileResponse, PaginatedResponse, DictionaryDTO, IncidentResponse)
-- `src/internal/infra/config/` — cobra/viper config loading, validation, defaults
+  - `src/internal/api/provider_handler.go` — RoutingProxyHandler (proxy to LLM providers), legacy stubs
+  - `src/internal/api/server.go` — router setup, RegisterProxyRoute accepts RoutingProxyHandler
+  - `src/internal/api/handler/profile/` — Profile CRUD handlers (list, get, create, update, delete, patch dictionary)
+  - `src/internal/api/handler/incident/` — Incident read/export handlers (list, get, export CSV/JSON)
+  - `src/internal/api/dto/` — request/response DTOs (ProfileResponse, PaginatedResponse, DictionaryDTO, IncidentResponse)
+- `src/internal/infra/config/` — cobra/viper config loading, validation, defaults (RoutingConfig, ProviderConfig, RouteConfig, RuleConfig)
 - `src/internal/infra/telemetry/` — OTel SDK init, TracerProvider, MeterProvider, OTLP exporters
 - `src/internal/infra/metrics/` — Prometheus metric definitions (HTTP, shield), /metrics handler
 - `src/internal/infra/logging/` — slog adapter with OTel trace_id/span_id enrichment
@@ -59,6 +65,8 @@
 - New domain logic — `src/internal/domain/`
 - New use case / feature — `src/internal/app/` + `src/internal/ports/` + `src/internal/adapters/`
 - New API endpoint — `src/internal/api/` + `src/internal/ports/` (inbound interface)
+- Routing domain changes — `src/internal/domain/routing/` + `src/internal/domain/routing/service/`
+- New provider adapter — `src/internal/adapters/provider/` + `src/internal/ports/provider.go`
 - Configuration changes — `src/internal/infra/config/`
 - Observability/telemetry changes — `src/internal/infra/telemetry/`, `src/internal/infra/metrics/`, `src/internal/infra/logging/`
 - Frontend changes — `ui/` (when implemented)

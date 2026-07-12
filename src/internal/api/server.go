@@ -92,10 +92,14 @@ func (s *Server) RegisterProfileHandler(h *profile.ProfileHandler) {
 	group.PATCH("/:slug/dictionary", h.PatchDictionary)
 }
 
-// @sk-task 51-shield-gateway-integration#T3.1: Register proxy routes with shield middleware (AC-001, AC-007)
-func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc) {
+// @sk-task 70-routing-engine#T3.2: Register proxy routes with routing handler (AC-003, AC-004)
+func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHandler *RoutingProxyHandler) {
 	group := s.engine.Group("/v1")
-	group.POST("/chat/completions", shieldMiddleware, ProxyChatCompletionHandler)
+	if routingHandler != nil {
+		group.POST("/chat/completions", shieldMiddleware, routingHandler.HandleChatCompletion)
+	} else {
+		group.POST("/chat/completions", shieldMiddleware, ProxyChatCompletionHandler)
+	}
 	group.POST("/completions", shieldMiddleware, ProxyCompletionHandler)
 }
 

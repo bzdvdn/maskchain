@@ -17,6 +17,7 @@ import (
 
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
 	"github.com/bzdvdn/maskchain/src/internal/api"
+	"github.com/gin-gonic/gin"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/incident"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
@@ -27,7 +28,9 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/reaction"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/service"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
+	routingDomain "github.com/bzdvdn/maskchain/src/internal/domain/routing/service"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
+	"github.com/bzdvdn/maskchain/src/internal/ports"
 	"github.com/bzdvdn/maskchain/src/internal/infra/logging"
 	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
 	"github.com/bzdvdn/maskchain/src/internal/infra/telemetry"
@@ -47,6 +50,15 @@ func main() {
 	defer logger.Sync()
 
 	logger.Debug("config loaded", zap.Any("config", cfg))
+
+	registry, err := routingDomain.NewProviderRegistry(cfg.Routing)
+	if err != nil {
+		logger.Fatal("failed to create provider registry", zap.Error(err))
+	}
+	selector := routingDomain.NewRouteSelector(registry)
+	clients := make(map[string]ports.ProviderClient)
+	fallbackHandler := routingDomain.NewFallbackHandler(clients)
+	routingHandler := api.NewRoutingProxyHandler(selector, fallbackHandler)
 
 	slogLogger := logging.NewLogger(io.Discard, slog.LevelInfo)
 
@@ -128,8 +140,8 @@ func main() {
 		scanUseCase := appshield.NewScanUseCase(profileRepo, pipelineFactory, policyEval, reactionPipeline, tenantID)
 		shieldEngine := appshield.NewShieldEngine(scanUseCase)
 		shieldMw := middleware.ShieldMiddleware(shieldEngine, profileRepo, cfg.Shield, logger)
-		srv.RegisterProxyRoute(shieldMw)
-		logger.Info("shield middleware registered")
+		srv.RegisterProxyRoute(shieldMw, routingHandler)
+		logger.Info("proxy routes with shield registered")
 
 		// @sk-task 60-audit-incidents#T2.3: Wire incident handler (AC-001, AC-002)
 		incidentRepo := postgres.NewPostgresIncidentRepo(pgPool)
@@ -138,6 +150,9 @@ func main() {
 		logger.Info("incident handler registered")
 	} else {
 		logger.Warn("no database configured, shield middleware disabled")
+		noopMw := func(c *gin.Context) { c.Next() }
+		srv.RegisterProxyRoute(noopMw, routingHandler)
+		logger.Info("proxy routes without shield registered")
 	}
 
 	go func() {

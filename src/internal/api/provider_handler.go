@@ -1,12 +1,96 @@
 package api
 
 import (
+	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	routingSvc "github.com/bzdvdn/maskchain/src/internal/domain/routing/service"
+	"github.com/bzdvdn/maskchain/src/internal/ports"
 )
 
-// @sk-task 51-shield-gateway-integration#T1.2: Create proxy handler stub (AC-002, AC-007)
+type chatRequest struct {
+	Model string `json:"model"`
+}
+
+// @sk-task 70-routing-engine#T3.1: Implement routing proxy handler (AC-003, AC-004)
+type RoutingProxyHandler struct {
+	selector *routingSvc.RouteSelector
+	fallback *routingSvc.FallbackHandler
+}
+
+func NewRoutingProxyHandler(selector *routingSvc.RouteSelector, fallback *routingSvc.FallbackHandler) *RoutingProxyHandler {
+	return &RoutingProxyHandler{selector: selector, fallback: fallback}
+}
+
+func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	var req chatRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	if req.Model == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "model is required"})
+		return
+	}
+
+	tenantID := c.GetHeader("X-Tenant-ID")
+
+	firstProvider, providers, err := h.selector.Select(req.Model, tenantID)
+	if errors.Is(err, routingSvc.ErrNoRoute) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no route for model " + req.Model})
+		return
+	}
+
+	if firstProvider != nil {
+		providerReq := &ports.ProviderRequest{
+			Method: http.MethodPost,
+			URL:    "/v1/chat/completions",
+			Body:   body,
+		}
+		resp, providerName, fbErr := h.fallback.Call(c.Request.Context(), []string{firstProvider.Name}, providerReq)
+		if fbErr == nil && resp != nil {
+			c.Header("X-Provider", providerName)
+			for k, v := range resp.Headers {
+				c.Header(k, v)
+			}
+			c.Data(resp.StatusCode, "application/json", resp.Body)
+			return
+		}
+	}
+
+	// First provider failed or none healthy — try fallback chain
+	if len(providers) == 0 {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "no healthy provider for model " + req.Model})
+		return
+	}
+
+	providerReq := &ports.ProviderRequest{
+		Method: http.MethodPost,
+		URL:    "/v1/chat/completions",
+		Body:   body,
+	}
+	resp, providerName, fbErr := h.fallback.Call(c.Request.Context(), providers, providerReq)
+	if fbErr != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "no healthy provider for model " + req.Model})
+		return
+	}
+
+	c.Header("X-Provider", providerName)
+	for k, v := range resp.Headers {
+		c.Header(k, v)
+	}
+	c.Data(resp.StatusCode, "application/json", resp.Body)
+}
+
 func ProxyChatCompletionHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"choices": []gin.H{

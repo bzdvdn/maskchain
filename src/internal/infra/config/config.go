@@ -49,6 +49,30 @@ type ShieldConfig struct {
 	TenantModelMapping map[string]map[string]string `mapstructure:"tenant_model_mapping" yaml:"tenant_model_mapping"`
 }
 
+// @sk-task 70-routing-engine#T1.2: Add routing config structs (AC-001, AC-002, AC-005)
+type ProviderConfig struct {
+	Name           string `mapstructure:"name" yaml:"name"`
+	BaseURL        string `mapstructure:"base_url" yaml:"base_url"`
+	HealthEndpoint string `mapstructure:"health_endpoint" yaml:"health_endpoint"`
+	Timeout        string `mapstructure:"timeout" yaml:"timeout"`
+	Priority       int    `mapstructure:"priority" yaml:"priority"`
+}
+
+type RouteConfig struct {
+	Model     string   `mapstructure:"model" yaml:"model"`
+	Providers []string `mapstructure:"providers" yaml:"providers"`
+}
+
+type RuleConfig struct {
+	Tenant string        `mapstructure:"tenant" yaml:"tenant"`
+	Routes []RouteConfig `mapstructure:"routes" yaml:"routes"`
+}
+
+type RoutingConfig struct {
+	Providers []ProviderConfig `mapstructure:"providers" yaml:"providers"`
+	Rules     []RuleConfig     `mapstructure:"rules" yaml:"rules"`
+}
+
 // @sk-task 61-observability#T1.2: Add OtelConfig section (AC-001, AC-006, AC-007)
 type OtelConfig struct {
 	Endpoint      string  `mapstructure:"endpoint" yaml:"endpoint"`
@@ -65,6 +89,7 @@ type Config struct {
 	Valkey *ValkeyConfig   `mapstructure:"valkey" yaml:"valkey"`
 	Mask   *MaskConfig     `mapstructure:"mask" yaml:"mask"`
 	Shield *ShieldConfig   `mapstructure:"shield" yaml:"shield"`
+	Routing *RoutingConfig `mapstructure:"routing" yaml:"routing"`
 	OTel   *OtelConfig     `mapstructure:"otel" yaml:"otel"`
 }
 
