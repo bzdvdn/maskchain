@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"net/http/pprof"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -143,6 +144,18 @@ func (s *Server) Start() error {
 	return s.http.ListenAndServe()
 }
 
+// @sk-task 90-production-hardening#T2.2: Register pprof routes behind admin auth (<AC-001>)
+func (s *Server) RegisterDebugRoutes(adminMw gin.HandlerFunc) {
+	group := s.engine.Group("/debug/pprof", adminMw)
+	group.GET("", gin.WrapH(http.HandlerFunc(pprof.Index)))
+	group.GET("/", gin.WrapH(http.HandlerFunc(pprof.Index)))
+	group.GET("/cmdline", gin.WrapH(http.HandlerFunc(pprof.Cmdline)))
+	group.GET("/profile", gin.WrapH(http.HandlerFunc(pprof.Profile)))
+	group.GET("/symbol", gin.WrapH(http.HandlerFunc(pprof.Symbol)))
+	group.GET("/trace", gin.WrapH(http.HandlerFunc(pprof.Trace)))
+}
+
+// @sk-task 90-production-hardening#T2.4: Graceful shutdown with config timeout (<SC-003>)
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.log.Info("shutting down server")
 	return s.http.Shutdown(ctx)

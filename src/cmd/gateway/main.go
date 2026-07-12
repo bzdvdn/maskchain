@@ -43,6 +43,8 @@ import (
 // @sk-task 30-shield-persistence#T2.4: Wire pool, migrations, and new repos in main
 // @sk-task 61-observability#T2.2: Wire OTel telemetry, metrics, and logging (AC-001, AC-002, AC-003, AC-005, AC-006)
 // @sk-task 71-egress-streaming#T5.1: Wire egress client in main for all configured providers (AC-001, AC-002, AC-004, AC-005)
+// @sk-task 90-production-hardening#T2.3: Log pool params at startup (<AC-002>)
+// @sk-task 90-production-hardening#T2.2: Wire debug routes with admin auth (<AC-001>)
 func main() {
 	cfg := config.MustLoadConfig()
 
@@ -54,6 +56,22 @@ func main() {
 	defer logger.Sync()
 
 	logger.Debug("config loaded", zap.Any("config", cfg))
+
+	if cfg.DB != nil {
+		logger.Info("database pool config",
+			zap.Int("max_open_conns", cfg.DB.MaxConns),
+			zap.Int("min_idle_conns", cfg.DB.MinConns),
+			zap.Duration("conn_max_lifetime", cfg.DB.MaxConnLifetime),
+		)
+	}
+	if cfg.Egress != nil {
+		logger.Info("http pool config",
+			zap.Int("max_idle_conns", cfg.Egress.MaxIdleConns),
+			zap.Int("max_idle_conns_per_host", cfg.Egress.MaxIdleConnsPerHost),
+			zap.Duration("idle_timeout", cfg.Egress.IdleTimeout),
+			zap.Bool("disable_keep_alives", cfg.Egress.DisableKeepAlives),
+		)
+	}
 
 	registry, err := routingDomain.NewProviderRegistry(cfg.Routing)
 	if err != nil {
@@ -109,6 +127,9 @@ func main() {
 		if err := postgres.RunMigrations(cfg.DB.DSN); err != nil {
 			logger.Fatal("failed to run migrations", zap.Error(err))
 		}
+		// @sk-task 90-production-hardening#T3.2: Register PG pool metrics collector (<AC-003>)
+		metrics.RegisterPGPoolCollector(promRegistry, pgPool)
+		logger.Info("PG pool metrics collector registered")
 	}
 
 	vkClient, err := initValkey(cfg.Valkey, logger)
@@ -150,6 +171,9 @@ func main() {
 	} else {
 		logger.Warn("no tenants configured, auth disabled")
 	}
+
+	adminMw := middleware.AdminAuth(cfg.Debug)
+	srv.RegisterDebugRoutes(adminMw)
 
 	srv.RegisterMetricsRoute(metricsHandler)
 	srv.RegisterMaskHandler(maskHandler)

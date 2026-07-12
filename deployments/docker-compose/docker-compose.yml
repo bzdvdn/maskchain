@@ -1,0 +1,70 @@
+version: "3.9"
+
+services:
+  gateway:
+    image: maskchain/gateway:latest
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      CONFIG_SERVER_PORT: "8080"
+      CONFIG_SERVER_SHUTDOWN_TIMEOUT: "30"
+      CONFIG_DATABASE_DSN: "postgres://maskchain:maskchain@postgres:5432/maskchain?sslmode=disable"
+      CONFIG_VALKEY_ADDR: "valkey:6379"
+      CONFIG_OTEL_ENDPOINT: "otel-collector:4317"
+      CONFIG_OTEL_ENVIRONMENT: "production"
+    profiles:
+      - production
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: "512M"
+        reservations:
+          cpus: "0.5"
+          memory: "256M"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: maskchain
+      POSTGRES_PASSWORD: maskchain
+      POSTGRES_DB: maskchain
+    profiles:
+      - production
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maskchain"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    profiles:
+      - production
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:

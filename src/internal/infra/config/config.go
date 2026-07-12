@@ -105,15 +105,25 @@ type RateLimitOverride struct {
 }
 
 // @sk-task 71-egress-streaming#T1.2: Add EgressConfig section (AC-002, AC-004, AC-006, AC-007)
+// @sk-task 90-production-hardening#T1.2: Add MaxIdleConnsPerHost and DisableKeepAlives (<AC-002>)
 type EgressConfig struct {
-	MaxIdleConns    int           `mapstructure:"max_idle_conns" yaml:"max_idle_conns"`
-	IdleTimeout     time.Duration `mapstructure:"idle_timeout" yaml:"idle_timeout"`
-	MaxRetries      int           `mapstructure:"max_retries" yaml:"max_retries"`
-	BaseBackoff     time.Duration `mapstructure:"base_backoff" yaml:"base_backoff"`
-	RetryOn5xx      bool          `mapstructure:"retry_on_5xx" yaml:"retry_on_5xx"`
+	MaxIdleConns        int           `mapstructure:"max_idle_conns" yaml:"max_idle_conns"`
+	IdleTimeout         time.Duration `mapstructure:"idle_timeout" yaml:"idle_timeout"`
+	MaxRetries          int           `mapstructure:"max_retries" yaml:"max_retries"`
+	BaseBackoff         time.Duration `mapstructure:"base_backoff" yaml:"base_backoff"`
+	RetryOn5xx          bool          `mapstructure:"retry_on_5xx" yaml:"retry_on_5xx"`
+	MaxIdleConnsPerHost int           `mapstructure:"max_idle_conns_per_host" yaml:"max_idle_conns_per_host"`
+	DisableKeepAlives   bool          `mapstructure:"disable_keep_alives" yaml:"disable_keep_alives"`
+}
+
+// @sk-task 90-production-hardening#T1.1: Add DebugConfig struct (<AC-001>)
+type DebugConfig struct {
+	Enabled    bool   `mapstructure:"enabled" yaml:"enabled"`
+	AdminToken string `mapstructure:"admin_token" yaml:"admin_token"`
 }
 
 // @sk-task 80-tenant-isolation#T1.2: Add Tenants map to Config struct (AC-001, AC-003, AC-004, AC-005)
+// @sk-task 90-production-hardening#T1.1: Wire Debug into Config (<AC-001>)
 type Config struct {
 	Log    *LogConfig    `mapstructure:"log" yaml:"log"`
 	Server *ServerConfig `mapstructure:"server" yaml:"server"`
@@ -125,12 +135,13 @@ type Config struct {
 	OTel   *OtelConfig     `mapstructure:"otel" yaml:"otel"`
 	RateLimit *RateLimitConfig `mapstructure:"ratelimit" yaml:"ratelimit"`
 	Egress    *EgressConfig    `mapstructure:"egress" yaml:"egress"`
+	Debug     *DebugConfig     `mapstructure:"debug" yaml:"debug"`
 	Tenants   map[string]*TenantConfig `mapstructure:"tenants" yaml:"tenants"`
 }
 
 const defaultLogLevel = "info"
 const defaultPort = 8080
-const defaultShutdownTimeout = 10
+const defaultShutdownTimeout = 30
 const defaultValkeyAddr = "localhost:6379"
 const defaultValkeyTTL = 3600
 const defaultMaskCacheTTL = 3600
@@ -147,6 +158,10 @@ const defaultEgressIdleTimeout = 30 * time.Second
 const defaultEgressMaxRetries = 3
 const defaultEgressBaseBackoff = 100 * time.Millisecond
 const defaultEgressRetryOn5xx = false
+const defaultEgressMaxIdleConnsPerHost = 2
+const defaultEgressDisableKeepAlives = false
+const defaultDebugEnabled = false
+const defaultDebugAdminToken = ""
 const defaultRateLimitRate = 100
 const defaultRateLimitWindowSec = 60
 
@@ -182,11 +197,17 @@ func DefaultConfig() *Config {
 			SamplingRatio: defaultOtelSamplingRatio,
 		},
 		Egress: &EgressConfig{
-			MaxIdleConns: defaultEgressMaxIdleConns,
-			IdleTimeout:  defaultEgressIdleTimeout,
-			MaxRetries:   defaultEgressMaxRetries,
-			BaseBackoff:  defaultEgressBaseBackoff,
-			RetryOn5xx:   defaultEgressRetryOn5xx,
+			MaxIdleConns:        defaultEgressMaxIdleConns,
+			IdleTimeout:         defaultEgressIdleTimeout,
+			MaxRetries:          defaultEgressMaxRetries,
+			BaseBackoff:         defaultEgressBaseBackoff,
+			RetryOn5xx:          defaultEgressRetryOn5xx,
+			MaxIdleConnsPerHost: defaultEgressMaxIdleConnsPerHost,
+			DisableKeepAlives:   defaultEgressDisableKeepAlives,
+		},
+		Debug: &DebugConfig{
+			Enabled:    defaultDebugEnabled,
+			AdminToken: defaultDebugAdminToken,
 		},
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -20,6 +21,11 @@ func RegisterMetrics(reg *prometheus.Registry) {
 	reg.MustRegister(ShieldProfilesEvaluated)
 	reg.MustRegister(RateLimitExceededTotal)
 	reg.MustRegister(RateLimitRemaining)
+}
+
+// @sk-task 90-production-hardening#T3.2: Register PG pool metrics collector (<AC-003>)
+func RegisterPGPoolCollector(reg *prometheus.Registry, pool *pgxpool.Pool) {
+	reg.MustRegister(NewPGPoolCollector(pool))
 }
 
 // @sk-task 61-observability#T2.1: Middleware returns gin middleware that records HTTP request metrics (AC-003)

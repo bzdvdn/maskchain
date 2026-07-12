@@ -3,7 +3,7 @@ GOFLAGS := -ldflags="-s -w"
 GOCMD := go
 GOPATH := $(shell $(GOCMD) env GOPATH)
 
-.PHONY: build test lint clean ui-build ui-dev docker-build check-structure
+.PHONY: build test lint clean ui-build ui-dev docker-build check-structure security-check load-test
 
 build: ui-build
 	@mkdir -p bin
@@ -47,3 +47,30 @@ check-structure:
 		if [ ! -d "$$dir" ]; then echo "MISSING: $$dir"; exit 1; fi; \
 	done
 	@echo "structure OK"
+
+# @sk-task 90-production-hardening#T4.1: Add security-check and load-test targets (<AC-004>, <AC-005>)
+security-check:
+	@echo "--- security-check: secrets scan ---"
+	@if command -v gitleaks >/dev/null 2>&1; then \
+		gitleaks detect --no-color --verbose 2>&1; \
+	else \
+		echo "gitleaks not installed. Install: brew install gitleaks or https://github.com/gitleaks/gitleaks"; \
+	fi
+	@echo "--- security-check: TLS lint ---"
+	@if command -v openssl >/dev/null 2>&1; then \
+		echo "OpenSSL available (manual TLS check: openssl s_client -connect <host>:443)"; \
+	else \
+		echo "openssl not found. Install openssl for TLS verification."; \
+	fi
+	@echo "--- security-check: config audit ---"
+	@if [ -f config.yaml ]; then \
+		echo "config.yaml found. Validating..."; \
+		$(GOCMD) run ./src/cmd/gateway/ --config config.yaml --log-level=error 2>&1 || echo "CONFIG AUDIT: config.yaml validation failed"; \
+	else \
+		echo "no config.yaml found, skipping audit"; \
+	fi
+	@echo "security-check complete"
+
+load-test:
+	@echo "--- load-test ---"
+	@python3 ./deployments/loadtest/chat_completion.py
