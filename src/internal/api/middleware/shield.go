@@ -184,12 +184,14 @@ func ShieldMiddleware(engine Scanner, profileRepo domshield.ProfileRepository, c
 	}
 }
 
+// @sk-task 80-tenant-isolation#T2.4: Read tenant from auth middleware context (AC-006)
 func resolveTenantID(c *gin.Context) value.TenantID {
-	tid := c.GetHeader("X-Tenant-ID")
-	if tid == "" {
-		tid = "default"
+	slug, ok := TenantFromContext(c)
+	if !ok {
+		id, _ := value.NewTenantID("default")
+		return id
 	}
-	id, err := value.NewTenantID(tid)
+	id, err := value.NewTenantID(slug)
 	if err != nil {
 		id, _ = value.NewTenantID("default")
 	}

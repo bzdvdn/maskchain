@@ -34,6 +34,9 @@ func (c *Client) Call(ctx context.Context, req *ports.ProviderRequest) (*ports.P
 	if err != nil {
 		return nil, err
 	}
+	for k, v := range req.Headers {
+		httpReq.Header.Set(k, v)
+	}
 
 	resp, err := c.doWithRetry(ctx, req.Method, func() (*http.Response, error) {
 		return c.tp.RoundTrip(httpReq)

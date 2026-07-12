@@ -23,6 +23,40 @@ func testConfig() *config.EgressConfig {
 	}
 }
 
+// @sk-test 80-tenant-isolation#T4.6: TestCallWithHeaders verifies ProviderRequest headers forwarded (AC-007)
+func TestCallWithHeaders(t *testing.T) {
+	var capturedHeaders map[string]string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedHeaders = map[string]string{
+			"X-Tenant-ID":  r.Header.Get("X-Tenant-ID"),
+			"X-Custom":     r.Header.Get("X-Custom"),
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(testConfig())
+	_, err := client.Call(context.Background(), &ports.ProviderRequest{
+		Method: http.MethodGet,
+		URL:    server.URL,
+		Headers: map[string]string{
+			"X-Tenant-ID": "alpha",
+			"X-Custom":    "custom-value",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Call failed: %v", err)
+	}
+
+	if capturedHeaders["X-Tenant-ID"] != "alpha" {
+		t.Errorf("expected X-Tenant-ID=alpha, got %q", capturedHeaders["X-Tenant-ID"])
+	}
+	if capturedHeaders["X-Custom"] != "custom-value" {
+		t.Errorf("expected X-Custom=custom-value, got %q", capturedHeaders["X-Custom"])
+	}
+}
+
 // @sk-test 71-egress-streaming#T2.2: TestCallViaProxy (AC-001)
 func TestCallViaProxy(t *testing.T) {
 	proxyCalled := atomic.Int64{}

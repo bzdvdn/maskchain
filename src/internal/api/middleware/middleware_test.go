@@ -200,6 +200,41 @@ func TestLogger(t *testing.T) {
 	}
 }
 
+// @sk-test 80-tenant-isolation#T4.7: TestLoggerWithTenant verifies tenant_id attribute (AC-008)
+func TestLoggerWithTenant(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	core, recorded := observer.New(zapcore.InfoLevel)
+	log := zap.New(core)
+
+	engine := gin.New()
+	engine.Use(RequestID())
+	engine.Use(Logger(log))
+	engine.GET("/test", func(c *gin.Context) {
+		c.Set(tenantKey, "test-tenant")
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
+	engine.ServeHTTP(w, req)
+
+	if recorded.Len() == 0 {
+		t.Fatal("expected log entry")
+	}
+	entry := recorded.All()[0]
+
+	var hasTenantID bool
+	for _, f := range entry.Context {
+		if f.Key == "tenant_id" && f.String == "test-tenant" {
+			hasTenantID = true
+			break
+		}
+	}
+	if !hasTenantID {
+		t.Error("expected tenant_id field in log entry")
+	}
+}
+
 // @sk-test 10-gateway-skeleton#T4.2: TestCORS allows configured origin (AC-008)
 func TestCORS_AllowedOrigin(t *testing.T) {
 	gin.SetMode(gin.TestMode)

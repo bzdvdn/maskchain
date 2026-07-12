@@ -2,10 +2,12 @@ package ports
 
 import "context"
 
+// @sk-task 80-tenant-isolation#T3.1: Add Headers field for X-Tenant-ID propagation (AC-007)
 type ProviderRequest struct {
-	Method string
-	URL    string
-	Body   []byte
+	Method  string
+	URL     string
+	Body    []byte
+	Headers map[string]string
 }
 
 type ProviderResponse struct {

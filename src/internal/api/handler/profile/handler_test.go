@@ -530,6 +530,11 @@ func performRequest(t *testing.T, h *ProfileHandler, method, path string, body i
 
 	w := httptest.NewRecorder()
 	r := gin.New()
+	// @sk-test 80-tenant-isolation#T2.3: Set tenant in context for tests (AC-005)
+	r.Use(func(c *gin.Context) {
+		c.Set("tenant_slug", "default")
+		c.Next()
+	})
 	r.POST("/api/v1/profiles", h.CreateProfile)
 	r.GET("/api/v1/profiles", h.ListProfiles)
 	r.GET("/api/v1/profiles/:slug", h.GetProfile)

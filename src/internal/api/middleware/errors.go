@@ -15,6 +15,8 @@ const (
 	ErrorCodeSlugConflict    ErrorCode = "SLUG_CONFLICT"
 	ErrorCodeValidationError ErrorCode = "VALIDATION_ERROR"
 	ErrorCodeInternal        ErrorCode = "INTERNAL_ERROR"
+	// @sk-task 80-tenant-isolation#T2.1: Add unauthorized error code (AC-001, AC-002, AC-003)
+	ErrorCodeUnauthorized    ErrorCode = "UNAUTHORIZED"
 )
 
 // @sk-task 40-profiles-api#T1.1: Implement error middleware and helpers (AC-011)

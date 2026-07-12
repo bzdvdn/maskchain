@@ -18,9 +18,10 @@ func newTestRegistry() *prometheus.Registry {
 }
 
 // @sk-test 61-observability#T4.1: TestMetricsPrefix verifies all metrics have maskchain_ prefix (AC-002)
+// @sk-test 80-tenant-isolation#T3.3: Update for tenant label (AC-009)
 func TestMetricsPrefix(t *testing.T) {
-	HttpRequestsTotal.WithLabelValues("GET", "/test", "200").Inc()
-	HttpRequestDuration.WithLabelValues("GET", "/test", "200").Observe(10)
+	HttpRequestsTotal.WithLabelValues("GET", "/test", "200", "unknown").Inc()
+	HttpRequestDuration.WithLabelValues("GET", "/test", "200", "unknown").Observe(10)
 	ShieldScanDuration.WithLabelValues("test-profile", "clean").Observe(10)
 	ShieldIncidentsBySeverity.WithLabelValues("blocked").Inc()
 	ShieldProfilesEvaluated.WithLabelValues("test-profile").Inc()
@@ -50,6 +51,34 @@ func TestMetricsPrefix(t *testing.T) {
 	}
 	if !strings.Contains(body, "maskchain_shield_profiles_evaluated") {
 		t.Error("expected maskchain_shield_profiles_evaluated")
+	}
+}
+
+// @sk-test 80-tenant-isolation#T4.8: TestMetricsTenantLabel verifies tenant label from context (AC-009)
+func TestMetricsTenantLabel(t *testing.T) {
+	reg := prometheus.NewRegistry()
+	RegisterMetrics(reg)
+
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(Middleware())
+	engine.GET("/test", func(c *gin.Context) {
+		c.Set("tenant_slug", "test-tenant")
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
+	engine.ServeHTTP(w, req)
+
+	handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
+	w2 := httptest.NewRecorder()
+	req2, _ := http.NewRequest(http.MethodGet, "/metrics", nil)
+	handler.ServeHTTP(w2, req2)
+
+	body := w2.Body.String()
+	if !strings.Contains(body, `tenant="test-tenant"`) {
+		t.Errorf("expected tenant label 'test-tenant' in metrics, got:\n%s", body)
 	}
 }
 

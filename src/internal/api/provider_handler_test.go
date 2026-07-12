@@ -18,12 +18,14 @@ import (
 )
 
 type mockPortClient struct {
-	statusCode int
-	err        error
-	delay      time.Duration
+	statusCode  int
+	err         error
+	delay       time.Duration
+	capturedReq *ports.ProviderRequest
 }
 
 func (m *mockPortClient) Call(_ context.Context, req *ports.ProviderRequest) (*ports.ProviderResponse, error) {
+	m.capturedReq = req
 	if m.delay > 0 {
 		time.Sleep(m.delay)
 	}
@@ -295,6 +297,56 @@ func TestSelectWithFallbackChain(t *testing.T) {
 	}
 	if len(providers) != 3 {
 		t.Errorf("expected 3 providers in list on error, got %d", len(providers))
+	}
+}
+
+// @sk-test 80-tenant-isolation#T4.5: TestRoutingHandlerTenantContext verifies tenant-scoped routing and X-Tenant-ID propagation (AC-006, AC-007)
+func TestRoutingHandlerTenantContext(t *testing.T) {
+	cfg := &config.RoutingConfig{
+		Providers: []config.ProviderConfig{
+			{Name: "test-provider", BaseURL: "http://localhost:1"},
+		},
+		Rules: []config.RuleConfig{
+			{
+				Tenant: "custom-tenant",
+				Routes: []config.RouteConfig{
+					{Model: "gpt-4", Providers: []string{"test-provider"}},
+				},
+			},
+		},
+	}
+
+	reg, _ := routingSvc.NewProviderRegistry(cfg)
+	sel := routingSvc.NewRouteSelector(reg)
+	client := &mockPortClient{statusCode: http.StatusOK}
+	clients := map[string]ports.ProviderClient{
+		"test-provider": client,
+	}
+	fb := routingSvc.NewFallbackHandler(clients)
+	handler := NewRoutingProxyHandler(sel, fb)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions",
+		strings.NewReader(`{"model":"gpt-4"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Set("tenant_slug", "custom-tenant")
+
+	handler.HandleChatCompletion(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	if prov := w.Header().Get("X-Provider"); prov != "test-provider" {
+		t.Errorf("expected X-Provider=test-provider (tenant-scoped routing), got %q", prov)
+	}
+
+	if client.capturedReq == nil {
+		t.Fatal("expected ProviderRequest to be captured")
+	}
+	if tid := client.capturedReq.Headers["X-Tenant-ID"]; tid != "custom-tenant" {
+		t.Errorf("expected X-Tenant-ID=custom-tenant, got %q", tid)
 	}
 }
 

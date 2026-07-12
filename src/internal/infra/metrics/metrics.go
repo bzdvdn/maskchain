@@ -21,14 +21,21 @@ func RegisterMetrics(reg *prometheus.Registry) {
 }
 
 // @sk-task 61-observability#T2.1: Middleware returns gin middleware that records HTTP request metrics (AC-003)
+// @sk-task 80-tenant-isolation#T3.3: Add tenant label to HTTP metrics (AC-009)
 func Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 		c.Next()
 		duration := time.Since(start)
 		status := strconv.Itoa(c.Writer.Status())
-		HttpRequestDuration.WithLabelValues(c.Request.Method, c.Request.URL.Path, status).Observe(float64(duration.Milliseconds()))
-		HttpRequestsTotal.WithLabelValues(c.Request.Method, c.Request.URL.Path, status).Inc()
+		tenant := "unknown"
+		if tid, ok := c.Get("tenant_slug"); ok {
+			if s, ok := tid.(string); ok {
+				tenant = s
+			}
+		}
+		HttpRequestDuration.WithLabelValues(c.Request.Method, c.Request.URL.Path, status, tenant).Observe(float64(duration.Milliseconds()))
+		HttpRequestsTotal.WithLabelValues(c.Request.Method, c.Request.URL.Path, status, tenant).Inc()
 	}
 }
 
@@ -41,15 +48,17 @@ func Handler(reg *prometheus.Registry) gin.HandlerFunc {
 }
 
 var (
+	// @sk-task 80-tenant-isolation#T3.3: Add tenant label to HTTP metrics (AC-009)
 	HttpRequestsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
 			Name:      "http_requests_total",
 			Help:      "Total number of HTTP requests",
 		},
-		[]string{"method", "path", "status_code"},
+		[]string{"method", "path", "status_code", "tenant"},
 	)
 
+	// @sk-task 80-tenant-isolation#T3.3: Add tenant label to HTTP metrics (AC-009)
 	HttpRequestDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: namespace,
@@ -57,7 +66,7 @@ var (
 			Help:      "HTTP request duration in milliseconds",
 			Buckets:   prometheus.DefBuckets,
 		},
-		[]string{"method", "path", "status_code"},
+		[]string{"method", "path", "status_code", "tenant"},
 	)
 
 	ShieldScanDuration = prometheus.NewHistogramVec(

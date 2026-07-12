@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	routingSvc "github.com/bzdvdn/maskchain/src/internal/domain/routing/service"
+	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/ports"
 )
 
@@ -42,7 +43,11 @@ func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
 		return
 	}
 
-	tenantID := c.GetHeader("X-Tenant-ID")
+	// @sk-task 80-tenant-isolation#T2.4: Read tenant from auth middleware context (AC-006)
+	tenantID, _ := middleware.TenantFromContext(c)
+	if tenantID == "" {
+		tenantID = c.GetHeader("X-Tenant-ID")
+	}
 
 	firstProvider, providers, err := h.selector.Select(req.Model, tenantID)
 	if errors.Is(err, routingSvc.ErrNoRoute) {
@@ -51,10 +56,14 @@ func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
 	}
 
 	if firstProvider != nil {
+		// @sk-task 80-tenant-isolation#T3.1: Propagate X-Tenant-ID to upstream (AC-007)
 		providerReq := &ports.ProviderRequest{
 			Method: http.MethodPost,
 			URL:    "/v1/chat/completions",
 			Body:   body,
+			Headers: map[string]string{
+				"X-Tenant-ID": tenantID,
+			},
 		}
 		resp, providerName, fbErr := h.fallback.Call(c.Request.Context(), []string{firstProvider.Name}, providerReq)
 		if fbErr == nil && resp != nil {

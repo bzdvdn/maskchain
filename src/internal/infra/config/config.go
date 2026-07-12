@@ -81,6 +81,15 @@ type OtelConfig struct {
 	SamplingRatio float64 `mapstructure:"sampling_ratio" yaml:"sampling_ratio"`
 }
 
+// @sk-task 80-tenant-isolation#T1.2: Add TenantConfig struct (AC-001, AC-003, AC-004)
+type TenantConfig struct {
+	Name        string   `mapstructure:"name" yaml:"name"`
+	ProfileSlug string   `mapstructure:"profile_slug" yaml:"profile_slug"`
+	AuthHeader  string   `mapstructure:"auth_header" yaml:"auth_header"`
+	AuthScheme  string   `mapstructure:"auth_scheme" yaml:"auth_scheme"`
+	APIKeys     []string `mapstructure:"api_keys" yaml:"api_keys" validate:"required"`
+}
+
 // @sk-task 71-egress-streaming#T1.2: Add EgressConfig section (AC-002, AC-004, AC-006, AC-007)
 type EgressConfig struct {
 	MaxIdleConns    int           `mapstructure:"max_idle_conns" yaml:"max_idle_conns"`
@@ -90,7 +99,7 @@ type EgressConfig struct {
 	RetryOn5xx      bool          `mapstructure:"retry_on_5xx" yaml:"retry_on_5xx"`
 }
 
-// @sk-task 10-gateway-skeleton#T1.2: Add ServerConfig to Config struct (AC-001, AC-005, AC-008)
+// @sk-task 80-tenant-isolation#T1.2: Add Tenants map to Config struct (AC-001, AC-003, AC-004, AC-005)
 type Config struct {
 	Log    *LogConfig    `mapstructure:"log" yaml:"log"`
 	Server *ServerConfig `mapstructure:"server" yaml:"server"`
@@ -101,6 +110,7 @@ type Config struct {
 	Routing *RoutingConfig `mapstructure:"routing" yaml:"routing"`
 	OTel   *OtelConfig     `mapstructure:"otel" yaml:"otel"`
 	Egress *EgressConfig   `mapstructure:"egress" yaml:"egress"`
+	Tenants map[string]*TenantConfig `mapstructure:"tenants" yaml:"tenants"`
 }
 
 const defaultLogLevel = "info"

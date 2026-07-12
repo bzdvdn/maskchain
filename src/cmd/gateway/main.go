@@ -29,6 +29,8 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/reaction"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/service"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
+	"github.com/bzdvdn/maskchain/src/internal/domain/tenant"
+	tenantrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/tenant"
 	routingDomain "github.com/bzdvdn/maskchain/src/internal/domain/routing/service"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 	"github.com/bzdvdn/maskchain/src/internal/ports"
@@ -124,6 +126,31 @@ func main() {
 	maskHandler := api.NewMaskHandler(maskUseCase, detectorRegistry)
 
 	srv := api.New(cfg.Server, logger, serviceName)
+
+	if cfg.Tenants != nil {
+		tenants := make([]*tenant.Tenant, 0, len(cfg.Tenants))
+		for slug, tc := range cfg.Tenants {
+			apiKeys := make([]tenant.APIKey, 0, len(tc.APIKeys))
+			for _, k := range tc.APIKeys {
+				ak, err := tenant.NewAPIKey(k)
+				if err != nil {
+					logger.Fatal("invalid api key", zap.String("tenant", slug), zap.Error(err))
+				}
+				apiKeys = append(apiKeys, ak)
+			}
+			tenants = append(tenants, tenant.NewTenant(slug, tc.Name, tc.ProfileSlug, apiKeys, tc.AuthHeader, tc.AuthScheme))
+		}
+		tenantRepo, err := tenantrepo.NewInMemoryRepository(tenants)
+		if err != nil {
+			logger.Fatal("failed to build tenant repository", zap.Error(err))
+		}
+		authMw := middleware.Auth(tenantRepo)
+		srv.RegisterAuth(authMw)
+		logger.Info("auth middleware registered", zap.Int("tenants", len(tenants)))
+	} else {
+		logger.Warn("no tenants configured, auth disabled")
+	}
+
 	srv.RegisterMetricsRoute(metricsHandler)
 	srv.RegisterMaskHandler(maskHandler)
 	srv.RegisterStaticFiles(ui.DistFiles)

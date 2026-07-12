@@ -18,12 +18,17 @@ func Logger(log *zap.Logger) gin.HandlerFunc {
 		rid, _ := c.Get(requestIDKey)
 		ridStr, _ := rid.(string)
 
-		log.Info("request",
+		// @sk-task 80-tenant-isolation#T3.2: Add tenant_id to log attributes (AC-008)
+		logFields := []zap.Field{
 			zap.String("method", c.Request.Method),
 			zap.String("path", c.Request.URL.Path),
 			zap.Int("status", c.Writer.Status()),
 			zap.Duration("duration", duration),
 			zap.String("request_id", ridStr),
-		)
+		}
+		if tid, ok := TenantFromContext(c); ok {
+			logFields = append(logFields, zap.String("tenant_id", tid))
+		}
+		log.Info("request", logFields...)
 	}
 }

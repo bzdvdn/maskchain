@@ -19,6 +19,30 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 )
 
+// @sk-test 80-tenant-isolation#T4.5: TestResolveTenantID reads tenant from auth context (AC-006)
+func TestResolveTenantID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("tenant in context", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set("tenant_slug", "alpha")
+		tid := resolveTenantID(c)
+		if tid.String() != "alpha" {
+			t.Errorf("expected alpha, got %s", tid.String())
+		}
+	})
+
+	t.Run("no tenant in context falls back to default", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		tid := resolveTenantID(c)
+		if tid.String() != "default" {
+			t.Errorf("expected default fallback, got %s", tid.String())
+		}
+	})
+}
+
 // @sk-test 51-shield-gateway-integration#T2.2: TestShieldBlocked returns 403 for critical content (AC-001)
 func TestShieldBlocked(t *testing.T) {
 	engine, mockEng, mockRepo, log := setupTest(t)

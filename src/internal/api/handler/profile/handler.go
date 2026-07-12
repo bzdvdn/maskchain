@@ -35,9 +35,18 @@ func New(repo shield.ProfileRepository) *ProfileHandler {
 	return &ProfileHandler{repo: repo}
 }
 
+// @sk-task 80-tenant-isolation#T2.3: Read tenant from auth middleware context, abort if missing (AC-005)
 func tenantIDFromContext(c *gin.Context) value.TenantID {
-	// TODO: replace with actual tenant extraction middleware
-	tid, _ := value.NewTenantID("default")
+	slug, ok := middleware.TenantFromContext(c)
+	if !ok {
+		middleware.AbortWithError(c, http.StatusUnauthorized, middleware.ErrorCodeUnauthorized, "unauthorized")
+		return value.TenantID{}
+	}
+	tid, err := value.NewTenantID(slug)
+	if err != nil {
+		middleware.AbortWithError(c, http.StatusUnauthorized, middleware.ErrorCodeUnauthorized, "unauthorized")
+		return value.TenantID{}
+	}
 	return tid
 }
 

@@ -73,6 +73,11 @@ func (s *Server) RegisterMaskHandler(h *MaskHandler) {
 	s.engine.POST("/api/v1/shield/unmask", h.HandleUnmask)
 }
 
+// @sk-task 80-tenant-isolation#T2.2: Register auth middleware (AC-002, AC-004)
+func (s *Server) RegisterAuth(mw gin.HandlerFunc) {
+	s.engine.Use(mw)
+}
+
 // @sk-task 60-audit-incidents#T2.3: Register incident routes with /export before /:id (AC-001, AC-002, AC-003)
 func (s *Server) RegisterIncidentHandler(h *incident.Handler) {
 	group := s.engine.Group("/api/v1/incidents")
