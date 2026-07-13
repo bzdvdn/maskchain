@@ -1,10 +1,12 @@
-# @sk-task 61-observability#T3.2: Add Prometheus + Grafana services for local observability dev-stack (AC-008)
+# Prod-like local dev stack for testing mask/unmask flow
+# Usage: docker compose up -d --build
+
 services:
   postgres:
     image: postgres:16-alpine
     container_name: maskchain-pg
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       POSTGRES_USER: test
       POSTGRES_PASSWORD: test
@@ -13,24 +15,61 @@ services:
       test: ["CMD-SHELL", "pg_isready -U test -d maskchain"]
       interval: 3s
       timeout: 3s
-      retries: 5
+      retries: 10
     volumes:
       - pgdata:/var/lib/postgresql/data
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: maskchain-vk
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
 
   gateway:
     build:
       context: ..
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.gateway
     container_name: maskchain-gateway
     ports:
       - "8080:8080"
     environment:
       CONFIG_LOG_LEVEL: debug
-      CONFIG_DATABASE_DSN: postgres://test:test@postgres:5432/maskchain?sslmode=disable
       CONFIG_SERVER_PORT: "8080"
-      CONFIG_OTEL_ENDPOINT: tempo:4317
+      CONFIG_DATABASE_DSN: postgres://test:test@postgres:5432/maskchain?sslmode=disable
+      CONFIG_VALKEY_ADDR: valkey:6379
+      CONFIG_OTEL_ENDPOINT: ""
+    volumes:
+      - ./config.yaml:/config.yaml:ro
     depends_on:
       postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+
+  admin:
+    build:
+      context: ..
+      dockerfile: Dockerfile.admin
+    container_name: maskchain-admin
+    ports:
+      - "8082:8081"
+    environment:
+      CONFIG_LOG_LEVEL: debug
+      CONFIG_SERVER_PORT: "8081"
+      CONFIG_DATABASE_DSN: postgres://test:test@postgres:5432/maskchain?sslmode=disable
+      CONFIG_VALKEY_ADDR: valkey:6379
+      CONFIG_OTEL_ENDPOINT: ""
+    volumes:
+      - ./config.yaml:/config.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
         condition: service_healthy
 
   prometheus:
@@ -52,8 +91,14 @@ services:
             static_configs:
               - targets: ['gateway:8080']
                 metrics_path: '/metrics'
+          - job_name: 'admin'
+            static_configs:
+              - targets: ['admin:8081']
+                metrics_path: '/metrics'
     depends_on:
       gateway:
+        condition: service_started
+      admin:
         condition: service_started
 
   grafana:

@@ -32,7 +32,7 @@ func TestProfileSaveAndFind(t *testing.T) {
 	tenant, _ := value.NewTenantID("t-integ-1")
 
 	dictSlug, _ := value.NewProfileSlug("integ-test-profile")
-	dictEntry := dictionary.NewDictionary(dictSlug, "blocklist", []string{"secret", "admin"}, dictionary.MatchModeExact)
+	dictEntry := dictionary.NewDictionary(dictSlug, "blocklist", []interface{}{"secret", "admin"}, dictionary.MatchModeExact)
 
 	pp := []preprocessor.PreprocessorDef{
 		{Name: "csv-mask", Type: "csv", Rules: []preprocessor.Rule{{Columns: []string{"email"}, Mask: "full"}}},

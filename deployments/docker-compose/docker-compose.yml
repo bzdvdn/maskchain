@@ -16,6 +16,8 @@ services:
       CONFIG_VALKEY_ADDR: "valkey:6379"
       CONFIG_OTEL_ENDPOINT: "otel-collector:4317"
       CONFIG_OTEL_ENVIRONMENT: "production"
+    volumes:
+      - ./config.yaml:/config.yaml:ro
     profiles:
       - production
     deploy:
@@ -55,6 +57,8 @@ services:
       CONFIG_VALKEY_ADDR: "valkey:6379"
       CONFIG_OTEL_ENDPOINT: "otel-collector:4317"
       CONFIG_OTEL_ENVIRONMENT: "production"
+    volumes:
+      - ./config.yaml:/config.yaml:ro
     profiles:
       - production
     deploy:

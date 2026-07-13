@@ -326,7 +326,11 @@ func (h *ProfileHandler) PatchDictionary(c *gin.Context) {
 			return
 		}
 
-		targetDict = dictionary.NewDictionary(slug, req.Name, req.Entries, dictionary.MatchModeExact)
+		entryList := make([]interface{}, len(req.Entries))
+		for i, e := range req.Entries {
+			entryList[i] = e
+		}
+		targetDict = dictionary.NewDictionary(slug, req.Name, entryList, dictionary.MatchModeExact)
 		dicts = append(dicts, targetDict)
 
 		profile = entity.NewProfile(profile.ID(), slug, tenantID, profile.Name(),
@@ -347,25 +351,31 @@ func (h *ProfileHandler) PatchDictionary(c *gin.Context) {
 		return
 	}
 
-	existingEntries := targetDict.Entries()
+	existingRaw := targetDict.Entries()
 	switch req.Action {
 	case "add":
-		existingEntries = append(existingEntries, req.Entries...)
+		for _, e := range req.Entries {
+			existingRaw = append(existingRaw, e)
+		}
 	case "remove":
 		removeSet := make(map[string]struct{}, len(req.Entries))
 		for _, e := range req.Entries {
 			removeSet[e] = struct{}{}
 		}
-		filtered := make([]string, 0, len(existingEntries))
-		for _, e := range existingEntries {
-			if _, ok := removeSet[e]; !ok {
+		var filtered []interface{}
+		for _, e := range existingRaw {
+			if s, ok := e.(string); ok {
+				if _, ok := removeSet[s]; !ok {
+					filtered = append(filtered, s)
+				}
+			} else {
 				filtered = append(filtered, e)
 			}
 		}
-		existingEntries = filtered
+		existingRaw = filtered
 	}
 
-	updatedDict := dictionary.NewDictionary(slug, req.Name, existingEntries, targetDict.MatchMode())
+	updatedDict := dictionary.NewDictionary(slug, req.Name, existingRaw, targetDict.MatchMode())
 	newDicts := make([]*dictionary.Dictionary, 0, len(dicts))
 	for _, d := range dicts {
 		if d.Name() == req.Name {
@@ -401,6 +411,17 @@ func makeDictionaries(slug value.ProfileSlug, dictDTOs []dto.DictionaryDTO) []*d
 		dicts = append(dicts, dictionary.NewDictionary(slug, d.Name, d.Entries, d.MatchMode))
 	}
 	return dicts
+}
+
+// makeStringEntries adapts []interface{} entries to []string for PatchDictionary.
+func makeStringEntries(raw []interface{}) []string {
+	out := make([]string, 0, len(raw))
+	for _, v := range raw {
+		if s, ok := v.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func toProfileResponse(p *entity.Profile) dto.ProfileResponse {

@@ -20,7 +20,7 @@ func NewDictionaryDetector(dict *dictionary.Dictionary) *DictionaryDetector {
 }
 
 func (d *DictionaryDetector) Scan(ctx context.Context, text string) ([]DetectorResult, error) {
-	if d.dict == nil || len(d.dict.Entries()) == 0 {
+	if d.dict == nil || len(d.dict.AllValues()) == 0 {
 		return nil, nil
 	}
 
@@ -39,7 +39,7 @@ func (d *DictionaryDetector) Scan(ctx context.Context, text string) ([]DetectorR
 }
 
 func (d *DictionaryDetector) scanExact(text string) []DetectorResult {
-	entries := d.dict.Entries()
+	entries := d.dict.AllValues()
 	set := make(map[string]struct{}, len(entries))
 	for _, e := range entries {
 		set[e] = struct{}{}
@@ -71,7 +71,7 @@ func (d *DictionaryDetector) scanExact(text string) []DetectorResult {
 }
 
 func (d *DictionaryDetector) scanContains(text string) []DetectorResult {
-	matcher := dictionary.BuildWordlistMatcher(d.dict.Entries())
+	matcher := dictionary.BuildWordlistMatcher(d.dict.AllValues())
 	matches := matcher.Match(text)
 
 	results := make([]DetectorResult, 0, len(matches))
@@ -91,7 +91,7 @@ func (d *DictionaryDetector) scanContains(text string) []DetectorResult {
 func (d *DictionaryDetector) scanRegex(text string) ([]DetectorResult, error) {
 	var results []DetectorResult
 
-	for _, entry := range d.dict.Entries() {
+	for _, entry := range d.dict.AllValues() {
 		re, err := regexp.Compile(entry)
 		if err != nil {
 			continue
@@ -112,7 +112,7 @@ func (d *DictionaryDetector) scanRegex(text string) ([]DetectorResult, error) {
 
 // @sk-task 24-shield-dictionaries#T3.3: Implement fuzzy mode with Levenshtein (AC-005)
 func (d *DictionaryDetector) scanFuzzy(text string) []DetectorResult {
-	entries := d.dict.Entries()
+	entries := d.dict.AllValues()
 	if len(entries) == 0 {
 		return nil
 	}

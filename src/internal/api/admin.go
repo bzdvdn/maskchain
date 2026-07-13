@@ -55,6 +55,10 @@ func NewAdminServer(cfg *config.ServerConfig, log *zap.Logger, serviceName strin
 	}
 }
 
+func (s *AdminServer) RegisterAuth(mw gin.HandlerFunc) {
+	s.engine.Use(mw)
+}
+
 func (s *AdminServer) RegisterMetricsRoute(handler gin.HandlerFunc) {
 	s.engine.GET("/metrics", handler)
 }

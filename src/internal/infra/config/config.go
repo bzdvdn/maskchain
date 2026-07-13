@@ -11,6 +11,10 @@ import (
 	"github.com/spf13/viper"
 )
 
+// envVarReplacer maps viper key format to env var format (reverse of SetEnvKeyReplacer).
+// Used to pre-populate viper from CONFIG_* env vars for Unmarshal to pick up.
+var envToKeyReplacer = strings.NewReplacer("_", ".", "-", ".")
+
 // @sk-task 01-config-bootstrap#T1.2: Create Config struct with LogConfig, mapstructure/yaml/validate tags, defaults (AC-001, AC-003)
 type LogConfig struct {
 	Level string `mapstructure:"level" yaml:"level" validate:"required"`
@@ -274,6 +278,28 @@ func LoadConfig(cmd *cobra.Command) (*Config, error) {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return nil, fmt.Errorf("read config: %w", err)
 		}
+	}
+
+	// Pre-populate from CONFIG_* env vars so Unmarshal picks them up
+	// even without a config file (AutomaticEnv only works with Get()).
+	// Multi-line values (YAML blocks) are skipped — they require a config file.
+	prefix := "CONFIG_"
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, prefix) {
+			continue
+		}
+		eq := strings.IndexByte(e, '=')
+		if eq < 0 {
+			continue
+		}
+		envName := e[:eq]
+		val := e[eq+1:]
+		key := strings.TrimPrefix(envName, prefix)
+		key = strings.ToLower(envToKeyReplacer.Replace(key))
+		if key == "" || strings.Contains(val, "\n") {
+			continue
+		}
+		v.Set(key, val)
 	}
 
 	cfg := DefaultConfig()

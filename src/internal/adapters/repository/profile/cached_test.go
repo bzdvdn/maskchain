@@ -197,7 +197,7 @@ func makeTestProfile(tenantID, slug, name string) *entity.Profile {
 	pid, _ := value.NewProfileID("test-" + slug)
 	return entity.NewProfile(pid, s, tid, name,
 		entity.WithDictionaries([]*dictionary.Dictionary{
-			dictionary.NewDictionary(s, "test-dict", []string{"entry1"}, dictionary.MatchModeExact),
+			dictionary.NewDictionary(s, "test-dict", []interface{}{"entry1"}, dictionary.MatchModeExact),
 		}),
 	)
 }

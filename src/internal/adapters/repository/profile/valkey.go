@@ -107,10 +107,10 @@ type patternDTO struct {
 }
 
 type dictionaryDTO struct {
-	ProfileSlug string   `json:"profile_slug"`
-	Name        string   `json:"name"`
-	Entries     []string `json:"entries"`
-	MatchMode   string   `json:"match_mode"`
+	ProfileSlug string        `json:"profile_slug"`
+	Name        string        `json:"name"`
+	Entries     []interface{} `json:"entries"`
+	MatchMode   string        `json:"match_mode"`
 }
 
 type preprocessorDTO = preprocessor.PreprocessorDef

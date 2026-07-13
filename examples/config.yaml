@@ -1,0 +1,10 @@
+# MaskChain example config — mounted into Docker containers
+# Simple overrides (CONFIG_VALKEY_ADDR, CONFIG_OTEL_ENDPOINT, etc.) can still use env vars.
+
+tenants:
+  default:
+    name: "Default Tenant"
+    profile_slug: "pii-protect"
+    auth_header: "Authorization"
+    api_keys:
+      - "sk-test-default"

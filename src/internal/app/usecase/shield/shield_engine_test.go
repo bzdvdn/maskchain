@@ -225,7 +225,7 @@ func setupRepos(t *testing.T, registry *detector.DetectorRegistry) *testRepos {
 	dict := dictionary.NewDictionary(
 		slug,
 		"test-dict",
-		[]string{"secret123"},
+		[]interface{}{"secret123"},
 		dictionary.MatchModeExact,
 	)
 
@@ -402,7 +402,7 @@ func setupMaskRepos(t *testing.T, registry *detector.DetectorRegistry) *testRepo
 	dict := dictionary.NewDictionary(
 		slug,
 		"test-dict",
-		[]string{"secret123"},
+		[]interface{}{"secret123"},
 		dictionary.MatchModeExact,
 	)
 

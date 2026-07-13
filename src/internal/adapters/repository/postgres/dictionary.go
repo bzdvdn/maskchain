@@ -28,7 +28,7 @@ func (r *PostgresDictionaryRepo) Save(ctx context.Context, dict *dictionary.Dict
 		return fmt.Errorf("delete old dictionary entries: %w", err)
 	}
 
-	for _, entry := range dict.Entries() {
+	for _, entry := range dict.AllValues() {
 		_, err := q.Exec(ctx,
 			`INSERT INTO dictionary_entries (profile_slug, entry_value, match_mode) VALUES ($1, $2, $3)`,
 			slug, entry, string(dict.MatchMode()))
@@ -81,7 +81,11 @@ func (r *PostgresDictionaryRepo) FindByProfileSlug(ctx context.Context, slug str
 		return nil, fmt.Errorf("invalid slug: %w", err)
 	}
 
-	return dictionary.NewDictionary(profileSlug, "", entries, matchMode), nil
+	entriesIface := make([]interface{}, len(entries))
+	for i, e := range entries {
+		entriesIface[i] = e
+	}
+	return dictionary.NewDictionary(profileSlug, "", entriesIface, matchMode), nil
 }
 
 func (r *PostgresDictionaryRepo) Delete(ctx context.Context, slug string) error {

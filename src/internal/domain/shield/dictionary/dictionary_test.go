@@ -10,7 +10,7 @@ import (
 // @sk-test 24-shield-dictionaries#T6.1: TestDictionaryValueObject (AC-001)
 func TestNewDictionary_Valid(t *testing.T) {
 	slug, _ := value.NewProfileSlug("test-profile")
-	entries := []string{"secret", "admin"}
+	entries := []interface{}{"secret", "admin"}
 
 	d := NewDictionary(slug, "test-dict", entries, MatchModeExact)
 	if d.ProfileSlug() != slug {
@@ -21,6 +21,10 @@ func TestNewDictionary_Valid(t *testing.T) {
 	}
 	if len(d.Entries()) != 2 || d.Entries()[0] != "secret" {
 		t.Errorf("unexpected entries: %v", d.Entries())
+	}
+	vals := d.AllValues()
+	if len(vals) != 2 || vals[0] != "secret" {
+		t.Errorf("unexpected AllValues: %v", vals)
 	}
 	if d.MatchMode() != MatchModeExact {
 		t.Errorf("expected exact mode, got %v", d.MatchMode())
@@ -42,7 +46,7 @@ func TestDictionaryRepository_SaveAndFind(t *testing.T) {
 	repo := newInMemoryRepo()
 
 	slug, _ := value.NewProfileSlug("test-profile")
-	dict := NewDictionary(slug, "test", []string{"a", "b"}, MatchModeExact)
+	dict := NewDictionary(slug, "test", []interface{}{"a", "b"}, MatchModeExact)
 
 	if err := repo.Save(ctx, dict); err != nil {
 		t.Fatalf("Save failed: %v", err)

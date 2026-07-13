@@ -41,7 +41,7 @@ type ProfileListItem struct {
 
 type DictionaryDTO struct {
 	Name      string              `json:"name" validate:"required"`
-	Entries   []string            `json:"entries" validate:"required"`
+	Entries   []interface{}       `json:"entries" validate:"required"`
 	MatchMode dictionary.MatchMode `json:"match_mode" validate:"required,oneof=exact contains regex fuzzy"`
 }
 

@@ -8,7 +8,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
 
-func testDict(t *testing.T, entries []string, mode dictionary.MatchMode) *dictionary.Dictionary {
+func testDict(t *testing.T, entries []interface{}, mode dictionary.MatchMode) *dictionary.Dictionary {
 	t.Helper()
 	slug, _ := value.NewProfileSlug("test-profile")
 	return dictionary.NewDictionary(slug, "test", entries, mode)
@@ -17,7 +17,7 @@ func testDict(t *testing.T, entries []string, mode dictionary.MatchMode) *dictio
 // @sk-test 24-shield-dictionaries#T6.1: TestDictionaryDetectorExact (AC-003)
 func TestDictionaryDetector_Exact(t *testing.T) {
 	ctx := context.Background()
-	dict := testDict(t, []string{"secret", "admin"}, dictionary.MatchModeExact)
+	dict := testDict(t, []interface{}{"secret", "admin"}, dictionary.MatchModeExact)
 	d := NewDictionaryDetector(dict)
 	results, err := d.Scan(ctx, "the admin password is secret")
 	if err != nil {
@@ -37,7 +37,7 @@ func TestDictionaryDetector_Exact(t *testing.T) {
 // @sk-test 24-shield-dictionaries#T6.1: TestDictionaryDetectorExactNoMatch (AC-003)
 func TestDictionaryDetector_ExactNoMatch(t *testing.T) {
 	ctx := context.Background()
-	dict := testDict(t, []string{"secret"}, dictionary.MatchModeExact)
+	dict := testDict(t, []interface{}{"secret"}, dictionary.MatchModeExact)
 	d := NewDictionaryDetector(dict)
 	results, err := d.Scan(ctx, "hello world")
 	if err != nil {
@@ -64,7 +64,7 @@ func TestDictionaryDetector_NilDict(t *testing.T) {
 // @sk-test 24-shield-dictionaries#T6.1: TestDictionaryDetectorContains (AC-004)
 func TestDictionaryDetector_Contains(t *testing.T) {
 	ctx := context.Background()
-	dict := testDict(t, []string{"example.com", "test"}, dictionary.MatchModeContains)
+	dict := testDict(t, []interface{}{"example.com", "test"}, dictionary.MatchModeContains)
 	d := NewDictionaryDetector(dict)
 	results, err := d.Scan(ctx, "visit sub.example.com for test")
 	if err != nil {
@@ -78,7 +78,7 @@ func TestDictionaryDetector_Contains(t *testing.T) {
 // @sk-test 24-shield-dictionaries#T6.1: TestDictionaryDetectorRegex (AC-005)
 func TestDictionaryDetector_Regex(t *testing.T) {
 	ctx := context.Background()
-	dict := testDict(t, []string{"admin.*", "\\d{3}"}, dictionary.MatchModeRegex)
+	dict := testDict(t, []interface{}{"admin.*", "\\d{3}"}, dictionary.MatchModeRegex)
 	d := NewDictionaryDetector(dict)
 	results, err := d.Scan(ctx, "admin_test 123")
 	if err != nil {
@@ -92,7 +92,7 @@ func TestDictionaryDetector_Regex(t *testing.T) {
 // @sk-test 24-shield-dictionaries#T6.1: TestDictionaryDetectorRegexInvalid (AC-005)
 func TestDictionaryDetector_RegexInvalid(t *testing.T) {
 	ctx := context.Background()
-	dict := testDict(t, []string{"[invalid", "valid"}, dictionary.MatchModeRegex)
+	dict := testDict(t, []interface{}{"[invalid", "valid"}, dictionary.MatchModeRegex)
 	d := NewDictionaryDetector(dict)
 	results, err := d.Scan(ctx, "this is valid")
 	if err != nil {
@@ -109,7 +109,7 @@ func TestDictionaryDetector_RegexInvalid(t *testing.T) {
 // @sk-test 24-shield-dictionaries#T6.1: TestDictionaryDetectorRegistry (AC-007)
 func TestDictionaryDetector_Registry(t *testing.T) {
 	registry := NewDetectorRegistry()
-	dict := testDict(t, []string{"test"}, dictionary.MatchModeExact)
+	dict := testDict(t, []interface{}{"test"}, dictionary.MatchModeExact)
 	det := NewDictionaryDetector(dict)
 
 	if err := registry.Register("dictionary", det); err != nil {
@@ -125,7 +125,7 @@ func TestDictionaryDetector_Registry(t *testing.T) {
 // @sk-test 24-shield-dictionaries#T6.1: TestDictionaryDetectorFuzzy (AC-005)
 func TestDictionaryDetector_Fuzzy(t *testing.T) {
 	ctx := context.Background()
-	dict := testDict(t, []string{"password"}, dictionary.MatchModeFuzzy)
+	dict := testDict(t, []interface{}{"password"}, dictionary.MatchModeFuzzy)
 	d := NewDictionaryDetector(dict)
 	results, err := d.Scan(ctx, "please enter your passw0rd")
 	if err != nil {

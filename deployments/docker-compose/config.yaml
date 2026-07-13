@@ -1,0 +1,11 @@
+# MaskChain production config
+# Монтируется в gateway/admin контейнеры.
+# В K8s — через ConfigMap.
+
+tenants:
+  default:
+    name: "Default Tenant"
+    profile_slug: "pii-protect"
+    auth_header: "Authorization"
+    api_keys:
+      - "sk-test-default"
