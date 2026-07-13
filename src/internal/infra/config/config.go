@@ -54,12 +54,15 @@ type ShieldConfig struct {
 }
 
 // @sk-task 70-routing-engine#T1.2: Add routing config structs (AC-001, AC-002, AC-005)
+// @sk-task 110-provider-adapters#T1.1: Add APIType and APIKey fields (AC-007, AC-008)
 type ProviderConfig struct {
 	Name           string `mapstructure:"name" yaml:"name"`
 	BaseURL        string `mapstructure:"base_url" yaml:"base_url"`
 	HealthEndpoint string `mapstructure:"health_endpoint" yaml:"health_endpoint"`
 	Timeout        string `mapstructure:"timeout" yaml:"timeout"`
 	Priority       int    `mapstructure:"priority" yaml:"priority"`
+	APIType        string `mapstructure:"api_type" yaml:"api_type"`
+	APIKey         string `mapstructure:"api_key" yaml:"api_key"`
 }
 
 type RouteConfig struct {

@@ -2,8 +2,10 @@ package egress
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -12,11 +14,19 @@ import (
 
 // @sk-task 71-egress-streaming#T4.1: Implement SSE stream parser with graceful shutdown (AC-003)
 func (c *Client) streamSSE(ctx context.Context, req *ports.ProviderRequest) (<-chan ports.ProviderChunk, error) {
-	httpReq, err := http.NewRequestWithContext(ctx, req.Method, req.URL, nil)
+	var body io.Reader
+	if len(req.Body) > 0 {
+		body = bytes.NewReader(req.Body)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, req.Method, req.URL, body)
 	if err != nil {
 		return nil, err
 	}
 	httpReq.Header.Set("Accept", "text/event-stream")
+	for k, v := range req.Headers {
+		httpReq.Header.Set(k, v)
+	}
 
 	resp, err := c.doWithRetry(ctx, req.Method, func() (*http.Response, error) {
 		return c.tp.RoundTrip(httpReq)
