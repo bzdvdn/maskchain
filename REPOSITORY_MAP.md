@@ -1,7 +1,8 @@
 # Repository Map
 
 ## Entry Points
-- `src/cmd/gateway/main.go` — runtime entrypoint (binary: `bin/gateway`)
+- `src/cmd/gateway/main.go` — gateway binary entrypoint (binary: `bin/gateway`, data plane: proxy, shield, admin API for automation)
+- `src/cmd/admin/main.go` — admin binary entrypoint (binary: `bin/admin`, control plane: UI, profile/incident management)
 
 ## Top-Level Code
 - `src/cmd/` — application entrypoints
@@ -13,7 +14,7 @@
 - `src/internal/api/` — HTTP/gRPC handlers, middleware, request/response types
 - `src/pkg/` — shared utilities (future)
 - `ui/` — Vite + React + TypeScript frontend (profiles management, incidents viewer)
-  - `ui/embed.go` — Go embed для встраивания статики в gateway
+  - `ui/embed.go` — Go embed для встраивания статики в admin (не gateway)
   - `ui/src/pages/Profiles/` — ProfileList, ProfileDetail, ProfileForm
   - `ui/src/pages/Incidents/` — IncidentList, IncidentDetail
   - `ui/src/components/` — DictionaryEditor, PreprocessorEditor, ErrorBoundary
@@ -23,7 +24,8 @@
 - `deployments/` — Docker, migrations, docker-compose configs
 
 ## Key Paths
-- `src/cmd/gateway/main.go` — gateway binary entrypoint (DI wiring for all components)
+- `src/cmd/gateway/main.go` — gateway binary entrypoint (DI wiring: proxy, shield, profile/incident API for automation)
+- `src/cmd/admin/main.go` — admin binary entrypoint (DI wiring: UI, profile/incident handlers, metrics)
 - `src/internal/domain/` — core business logic: Content Shield, profiles, policies, routing
   - `src/internal/domain/shield/mask/` — mask entry entity, storage interface, use case, UUIDv7
   - `src/internal/domain/shield/detector/` — detector interface, registry, composite detector
@@ -40,7 +42,8 @@
 - `src/internal/api/` — HTTP handlers, middleware, request/response types
   - `src/internal/api/mask_handler.go` — POST /api/v1/shield/mask and /unmask handlers
   - `src/internal/api/provider_handler.go` — RoutingProxyHandler (proxy to LLM providers), legacy stubs
-  - `src/internal/api/server.go` — router setup, RegisterProxyRoute accepts RoutingProxyHandler
+  - `src/internal/api/server.go` — gateway router setup, RegisterProxyRoute accepts RoutingProxyHandler
+- `src/internal/api/admin.go` — admin router setup (AdminServer), static files, profile/incident handlers
   - `src/internal/api/handler/profile/` — Profile CRUD handlers (list, get, create, update, delete, patch dictionary)
   - `src/internal/api/handler/incident/` — Incident read/export handlers (list, get, export CSV/JSON)
   - `src/internal/api/dto/` — request/response DTOs (ProfileResponse, PaginatedResponse, DictionaryDTO, IncidentResponse)
@@ -54,9 +57,11 @@
 - `specs/active/50-shield-engine/` — shield engine orchestration: spec, plan, tasks, inspect
 - `specs/active/60-audit-incidents/` — audit incidents viewer: spec, plan, tasks, inspect, data-model
 - `specs/active/61-observability/` — observability phase: spec, plan, tasks, inspect, data-model
+- `specs/active/100-admin-control-plane/` — admin control plane phase: spec, plan, tasks, inspect, data-model
 - `deployments/docker-compose/` — local dev environment (PostgreSQL, Valkey)
-- `Dockerfile` — multi-stage Docker build (node → golang → distroless)
-- `Dockerfile` — multistage Docker build (golang:1.26-alpine → distroless)
+- `Dockerfile` — symlink → `Dockerfile.admin` (обратная совместимость)
+- `Dockerfile.gateway` — gateway Dockerfile (Go build → distroless, без node)
+- `Dockerfile.admin` — admin Dockerfile (node build → Go build → distroless)
 - `Makefile` — build, test, lint, docker-build, clean, check-structure targets
 - `.golangci.yml` — linter configuration (gofmt, govet, staticcheck, errcheck, unused)
 - `.editorconfig` — editor formatting rules
@@ -72,7 +77,8 @@
 - Observability/telemetry changes — `src/internal/infra/telemetry/`, `src/internal/infra/metrics/`, `src/internal/infra/logging/`
 - Frontend changes — `ui/` (when implemented)
 - Spec/plan/tasks changes — `specs/active/<slug>/`
-- Build/CI changes — `Makefile`, `Dockerfile`, `.golangci.yml`
+- Admin binary changes — `src/cmd/admin/` + `src/internal/api/admin.go`
+- Build/CI changes — `Makefile`, `Dockerfile.gateway`, `Dockerfile.admin`, `.golangci.yml`
 - Deployment changes — `deployments/docker-compose/`
 
 ## Excluded

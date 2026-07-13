@@ -1,14 +1,23 @@
-BINARY := bin/gateway
+BINARY_GATEWAY := bin/gateway
+BINARY_ADMIN := bin/admin
 GOFLAGS := -ldflags="-s -w"
 GOCMD := go
 GOPATH := $(shell $(GOCMD) env GOPATH)
 
-.PHONY: build test lint clean ui-build ui-dev docker-build check-structure security-check load-test
+.PHONY: build build-gateway build-admin test lint clean ui-build ui-dev docker-build docker-build-gateway docker-build-admin check-structure security-check load-test
 
-build: ui-build
+# @sk-task 100-admin-control-plane#T1.2: Add build-gateway, build-admin, docker-build-gateway, docker-build-admin targets (AC-008)
+build: build-admin
+
+build-gateway:
 	@mkdir -p bin
-	@$(GOCMD) build $(GOFLAGS) -o $(BINARY) ./src/cmd/gateway/
-	@echo "built $(BINARY)"
+	@$(GOCMD) build $(GOFLAGS) -o $(BINARY_GATEWAY) ./src/cmd/gateway/
+	@echo "built $(BINARY_GATEWAY)"
+
+build-admin: ui-build
+	@mkdir -p bin
+	@$(GOCMD) build $(GOFLAGS) -o $(BINARY_ADMIN) ./src/cmd/admin/
+	@echo "built $(BINARY_ADMIN)"
 
 test:
 	@$(GOCMD) test ./...
@@ -34,9 +43,19 @@ ui-dev:
 	@echo "starting Vite dev server (API proxy -> localhost:8080)..."
 	@cd ui && npm run dev
 
-docker-build:
+docker-build: docker-build-admin
+
+docker-build-gateway:
 	@if command -v docker >/dev/null 2>&1; then \
-		docker build -t maskchain/gateway:latest .; \
+		docker build -f Dockerfile.gateway -t maskchain/gateway:latest .; \
+	else \
+		echo "docker not found. Please install Docker first."; \
+		exit 1; \
+	fi
+
+docker-build-admin:
+	@if command -v docker >/dev/null 2>&1; then \
+		docker build -f Dockerfile.admin -t maskchain/admin:latest .; \
 	else \
 		echo "docker not found. Please install Docker first."; \
 		exit 1; \

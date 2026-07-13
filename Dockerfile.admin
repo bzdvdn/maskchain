@@ -1,0 +1,24 @@
+# @sk-task 100-admin-control-plane#T1.1: Admin Dockerfile with UI build stage (AC-006)
+# Stage 1: UI build
+FROM node:20-alpine AS ui-builder
+
+WORKDIR /app/ui
+COPY ui/package.json ui/package-lock.json ./
+RUN npm ci
+COPY ui/ .
+RUN npm run build
+
+# Stage 2: Go build
+FROM golang:1.26-alpine AS go-builder
+
+WORKDIR /app
+COPY . .
+COPY --from=ui-builder /app/ui/dist ./ui/dist
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /admin ./src/cmd/admin/
+
+# Stage 3: Runtime
+FROM gcr.io/distroless/static-debian12
+
+COPY --from=go-builder /admin /admin
+
+ENTRYPOINT ["/admin"]

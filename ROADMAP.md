@@ -427,6 +427,139 @@
 
 ---
 
+## Group 10: Architecture Split & Production Quality
+
+### 100-admin-control-plane
+
+**Цель:** Выделить admin control plane в отдельный сервис со своим Dockerfile. Gateway остаётся лёгким data plane для LLM proxy, admin обслуживает UI и management API (profiles, incidents). Оба сервиса используют общие domain/ports/repository модули и одну базу.
+
+**Ключевые артефакты:**
+
+- `src/cmd/admin/main.go` — entrypoint admin binary (DI только для admin-нужд: UI, profile/incident handlers, metrics)
+- `src/internal/api/admin.go` — отдельный Server для admin (другие middleware, CORS, rate limits)
+- UI вынесен из gateway: `ui/embed.go` импортируется только admin binary
+- Gateway Dockerfile (`Dockerfile.gateway`): Go build → distroless, **без node-стадии**
+- Admin Dockerfile (`Dockerfile.admin`): node build → Go build → distroless (как текущий Dockerfile)
+- `src/cmd/gateway/main.go` — остаётся только: proxy routes, shield middleware, health, metrics, profile/incident **API handlers** (для automation/CI)
+- Общая библиотека: `src/internal/` — переиспользуется обоими binary без копирования
+- `deployments/docker-compose/docker-compose.yml` — оба сервиса: gateway (replicas: N) + admin (replica: 1)
+- Graceful shutdown per-service, раздельные сигналы
+
+**API маршрутизация:**
+- Gateway: `POST /v1/chat/completions`, `POST /v1/completions`, `GET /health`, `GET /ready`, `GET /metrics`
+- Gateway (admin API для automation): `GET/POST/PUT/DELETE /api/v1/profiles/*`, `GET /api/v1/incidents/*`, `POST /api/v1/shield/mask`
+- Admin: SPA static files (`/*` → `index.html`), admin-only endpoints (dashboard, bulk export)
+- Admin API может проксироваться через gateway или быть прямым (рекомендуется прямой на порту 8081 с внутренней сетью)
+
+**Зависимости:** 90, 40, 41
+
+---
+
+### 101-gateway-diet
+
+**Цель:** Убрать все не-proxy зависимости из gateway binary. Gateway должен весить минимально, стартовать за <100ms и не иметь лишних зависимостей.
+
+**Ключевые артефакты:**
+
+- Go build tag `gateway` / `admin` для условной компиляции
+- Удалить `ui/` embed из gateway (перенести в admin)
+- Опционально: вынести profile/incident handlers за feature-flag (если нужны — gateway их импортирует через build tag)
+- Gateway собирается без CGO, без node, минимальный image (distroless static, ~15MB)
+- Проверка: `go build -tags gateway ./src/cmd/gateway/` не импортирует никаких ui-пакетов
+- Makefile target: `build-gateway`, `build-admin`, `docker-build-gateway`, `docker-build-admin`
+
+**Зависимости:** 100
+
+---
+
+### 102-profile-cache
+
+**Цель:** Добавить read-through кэш для профилей на базе Valkey, чтобы gateway не ходил в PG при каждом запросе. Критично для горизонтального масштабирования gateway.
+
+**Ключевые артефакты:**
+
+- `src/internal/adapters/repository/profile/cached.go` — ProfileCache (Valkey + in-memory LRU fallback)
+- Кэш-ключи: `profile:<slug>:v<version>`, инвалидация по version bump
+- Write-through: при создании/обновлении профиля через admin пишем и в PG, и в Valkey
+- Read-through: при запросе профиля читаем Valkey → PG → пишем в кэш
+- TTL конфигурируемый, per-profile (дефолт 5 мин)
+- In-memory LRU cache (2nd level, `lru.Sized[K,V]`): ~10k entries, защита от burst-нагрузки при сбое Valkey
+- Event-based инвалидация: при изменении профиля отправляем PubSub-сообщение в Valkey → все gateway инстансы сбрасывают кэш
+- Graceful degradation: при недоступности Valkey читаем из PG + LRU, логируем warning
+- Метрики: cache_hits, cache_misses, cache_stale, cache_invalidations
+
+**Зависимости:** 30, 80, 61
+
+---
+
+### 103-rate-limiting-wiring
+
+**Цель:** Полноценно подключить rate limiting и token budgets в gateway request lifecycle. Middleware готова (`RegisterRateLimit`), но не завязана в main.
+
+**Ключевые артефакты:**
+
+- `src/internal/api/middleware/ratelimit.go` — RateLimit middleware (существует, требует доводки)
+- `src/internal/adapters/repository/budget/valkey_ratelimit.go` — Valkey-based sliding window counter (существует)
+- `src/internal/adapters/repository/budget/valkey_tokenbudget.go` — Token budget tracker (существует)
+- Wired в `main.go`: инициализация Valkey repos → middleware → регистрация через `srv.RegisterRateLimit()`
+- Per-tenant rate limits (из конфига `tenant_overrides`)
+- Per-model token budgets (из конфига `default_token_budget`)
+- Ошибки: `429 Too Many Requests` с `Retry-After` header
+- Метрики: rate_limit_exceeded_total, budget_exceeded_total, remaining_budget
+- Интеграционные тесты: rate limit + budget enforcement через testcontainers (Valkey)
+- Graceful handling: при недоступности Valkey rate limiting отключается (fail-open), логируется warning
+
+**Зависимости:** 81, 61, 90
+
+---
+
+### 104-api-consistency
+
+**Цель:** Привести все API-маршруты к единому стандарту `/api/v1/*`, исправить SPA NoRoute, добавить OpenAPI/Swagger docs.
+
+**Ключевые артефакты:**
+
+- Все маршруты: `/api/v1/profiles/*`, `/api/v1/incidents/*`, `/api/v1/shield/mask`, `/api/v1/chat/completions`, `/api/v1/completions`
+- Старые маршруты `/v1/chat/completions` оставить как deprecated с redirect (301)
+- `NoRoute` SPA handler ограничен: проверка `Accept: text/html` или отсутствие `.` в path
+- OpenAPI 3.1 spec: `docs/openapi.yaml`
+- Swagger UI endpoint: `GET /api/v1/docs` (только в admin binary)
+- Request/Response единый envelope: `{"data": ..., "error": {"code": "...", "message": "..."}}`
+- Пагинация: `{"data": [...], "pagination": {"page": 1, "per_page": 20, "total": 100}}`
+
+**Зависимости:** 100, 40, 60, 22
+
+---
+
+### 105-health-enhancements
+
+**Цель:** Заменить мёртвый healthcheck на dependency-aware probes. `GET /health` и `GET /ready` должны реально проверять состояние зависимостей.
+
+**Ключевые артефакты:**
+
+- `GET /health` — liveness: всегда 200 (процесс жив), базовый
+- `GET /ready` — readiness: проверка PG (SELECT 1), Valkey (PING), зависимости секции
+- `GET /live` — startup probe: сервис принял конфиг и инициализировал зависимости
+- Формат ответа:
+  ```json
+  {
+    "status": "ok" | "degraded" | "down",
+    "checks": {
+      "database": {"status": "ok", "latency_ms": 2},
+      "valkey": {"status": "ok", "latency_ms": 1},
+      "egress": {"status": "ok", "reachable": ["openai", "anthropic"]}
+    }
+  }
+  ```
+- `degraded` — если одна из не-критичных зависимостей недоступна (например, Valkey для rate limiter)
+- `down` — если критическая зависимость недоступна (PG для shield)
+- Config: `server.health_check.critical_deps: ["database"]`
+- Тесты: health handler с mock probes
+
+**Зависимости:** 10, 61
+
+---
+
 ## PostMVP (будущие фазы)
 
 | Slug                 | Описание                                                                   |
@@ -436,6 +569,8 @@
 | `advanced-detectors` | ML-based classifiers, context-aware PII, multi-language.                   |
 | `policy-engine`      | OPA/Rego policies, WASM filters, declarative policy model.                 |
 | `shield-benchmark`   | Performance benchmark suite для детекторов: throughput, latency, accuracy. |
+| `audit-dashboard`    | Admin dashboard с графиками инцидентов по tenant/severity/timeline.       |
+| `profile-export`     | Импорт/экспорт профилей в YAML/JSON, bulk operations.                      |
 
 ---
 
@@ -447,6 +582,10 @@
 30 → 40 → 41 → 50 → 51 → 60 → 61
                                     ↓
 70 → 71 → 80 → 81 → 82 → 90
+                                    ↓
+100 → 101  102 → 103 → 104 → 105
+  ↓     ↓     ↓
+  └─────┴─────┘ (могут идти параллельно после 100)
 ```
 
 Каждая фаза — полный speckeep цикл:

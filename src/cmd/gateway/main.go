@@ -37,7 +37,6 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/infra/logging"
 	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
 	"github.com/bzdvdn/maskchain/src/internal/infra/telemetry"
-	"github.com/bzdvdn/maskchain/ui"
 )
 
 // @sk-task 30-shield-persistence#T2.4: Wire pool, migrations, and new repos in main
@@ -45,6 +44,8 @@ import (
 // @sk-task 71-egress-streaming#T5.1: Wire egress client in main for all configured providers (AC-001, AC-002, AC-004, AC-005)
 // @sk-task 90-production-hardening#T2.3: Log pool params at startup (<AC-002>)
 // @sk-task 90-production-hardening#T2.2: Wire debug routes with admin auth (<AC-001>)
+// @sk-task 100-admin-control-plane#T2.3: Remove ui import from gateway, move to admin (AC-001, AC-005)
+// @sk-task 100-admin-control-plane#T3.2: Final cleanup — no ui references in gateway (AC-001)
 func main() {
 	cfg := config.MustLoadConfig()
 
@@ -177,7 +178,6 @@ func main() {
 
 	srv.RegisterMetricsRoute(metricsHandler)
 	srv.RegisterMaskHandler(maskHandler)
-	srv.RegisterStaticFiles(ui.DistFiles)
 
 	if pgPool != nil {
 		dictRepo := postgres.NewPostgresDictionaryRepo(pgPool)
