@@ -18,12 +18,14 @@ import (
 
 	"github.com/bzdvdn/maskchain/src/internal/adapters/egress"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
+	profilerepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/profile"
 	"github.com/bzdvdn/maskchain/src/internal/api"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/incident"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
 	maskrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/mask"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/detector"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/dictionary"
 	domainMask "github.com/bzdvdn/maskchain/src/internal/domain/shield/mask"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/reaction"
@@ -182,7 +184,7 @@ func main() {
 	if pgPool != nil {
 		dictRepo := postgres.NewPostgresDictionaryRepo(pgPool)
 		txMgr := postgres.NewPGXTransactionManager(pgPool)
-		profileRepo := postgres.NewPostgresProfileRepo(pgPool, dictRepo, txMgr)
+		pgProfileRepo := postgres.NewPostgresProfileRepo(pgPool, dictRepo, txMgr)
 
 		pipelineFactory := appshield.NewScanPipelineFactory(detectorRegistry)
 		policyEval := service.NewPolicyEvaluator()
@@ -196,11 +198,47 @@ func main() {
 			logger.Fatal("failed to create tenant ID", zap.Error(err))
 		}
 
+		// @sk-task 102-profile-cache#T2.5: Wire ProfileCache in gateway (AC-001, AC-002, AC-003, AC-004, AC-006, AC-009)
+		profileValkeyTTL := time.Duration(cfg.ProfileCache.ValkeyTTLSec) * time.Second
+		pvkRepo := profilerepo.NewProfileValkeyRepo(vkClient, profileValkeyTTL)
+		pLru := profilerepo.NewProfileLRUCache(cfg.ProfileCache.LRUSize)
+		dictLoader := profilerepo.NewDictLoader(func(ctx context.Context, slug string) (*dictionary.Dictionary, error) {
+			return dictRepo.FindByProfileSlug(ctx, slug)
+		})
+		versionFunc := func(ctx context.Context, tenantID, slug string) (int, error) {
+			var v int
+			err := pgPool.QueryRow(ctx, "SELECT version FROM profiles WHERE slug = $1 AND tenant_id = $2", slug, tenantID).Scan(&v)
+			return v, err
+		}
+		cacheMetrics := profilerepo.NewPromCacheMetrics(
+			metrics.ProfileCacheHitsTotal,
+			metrics.ProfileCacheMissesTotal,
+			metrics.ProfileCacheStaleTotal,
+			metrics.ProfileCacheInvalidationsTotal,
+		)
+		invalidated := profilerepo.NewInvalidationTracker()
+		profileRepo := profilerepo.NewProfileCache(pgProfileRepo, pvkRepo, pLru, dictLoader, slogLogger, versionFunc, cacheMetrics, invalidated)
+
 		scanUseCase := appshield.NewScanUseCase(profileRepo, pipelineFactory, policyEval, reactionPipeline, tenantID)
 		shieldEngine := appshield.NewShieldEngine(scanUseCase)
 		shieldMw := middleware.ShieldMiddleware(shieldEngine, profileRepo, cfg.Shield, logger)
 		srv.RegisterProxyRoute(shieldMw, routingHandler)
 		logger.Info("proxy routes with shield registered")
+
+		if cfg.ProfileCache.WarmOnStartup {
+			warmer := profilerepo.NewProfileCacheWarmer(pgProfileRepo, pvkRepo, pLru, slogLogger, versionFunc, cfg.ProfileCache.WarmConcurrency)
+			warmCtx, warmCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			go func() {
+				defer warmCancel()
+				warmer.WarmTenant(warmCtx, tenantID)
+			}()
+			logger.Info("cache warming started", zap.Int("concurrency", cfg.ProfileCache.WarmConcurrency))
+		}
+
+		// @sk-task 102-profile-cache#T3.3: Wire PubSub subscriber in gateway (AC-005, AC-007)
+		pubSubSub := profilerepo.NewPubSubSubscriber(vkClient, invalidated, cacheMetrics, slogLogger)
+		pubSubSub.Start()
+		logger.Info("pubsub subscriber started", zap.String("pattern", "profile.invalidate:*"))
 
 		// @sk-task 60-audit-incidents#T2.3: Wire incident handler (AC-001, AC-002)
 		incidentRepo := postgres.NewPostgresIncidentRepo(pgPool)

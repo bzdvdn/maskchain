@@ -37,6 +37,7 @@
   - `src/internal/ports/provider.go` — ProviderClient port interface (outbound, LLM provider abstraction), ProviderChunk type, Stream() method
 - `src/internal/adapters/` — repository impl (PostgreSQL), provider clients (OpenAI, Anthropic, etc.)
   - `src/internal/adapters/repository/mask/` — Postgres, Valkey, Cached mask repos
+  - `src/internal/adapters/repository/profile/` — ProfileCache (Valkey + LRU), PubSub invalidation, warming, InvalidationTracker
   - `src/internal/adapters/provider/` — provider adapter stubs (OpenAI, Anthropic, etc.)
   - `src/internal/adapters/egress/` — egress HTTP/HTTPS client with proxy dialer, SSE streaming, retry, connection pooling (implements ProviderClient with Call + Stream)
 - `src/internal/api/` — HTTP handlers, middleware, request/response types

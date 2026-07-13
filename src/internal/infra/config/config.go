@@ -122,6 +122,14 @@ type DebugConfig struct {
 	AdminToken string `mapstructure:"admin_token" yaml:"admin_token"`
 }
 
+// @sk-task 102-profile-cache#T1.2: Add ProfileCacheConfig struct (RQ-009, RQ-010)
+type ProfileCacheConfig struct {
+	ValkeyTTLSec    int  `mapstructure:"valkey_ttl_sec" yaml:"valkey_ttl_sec"`
+	LRUSize         int  `mapstructure:"lru_size" yaml:"lru_size"`
+	WarmOnStartup   bool `mapstructure:"warm_on_startup" yaml:"warm_on_startup"`
+	WarmConcurrency int  `mapstructure:"warm_concurrency" yaml:"warm_concurrency"`
+}
+
 // @sk-task 80-tenant-isolation#T1.2: Add Tenants map to Config struct (AC-001, AC-003, AC-004, AC-005)
 // @sk-task 90-production-hardening#T1.1: Wire Debug into Config (<AC-001>)
 type Config struct {
@@ -136,6 +144,7 @@ type Config struct {
 	RateLimit *RateLimitConfig `mapstructure:"ratelimit" yaml:"ratelimit"`
 	Egress    *EgressConfig    `mapstructure:"egress" yaml:"egress"`
 	Debug     *DebugConfig     `mapstructure:"debug" yaml:"debug"`
+	ProfileCache *ProfileCacheConfig `mapstructure:"profile_cache" yaml:"profile_cache"`
 	Tenants   map[string]*TenantConfig `mapstructure:"tenants" yaml:"tenants"`
 }
 
@@ -164,6 +173,10 @@ const defaultDebugEnabled = false
 const defaultDebugAdminToken = ""
 const defaultRateLimitRate = 100
 const defaultRateLimitWindowSec = 60
+const defaultProfileCacheValkeyTTL = 300
+const defaultProfileCacheLRUSize = 10000
+const defaultProfileCacheWarmOnStartup = true
+const defaultProfileCacheWarmConcurrency = 5
 
 // @sk-task 10-gateway-skeleton#T1.2: Set ServerConfig defaults in DefaultConfig (AC-001, AC-005)
 func DefaultConfig() *Config {
@@ -208,6 +221,12 @@ func DefaultConfig() *Config {
 		Debug: &DebugConfig{
 			Enabled:    defaultDebugEnabled,
 			AdminToken: defaultDebugAdminToken,
+		},
+		ProfileCache: &ProfileCacheConfig{
+			ValkeyTTLSec:    defaultProfileCacheValkeyTTL,
+			LRUSize:         defaultProfileCacheLRUSize,
+			WarmOnStartup:   defaultProfileCacheWarmOnStartup,
+			WarmConcurrency: defaultProfileCacheWarmConcurrency,
 		},
 	}
 }

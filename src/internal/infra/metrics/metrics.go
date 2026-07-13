@@ -21,6 +21,10 @@ func RegisterMetrics(reg *prometheus.Registry) {
 	reg.MustRegister(ShieldProfilesEvaluated)
 	reg.MustRegister(RateLimitExceededTotal)
 	reg.MustRegister(RateLimitRemaining)
+	reg.MustRegister(ProfileCacheHitsTotal)
+	reg.MustRegister(ProfileCacheMissesTotal)
+	reg.MustRegister(ProfileCacheStaleTotal)
+	reg.MustRegister(ProfileCacheInvalidationsTotal)
 }
 
 // @sk-task 90-production-hardening#T3.2: Register PG pool metrics collector (<AC-003>)
@@ -123,5 +127,42 @@ var (
 			Help:      "Remaining requests in current window",
 		},
 		[]string{"tenant"},
+	)
+
+	// @sk-task 102-profile-cache#T2.3: Register ProfileCache Prometheus counter vectors (RQ-008)
+	ProfileCacheHitsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "profile_cache_hits_total",
+			Help:      "Total number of profile cache hits",
+		},
+		[]string{"operation", "level"},
+	)
+
+	ProfileCacheMissesTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "profile_cache_misses_total",
+			Help:      "Total number of profile cache misses",
+		},
+		[]string{"operation", "level"},
+	)
+
+	ProfileCacheStaleTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "profile_cache_stale_total",
+			Help:      "Total number of stale cache reads (Valkey degraded)",
+		},
+		[]string{"operation"},
+	)
+
+	ProfileCacheInvalidationsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "profile_cache_invalidations_total",
+			Help:      "Total number of cache invalidations",
+		},
+		[]string{"operation"},
 	)
 )

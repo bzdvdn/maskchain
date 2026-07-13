@@ -20,6 +20,8 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/profile"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
+	profilerepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/profile"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/dictionary"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 	"github.com/bzdvdn/maskchain/src/internal/infra/logging"
 	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
@@ -77,7 +79,7 @@ func main() {
 		metrics.RegisterPGPoolCollector(promRegistry, pgPool)
 	}
 
-	initValkey(cfg.Valkey, logger)
+	vkClient := initValkey(cfg.Valkey, logger)
 
 	srv := api.NewAdminServer(cfg.Server, logger, serviceName)
 
@@ -90,7 +92,27 @@ func main() {
 	if pgPool != nil {
 		dictRepo := postgres.NewPostgresDictionaryRepo(pgPool)
 		txMgr := postgres.NewPGXTransactionManager(pgPool)
-		profileRepo := postgres.NewPostgresProfileRepo(pgPool, dictRepo, txMgr)
+		pgProfileRepo := postgres.NewPostgresProfileRepo(pgPool, dictRepo, txMgr)
+
+		// @sk-task 102-profile-cache#T2.5: Wire ProfileCache in admin (AC-002, AC-009)
+		profileValkeyTTL := time.Duration(cfg.ProfileCache.ValkeyTTLSec) * time.Second
+		pvkRepo := profilerepo.NewProfileValkeyRepo(vkClient, profileValkeyTTL)
+		pLru := profilerepo.NewProfileLRUCache(cfg.ProfileCache.LRUSize)
+		dictLoader := profilerepo.NewDictLoader(func(ctx context.Context, slug string) (*dictionary.Dictionary, error) {
+			return dictRepo.FindByProfileSlug(ctx, slug)
+		})
+		versionFunc := func(ctx context.Context, tenantID, slug string) (int, error) {
+			var v int
+			err := pgPool.QueryRow(ctx, "SELECT version FROM profiles WHERE slug = $1 AND tenant_id = $2", slug, tenantID).Scan(&v)
+			return v, err
+		}
+		cacheMetrics := profilerepo.NewPromCacheMetrics(
+			metrics.ProfileCacheHitsTotal,
+			metrics.ProfileCacheMissesTotal,
+			metrics.ProfileCacheStaleTotal,
+			metrics.ProfileCacheInvalidationsTotal,
+		)
+		profileRepo := profilerepo.NewProfileCache(pgProfileRepo, pvkRepo, pLru, dictLoader, slogLogger, versionFunc, cacheMetrics, nil)
 		profileHandler := profile.New(profileRepo)
 		srv.RegisterProfileHandler(profileHandler)
 
@@ -138,10 +160,10 @@ func initPG(ctx context.Context, dbCfg *config.DatabaseConfig, log *zap.Logger) 
 	return pool, nil
 }
 
-func initValkey(vkCfg *config.ValkeyConfig, log *zap.Logger) {
+func initValkey(vkCfg *config.ValkeyConfig, log *zap.Logger) valkey.Client {
 	if vkCfg == nil || vkCfg.Addr == "" {
 		log.Warn("no valkey configured, admin cache disabled")
-		return
+		return nil
 	}
 	client, err := valkey.NewClient(valkey.ClientOption{
 		InitAddress: []string{vkCfg.Addr},
@@ -149,9 +171,9 @@ func initValkey(vkCfg *config.ValkeyConfig, log *zap.Logger) {
 	})
 	if err != nil {
 		log.Warn("valkey client init failed", zap.Error(err))
-		return
+		return nil
 	}
-	_ = client
+	return client
 }
 
 func buildLogger(level string) (*zap.Logger, error) {
