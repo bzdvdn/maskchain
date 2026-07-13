@@ -9,14 +9,16 @@ GOPATH := $(shell $(GOCMD) env GOPATH)
 # @sk-task 100-admin-control-plane#T1.2: Add build-gateway, build-admin, docker-build-gateway, docker-build-admin targets (AC-008)
 build: build-admin
 
+# @sk-task 101-gateway-diet#T1.2: Add -tags gateway and CGO_ENABLED=0 to build-gateway (AC-003, AC-006)
 build-gateway:
 	@mkdir -p bin
-	@$(GOCMD) build $(GOFLAGS) -o $(BINARY_GATEWAY) ./src/cmd/gateway/
+	@CGO_ENABLED=0 $(GOCMD) build $(GOFLAGS) -tags gateway -o $(BINARY_GATEWAY) ./src/cmd/gateway/
 	@echo "built $(BINARY_GATEWAY)"
 
+# @sk-task 101-gateway-diet#T1.2: Add -tags admin and CGO_ENABLED=0 to build-admin (AC-006)
 build-admin: ui-build
 	@mkdir -p bin
-	@$(GOCMD) build $(GOFLAGS) -o $(BINARY_ADMIN) ./src/cmd/admin/
+	@CGO_ENABLED=0 $(GOCMD) build $(GOFLAGS) -tags admin -o $(BINARY_ADMIN) ./src/cmd/admin/
 	@echo "built $(BINARY_ADMIN)"
 
 test:

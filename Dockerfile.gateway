@@ -1,10 +1,11 @@
 # @sk-task 100-admin-control-plane#T1.1: Gateway Dockerfile without node stage (AC-005, AC-009)
+# @sk-task 101-gateway-diet#T2.1: Add -tags gateway to Dockerfile.gateway (AC-003)
 # Stage 1: Go build
 FROM golang:1.26-alpine AS go-builder
 
 WORKDIR /app
 COPY . .
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /gateway ./src/cmd/gateway/
+RUN CGO_ENABLED=0 go build -tags gateway -ldflags="-s -w" -o /gateway ./src/cmd/gateway/
 
 # Stage 2: Runtime
 FROM gcr.io/distroless/static-debian12
