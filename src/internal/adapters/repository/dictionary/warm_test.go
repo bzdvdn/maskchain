@@ -1,4 +1,4 @@
-package profilerepo
+package dictionaryrepo
 
 import (
 	"context"
@@ -8,12 +8,12 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
 
-// @sk-task 102-profile-cache#T2.6: Test ProfileCacheWarmer warmOne and WarmTenant (AC-010)
+// @sk-task 102-profile-cache#T2.6: Test DictionaryCacheWarmer warmOne and WarmTenant (AC-010)
 
 func TestCacheWarmer_WarmOne_PopulatesValkeyAndLRU(t *testing.T) {
 	pg := newMockPGRepo()
 	vk := newMockValkeyCache()
-	lru := NewProfileLRUCache(100)
+	lru := NewDictionaryLRUCache(100)
 
 	profile := makeTestProfile("t1", "my-profile", "test")
 	pg.profilesBySlug["t1:my-profile"] = profile
@@ -22,9 +22,9 @@ func TestCacheWarmer_WarmOne_PopulatesValkeyAndLRU(t *testing.T) {
 		return 1, nil
 	}
 
-	warmer := NewProfileCacheWarmer(pg, vk, lru, slog.Default(), versionFunc, 5)
+	warmer := NewDictionaryCacheWarmer(pg, vk, lru, slog.Default(), versionFunc, 5)
 
-	ref := &profileRef{slug: "my-profile", tenantID: "t1"}
+	ref := &dictRef{slug: "my-profile", tenantID: "t1"}
 	if err := warmer.warmOne(context.Background(), ref); err != nil {
 		t.Fatalf("warmOne failed: %v", err)
 	}
@@ -44,15 +44,15 @@ func TestCacheWarmer_WarmOne_PopulatesValkeyAndLRU(t *testing.T) {
 func TestCacheWarmer_WarmOne_ValkeyHit_NoPG(t *testing.T) {
 	pg := newMockPGRepo()
 	vk := newMockValkeyCache()
-	lru := NewProfileLRUCache(100)
+	lru := NewDictionaryLRUCache(100)
 
 	profile := makeTestProfile("t1", "my-profile", "test")
-	val := profileToCacheValue(profile, 2)
+	val := dictToCacheValue(profile, 2)
 	vk.store["t1:my-profile"] = val
 
-	warmer := NewProfileCacheWarmer(pg, vk, lru, slog.Default(), nil, 5)
+	warmer := NewDictionaryCacheWarmer(pg, vk, lru, slog.Default(), nil, 5)
 
-	ref := &profileRef{slug: "my-profile", tenantID: "t1"}
+	ref := &dictRef{slug: "my-profile", tenantID: "t1"}
 	if err := warmer.warmOne(context.Background(), ref); err != nil {
 		t.Fatalf("warmOne failed: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestCacheWarmer_WarmOne_ValkeyHit_NoPG(t *testing.T) {
 func TestCacheWarmer_WarmTenant(t *testing.T) {
 	pg := newMockPGRepo()
 	vk := newMockValkeyCache()
-	lru := NewProfileLRUCache(100)
+	lru := NewDictionaryLRUCache(100)
 
 	p1 := makeTestProfile("t1", "profile-a", "A")
 	p2 := makeTestProfile("t1", "profile-b", "B")
@@ -85,7 +85,7 @@ func TestCacheWarmer_WarmTenant(t *testing.T) {
 		return 1, nil
 	}
 
-	warmer := NewProfileCacheWarmer(pg, vk, lru, slog.Default(), versionFunc, 2)
+	warmer := NewDictionaryCacheWarmer(pg, vk, lru, slog.Default(), versionFunc, 2)
 	warmer.WarmTenant(context.Background(), tid)
 
 	// Both profiles should be in Valkey and LRU

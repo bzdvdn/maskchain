@@ -1,4 +1,4 @@
-package profilerepo
+package dictionaryrepo
 
 import (
 	"context"
@@ -36,7 +36,7 @@ func (s *PubSubSubscriber) Stop() {
 	close(s.done)
 }
 
-const pubSubPattern = "profile.invalidate:*"
+const pubSubPattern = "dictionary.invalidate:*"
 
 func (s *PubSubSubscriber) run() {
 	for {
@@ -84,7 +84,7 @@ func (s *PubSubSubscriber) subscribeOnce() error {
 }
 
 func (s *PubSubSubscriber) handleMessage(msg valkey.PubSubMessage) {
-	slug := strings.TrimPrefix(msg.Channel, "profile.invalidate:")
+	slug := strings.TrimPrefix(msg.Channel, "dictionary.invalidate:")
 	if slug == "" || slug == msg.Channel {
 		s.logger.Warn("pubsub received unexpected channel", "channel", msg.Channel)
 		return

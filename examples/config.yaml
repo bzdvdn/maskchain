@@ -4,7 +4,6 @@
 tenants:
   default:
     name: "Default Tenant"
-    profile_slug: "pii-protect"
     auth_header: "Authorization"
     api_keys:
       - "sk-test-default"

@@ -126,8 +126,8 @@ type DebugConfig struct {
 	AdminToken string `mapstructure:"admin_token" yaml:"admin_token"`
 }
 
-// @sk-task 102-profile-cache#T1.2: Add ProfileCacheConfig struct (RQ-009, RQ-010)
-type ProfileCacheConfig struct {
+// @sk-task 102-profile-cache#T1.2: Add DictionaryCacheConfig struct (RQ-009, RQ-010)
+type DictionaryCacheConfig struct {
 	ValkeyTTLSec    int  `mapstructure:"valkey_ttl_sec" yaml:"valkey_ttl_sec"`
 	LRUSize         int  `mapstructure:"lru_size" yaml:"lru_size"`
 	WarmOnStartup   bool `mapstructure:"warm_on_startup" yaml:"warm_on_startup"`
@@ -148,7 +148,7 @@ type Config struct {
 	RateLimit *RateLimitConfig `mapstructure:"ratelimit" yaml:"ratelimit"`
 	Egress    *EgressConfig    `mapstructure:"egress" yaml:"egress"`
 	Debug     *DebugConfig     `mapstructure:"debug" yaml:"debug"`
-	ProfileCache *ProfileCacheConfig `mapstructure:"profile_cache" yaml:"profile_cache"`
+	DictionaryCache *DictionaryCacheConfig `mapstructure:"dictionary_cache" yaml:"dictionary_cache"`
 	Tenants   map[string]*TenantConfig `mapstructure:"tenants" yaml:"tenants"`
 }
 
@@ -177,10 +177,10 @@ const defaultDebugEnabled = false
 const defaultDebugAdminToken = ""
 const defaultRateLimitRate = 100
 const defaultRateLimitWindowSec = 60
-const defaultProfileCacheValkeyTTL = 300
-const defaultProfileCacheLRUSize = 10000
-const defaultProfileCacheWarmOnStartup = true
-const defaultProfileCacheWarmConcurrency = 5
+const defaultDictionaryCacheValkeyTTL = 300
+const defaultDictionaryCacheLRUSize = 10000
+const defaultDictionaryCacheWarmOnStartup = true
+const defaultDictionaryCacheWarmConcurrency = 5
 
 // @sk-task 10-gateway-skeleton#T1.2: Set ServerConfig defaults in DefaultConfig (AC-001, AC-005)
 func DefaultConfig() *Config {
@@ -226,11 +226,11 @@ func DefaultConfig() *Config {
 			Enabled:    defaultDebugEnabled,
 			AdminToken: defaultDebugAdminToken,
 		},
-		ProfileCache: &ProfileCacheConfig{
-			ValkeyTTLSec:    defaultProfileCacheValkeyTTL,
-			LRUSize:         defaultProfileCacheLRUSize,
-			WarmOnStartup:   defaultProfileCacheWarmOnStartup,
-			WarmConcurrency: defaultProfileCacheWarmConcurrency,
+		DictionaryCache: &DictionaryCacheConfig{
+			ValkeyTTLSec:    defaultDictionaryCacheValkeyTTL,
+			LRUSize:         defaultDictionaryCacheLRUSize,
+			WarmOnStartup:   defaultDictionaryCacheWarmOnStartup,
+			WarmConcurrency: defaultDictionaryCacheWarmConcurrency,
 		},
 	}
 }
@@ -299,7 +299,7 @@ func LoadConfig(cmd *cobra.Command) (*Config, error) {
 		if key == "" || strings.Contains(val, "\n") {
 			continue
 		}
-		v.Set(key, val)
+		v.SetDefault(key, val)
 	}
 
 	cfg := DefaultConfig()

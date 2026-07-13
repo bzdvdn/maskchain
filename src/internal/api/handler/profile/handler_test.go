@@ -532,7 +532,9 @@ func performRequest(t *testing.T, h *ProfileHandler, method, path string, body i
 	r := gin.New()
 	// @sk-test 80-tenant-isolation#T2.3: Set tenant in context for tests (AC-005)
 	r.Use(func(c *gin.Context) {
-		c.Set("tenant_slug", "default")
+		slug, _ := value.NewTenantSlug("default")
+		tenant := entity.NewTenant(slug, "Default", "Authorization", []string{"test-key"})
+		c.Set("tenant", tenant)
 		c.Next()
 	})
 	r.POST("/api/v1/profiles", h.CreateProfile)

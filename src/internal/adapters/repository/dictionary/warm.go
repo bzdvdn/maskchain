@@ -1,4 +1,4 @@
-package profilerepo
+package dictionaryrepo
 
 import (
 	"context"
@@ -9,25 +9,26 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
 
-// @sk-task 102-profile-cache#T2.4: Implement ProfileCacheWarmer (RQ-013)
-type ProfileCacheWarmer struct {
+// @sk-task 102-profile-cache#T2.4: Implement DictionaryCacheWarmer (RQ-013)
+// @sk-task tenant-profile-sync#T4.1: Rename ProfileCacheWarmer → DictionaryCacheWarmer (AC-006)
+type DictionaryCacheWarmer struct {
 	pgRepo      shield.ProfileRepository
 	valkeyRepo  profileValkeyCache
-	lru         *ProfileLRUCache
+	lru         *DictionaryLRUCache
 	logger      *slog.Logger
-	versionFunc ProfileVersionFunc
+	versionFunc DictionaryVersionFunc
 	concurrency int
 }
 
-func NewProfileCacheWarmer(
+func NewDictionaryCacheWarmer(
 	pgRepo shield.ProfileRepository,
 	valkeyRepo profileValkeyCache,
-	lru *ProfileLRUCache,
+	lru *DictionaryLRUCache,
 	logger *slog.Logger,
-	versionFunc ProfileVersionFunc,
+	versionFunc DictionaryVersionFunc,
 	concurrency int,
-) *ProfileCacheWarmer {
-	return &ProfileCacheWarmer{
+) *DictionaryCacheWarmer {
+	return &DictionaryCacheWarmer{
 		pgRepo:      pgRepo,
 		valkeyRepo:  valkeyRepo,
 		lru:         lru,
@@ -38,7 +39,7 @@ func NewProfileCacheWarmer(
 }
 
 // WarmTenant warms the cache for all profiles of a given tenant.
-func (w *ProfileCacheWarmer) WarmTenant(ctx context.Context, tenantID value.TenantID) {
+func (w *DictionaryCacheWarmer) WarmTenant(ctx context.Context, tenantID value.TenantID) {
 	profiles, err := w.pgRepo.ListByTenant(ctx, tenantID)
 	if err != nil {
 		w.logger.Warn("cache warmer: list profiles failed", "tenant", tenantID.String(), "error", err)
@@ -49,7 +50,7 @@ func (w *ProfileCacheWarmer) WarmTenant(ctx context.Context, tenantID value.Tena
 	var wg sync.WaitGroup
 
 	for _, p := range profiles {
-		ref := profileRef{slug: p.Slug().String(), tenantID: p.TenantID().String()}
+		ref := dictRef{slug: p.Slug().String(), tenantID: p.TenantID().String()}
 
 		select {
 		case <-ctx.Done():
@@ -59,7 +60,7 @@ func (w *ProfileCacheWarmer) WarmTenant(ctx context.Context, tenantID value.Tena
 		}
 
 		wg.Add(1)
-		go func(r profileRef) {
+		go func(r dictRef) {
 			defer func() {
 				<-sem
 				wg.Done()
@@ -73,19 +74,19 @@ func (w *ProfileCacheWarmer) WarmTenant(ctx context.Context, tenantID value.Tena
 	wg.Wait()
 }
 
-type profileRef struct {
+type dictRef struct {
 	slug     string
 	tenantID string
 }
 
-func (w *ProfileCacheWarmer) warmOne(ctx context.Context, ref *profileRef) error {
+func (w *DictionaryCacheWarmer) warmOne(ctx context.Context, ref *dictRef) error {
 	val, err := w.valkeyRepo.Get(ctx, ref.tenantID, ref.slug)
 	if err == nil && val != nil {
-		profile, convErr := cacheValueToProfile(val)
+		profile, convErr := cacheValueToDict(val)
 		if convErr != nil {
 			return convErr
 		}
-		w.lru.Add(metadataKey(ref.tenantID, ref.slug), ProfileMetadataFromProfile(profile, val.Version))
+		w.lru.Add(metadataKey(ref.tenantID, ref.slug), DictionaryMetadataFromProfile(profile, val.Version))
 		return nil
 	}
 
@@ -113,10 +114,10 @@ func (w *ProfileCacheWarmer) warmOne(ctx context.Context, ref *profileRef) error
 		}
 	}
 
-	val = profileToCacheValue(profile, version)
+	val = dictToCacheValue(profile, version)
 	if err := w.valkeyRepo.Set(ctx, ref.tenantID, ref.slug, val); err != nil {
 		w.logger.Warn("cache warmer: valkey set failed", "slug", ref.slug, "error", err)
 	}
-	w.lru.Add(metadataKey(ref.tenantID, ref.slug), ProfileMetadataFromProfile(profile, version))
+	w.lru.Add(metadataKey(ref.tenantID, ref.slug), DictionaryMetadataFromProfile(profile, version))
 	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,7 +18,9 @@ import (
 	"go.uber.org/zap"
 
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
-	domshield "github.com/bzdvdn/maskchain/src/internal/domain/shield"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/detector"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/mask"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
@@ -47,7 +50,8 @@ type Scanner interface {
 
 // @sk-task 51-shield-gateway-integration#T2.1: Implement ShieldMiddleware (AC-001, AC-002, AC-003, AC-004, AC-005, AC-006)
 // @sk-task 61-observability#T3.1: Instrument shield middleware with span attributes and metrics (AC-004)
-func ShieldMiddleware(engine Scanner, profileRepo domshield.ProfileRepository, cfg *config.ShieldConfig, log *zap.Logger) gin.HandlerFunc {
+// @sk-task tenant-profile-sync#T3.1: ShieldMiddleware reads dictionaries from tenant (AC-006, AC-007)
+func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 
@@ -75,34 +79,15 @@ func ShieldMiddleware(engine Scanner, profileRepo domshield.ProfileRepository, c
 			return
 		}
 
-		profileSlugStr := c.GetHeader("X-Shield-Profile-Slug")
-		if profileSlugStr == "" {
-			abortWithShieldError(c, http.StatusBadRequest, "missing X-Shield-Profile-Slug header", "")
-			return
-		}
-
-		profileSlug, err := value.NewProfileSlug(profileSlugStr)
-		if err != nil {
-			abortWithShieldError(c, http.StatusBadRequest, fmt.Sprintf("invalid profile slug: %s", profileSlugStr), "")
-			return
-		}
-
-		tenantID := resolveTenantID(c)
-
-		profile, err := profileRepo.FindBySlug(c.Request.Context(), tenantID, profileSlug)
-		if err != nil || profile == nil {
-			abortWithShieldError(c, http.StatusNotFound, fmt.Sprintf("profile %s not found", profileSlug.String()), profileSlug.String())
-			return
-		}
-
-		if !profile.Enabled() {
-			abortWithShieldError(c, http.StatusNotFound, fmt.Sprintf("profile %s is disabled", profileSlug.String()), profileSlug.String())
+		tenant, ok := TenantFromContext(c)
+		if !ok {
+			abortWithShieldError(c, http.StatusBadRequest, "missing tenant in context", "")
 			return
 		}
 
 		var chatReq chatRequest
 		if err := json.Unmarshal(body, &chatReq); err != nil {
-			abortWithShieldError(c, http.StatusBadRequest, "invalid JSON body", profileSlug.String())
+			abortWithShieldError(c, http.StatusBadRequest, "invalid JSON body", tenant.Slug().String())
 			return
 		}
 
@@ -113,40 +98,99 @@ func ShieldMiddleware(engine Scanner, profileRepo domshield.ProfileRepository, c
 			return
 		}
 
+		tenantSlug := tenant.Slug().String()
+
+		var incidents []entity.Incident
+
+		for _, dict := range tenant.Dictionaries() {
+			dd := detector.NewDictionaryDetector(dict)
+			results, err := dd.Scan(c.Request.Context(), promptText)
+			if err != nil || len(results) == 0 {
+				continue
+			}
+			for _, r := range results {
+				inc := entity.NewIncident(
+					"dictionary:"+dict.Name(),
+					value.PatternID{},
+					value.SeverityMedium,
+					r.Fragment,
+					r.StartPos,
+				)
+				incidents = append(incidents, *inc)
+			}
+		}
+
 		incidentID := uuid.New().String()
 
-		resp, err := engine.Scan(c.Request.Context(), appshield.ScanRequest{
-			Text:        promptText,
-			ProfileSlug: profileSlug.String(),
-		})
-		if err != nil {
-			log.Error("shield scan failed", zap.Error(err), zap.String("profile_slug", profileSlug.String()))
-			abortWithShieldError(c, http.StatusBadGateway, "shield scan error", profileSlug.String())
-			return
+		var resp *appshield.ScanResponse
+		if engine != nil {
+			resp, err = engine.Scan(c.Request.Context(), appshield.ScanRequest{
+				Text:        promptText,
+				ProfileSlug: tenantSlug,
+			})
+			if err != nil {
+				log.Warn("engine scan (profile-based) failed, using dictionary-only results",
+					zap.Error(err),
+					zap.String("tenant_slug", tenantSlug),
+				)
+			}
+		}
+
+		// Mask dictionary values in each message before passing to provider
+		if len(incidents) > 0 {
+			dictMaskID := mask.NewShortID()
+			phCounter := 0
+			for mi, msg := range chatReq.Messages {
+				if msg.Content == "" {
+					continue
+				}
+				for _, dict := range tenant.Dictionaries() {
+					dd := detector.NewDictionaryDetector(dict)
+					results, _ := dd.Scan(c.Request.Context(), msg.Content)
+					if len(results) == 0 {
+						continue
+					}
+					sort.Slice(results, func(i, j int) bool {
+						return results[i].StartPos > results[j].StartPos
+					})
+					for _, r := range results {
+						ph := fmt.Sprintf("{{dict.%s.%d}}", dictMaskID, phCounter)
+						phCounter++
+						chatReq.Messages[mi].Content = chatReq.Messages[mi].Content[:r.StartPos] + ph + chatReq.Messages[mi].Content[r.StartPos+len(r.Fragment):]
+					}
+				}
+			}
+			if phCounter > 0 {
+				newBody, _ := json.Marshal(chatReq)
+				c.Request.Body = io.NopCloser(bytes.NewBuffer(newBody))
+				c.Header("X-Shield-Dict-Mask-ID", dictMaskID)
+			}
 		}
 
 		duration := time.Since(start)
 
 		span := trace.SpanFromContext(c.Request.Context())
 		span.SetAttributes(
-			attribute.String("shield.profile", profileSlug.String()),
-			attribute.String("shield.status", string(resp.Status())),
+			attribute.String("shield.tenant", tenantSlug),
+			attribute.String("shield.status", string(respStatus(resp, incidents))),
 			attribute.String("shield.incident_id", incidentID),
 		)
 
-		scanStatus := string(resp.Status())
-		metrics.ShieldScanDuration.WithLabelValues(profileSlug.String(), scanStatus).Observe(float64(duration.Milliseconds()))
-		metrics.ShieldProfilesEvaluated.WithLabelValues(profileSlug.String()).Inc()
+		scanStatus := string(respStatus(resp, incidents))
+		metrics.ShieldScanDuration.WithLabelValues(tenantSlug, scanStatus).Observe(float64(duration.Milliseconds()))
+		metrics.ShieldProfilesEvaluated.WithLabelValues(tenantSlug).Inc()
 
 		log.Info("shield scan",
 			zap.String("shield_status", scanStatus),
-			zap.String("profile_slug", profileSlug.String()),
+			zap.String("tenant_slug", tenantSlug),
 			zap.String("model", chatReq.Model),
 			zap.Duration("latency", duration),
 			zap.String("incident_id", incidentID),
+			zap.Int("dictionary_incidents", len(incidents)),
 		)
 
-		switch resp.Status() {
+		status := respStatus(resp, incidents)
+		switch status {
 		case value.ScanStatusBlocked:
 			metrics.ShieldIncidentsBySeverity.WithLabelValues("blocked").Inc()
 			c.Header("X-Shield-Status", "blocked")
@@ -159,7 +203,7 @@ func ShieldMiddleware(engine Scanner, profileRepo domshield.ProfileRepository, c
 
 		case value.ScanStatusError:
 			metrics.ShieldIncidentsBySeverity.WithLabelValues("error").Inc()
-			abortWithShieldError(c, http.StatusBadGateway, "shield scan error", profileSlug.String())
+			abortWithShieldError(c, http.StatusBadGateway, "shield scan error", tenantSlug)
 
 		case value.ScanStatusSuspicious:
 			metrics.ShieldIncidentsBySeverity.WithLabelValues("suspicious").Inc()
@@ -184,18 +228,24 @@ func ShieldMiddleware(engine Scanner, profileRepo domshield.ProfileRepository, c
 	}
 }
 
-// @sk-task 80-tenant-isolation#T2.4: Read tenant from auth middleware context (AC-006)
-func resolveTenantID(c *gin.Context) value.TenantID {
-	slug, ok := TenantFromContext(c)
-	if !ok {
-		id, _ := value.NewTenantID("default")
-		return id
+func respStatus(resp *appshield.ScanResponse, incidents []entity.Incident) value.ScanStatus {
+	if resp != nil {
+		return resp.Status()
 	}
-	id, err := value.NewTenantID(slug)
-	if err != nil {
-		id, _ = value.NewTenantID("default")
+	if len(incidents) == 0 {
+		return value.ScanStatusClean
 	}
-	return id
+	blocked := false
+	for _, inc := range incidents {
+		if inc.Severity() == value.SeverityCritical {
+			blocked = true
+			break
+		}
+	}
+	if blocked {
+		return value.ScanStatusBlocked
+	}
+	return value.ScanStatusSuspicious
 }
 
 func extractPromptText(messages []chatMessage) string {

@@ -1,4 +1,4 @@
-package profilerepo
+package dictionaryrepo
 
 import (
 	"context"
@@ -20,8 +20,8 @@ func TestPubSubSubscriber_HandleMessage_TracksInvalidation(t *testing.T) {
 	sub := NewPubSubSubscriber(nil, tracker, metrics, slog.Default())
 
 	sub.handleMessage(valkey.PubSubMessage{
-		Pattern: "profile.invalidate:*",
-		Channel: "profile.invalidate:my-profile",
+		Pattern: "dictionary.invalidate:*",
+		Channel: "dictionary.invalidate:my-profile",
 		Message: "",
 	})
 
@@ -69,13 +69,13 @@ func TestCache_FindBySlug_SkipsLRUAfterInvalidation(t *testing.T) {
 	pg := newMockPGRepo()
 	vk := newMockValkeyCache()
 	vk.getErr = errors.New("valkey down")
-	lru := NewProfileLRUCache(100)
+	lru := NewDictionaryLRUCache(100)
 	tracker := NewInvalidationTracker()
 	dictLoader := NewDictLoader(newMockDictRepo().FindByProfileSlug)
 	metrics := newSpyMetrics()
 
 	profile := makeTestProfile("t1", "my-profile", "test")
-	lru.Add("t1:my-profile", ProfileMetadataFromProfile(profile, 1))
+	lru.Add("t1:my-profile", DictionaryMetadataFromProfile(profile, 1))
 
 	// Mark as invalidated via PubSub
 	tracker.Add("my-profile")
@@ -83,7 +83,7 @@ func TestCache_FindBySlug_SkipsLRUAfterInvalidation(t *testing.T) {
 	tid, _ := value.NewTenantID("t1")
 	slug, _ := value.NewProfileSlug("my-profile")
 
-	cache := NewProfileCache(pg, vk, lru, dictLoader, slog.Default(), nil, metrics, tracker)
+	cache := NewDictionaryCache(pg, vk, lru, dictLoader, slog.Default(), nil, metrics, tracker)
 
 	result, err := cache.FindBySlug(context.Background(), tid, slug)
 	if err != nil {
@@ -108,10 +108,10 @@ func TestCache_FindBySlug_SkipsLRUAfterInvalidation(t *testing.T) {
 
 // @sk-test 102-profile-cache#T3.4: Test Save publishes invalidation (AC-005, AC-007)
 
-func TestProfileCache_Save_PublishesInvalidation(t *testing.T) {
+func TestDictionaryCache_Save_PublishesInvalidation(t *testing.T) {
 	pg := newMockPGRepo()
 	vk := newMockValkeyCache()
-	lru := NewProfileLRUCache(100)
+	lru := NewDictionaryLRUCache(100)
 	dictLoader := NewDictLoader(newMockDictRepo().FindByProfileSlug)
 	metrics := newSpyMetrics()
 
@@ -119,7 +119,7 @@ func TestProfileCache_Save_PublishesInvalidation(t *testing.T) {
 		return 1, nil
 	}
 
-	cache := NewProfileCache(pg, vk, lru, dictLoader, slog.Default(), versionFunc, metrics, nil)
+	cache := NewDictionaryCache(pg, vk, lru, dictLoader, slog.Default(), versionFunc, metrics, nil)
 
 	profile := makeTestProfile("t1", "my-profile", "test")
 	if err := cache.Save(context.Background(), profile); err != nil {
@@ -136,10 +136,10 @@ func TestProfileCache_Save_PublishesInvalidation(t *testing.T) {
 
 // @sk-test 102-profile-cache#T3.4: Test Delete publishes invalidation (AC-005)
 
-func TestProfileCache_Delete_PublishesInvalidation(t *testing.T) {
+func TestDictionaryCache_Delete_PublishesInvalidation(t *testing.T) {
 	pg := newMockPGRepo()
 	vk := newMockValkeyCache()
-	lru := NewProfileLRUCache(100)
+	lru := NewDictionaryLRUCache(100)
 	dictLoader := NewDictLoader(newMockDictRepo().FindByProfileSlug)
 	metrics := newSpyMetrics()
 
@@ -147,7 +147,7 @@ func TestProfileCache_Delete_PublishesInvalidation(t *testing.T) {
 	pg.profilesByID[profile.ID().String()] = profile
 	pg.profilesBySlug["t1:my-profile"] = profile
 
-	cache := NewProfileCache(pg, vk, lru, dictLoader, slog.Default(), nil, metrics, nil)
+	cache := NewDictionaryCache(pg, vk, lru, dictLoader, slog.Default(), nil, metrics, nil)
 
 	if err := cache.Delete(context.Background(), profile.ID()); err != nil {
 		t.Fatalf("unexpected error: %v", err)

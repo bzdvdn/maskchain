@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -31,46 +30,18 @@ func (m *mockEngine) Scan(_ context.Context, _ appshield.ScanRequest) (*appshiel
 	return m.resp, m.err
 }
 
-type mockProfileRepo struct {
-	profile *entity.Profile
-	err     error
+func newTestTenant(slug string) *entity.Tenant {
+	s, _ := value.NewTenantSlug(slug)
+	return entity.NewTenant(s, "test-"+slug, "Authorization", nil)
 }
 
-func (m *mockProfileRepo) Save(_ context.Context, _ *entity.Profile) error {
-	return nil
-}
-
-func (m *mockProfileRepo) FindByID(_ context.Context, _ value.ProfileID) (*entity.Profile, error) {
-	return m.profile, m.err
-}
-
-func (m *mockProfileRepo) FindBySlug(_ context.Context, _ value.TenantID, _ value.ProfileSlug) (*entity.Profile, error) {
-	return m.profile, m.err
-}
-
-func (m *mockProfileRepo) ListByTenant(_ context.Context, _ value.TenantID) ([]*entity.Profile, error) {
-	return nil, nil
-}
-
-func (m *mockProfileRepo) Delete(_ context.Context, _ value.ProfileID) error {
-	return nil
-}
-
-func newTestProfile(slug string, enabled bool) *entity.Profile {
-	s, _ := value.NewProfileSlug(slug)
-	tid, _ := value.NewTenantID("default")
-	pid, _ := value.NewProfileID(uuid.New().String())
-	return entity.NewProfile(pid, s, tid, "test-profile", entity.WithEnabled(enabled))
-}
-
-func setupTest(t *testing.T) (*gin.Engine, *mockEngine, *mockProfileRepo, *zap.Logger) {
+func setupTest(t *testing.T) (*gin.Engine, *mockEngine, *zap.Logger) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	mockEng := &mockEngine{}
-	mockRepo := &mockProfileRepo{}
 	log, _ := zap.NewProduction()
-	return engine, mockEng, mockRepo, log
+	return engine, mockEng, log
 }
 
 func chatBody(model, content string) string {
@@ -210,7 +181,8 @@ func TestLoggerWithTenant(t *testing.T) {
 	engine.Use(RequestID())
 	engine.Use(Logger(log))
 	engine.GET("/test", func(c *gin.Context) {
-		c.Set(tenantKey, "test-tenant")
+		slug, _ := value.NewTenantSlug("test-tenant")
+		c.Set(tenantKey, entity.NewTenant(slug, "Test", "", nil))
 		c.Status(http.StatusOK)
 	})
 
@@ -298,12 +270,13 @@ func TestShieldIntegration(t *testing.T) {
 	log, _ := zap.NewProduction()
 
 	mockEng := &mockEngine{}
-	mockRepo := &mockProfileRepo{
-		profile: newTestProfile("test-profile", true),
-	}
 
 	engine := gin.New()
-	engine.Use(ShieldMiddleware(mockEng, mockRepo, &config.ShieldConfig{}, log))
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", newTestTenant("test-tenant"))
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(mockEng, &config.ShieldConfig{}, log))
 	engine.POST("/v1/chat/completions", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"choices": []gin.H{
@@ -321,7 +294,6 @@ func TestShieldIntegration(t *testing.T) {
 		body := chatBody("gpt-4", "my SSN is 123-45-6789")
 		req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-Shield-Profile-Slug", "test-profile")
 		engine.ServeHTTP(w, req)
 
 		if w.Code != http.StatusForbidden {
@@ -341,7 +313,6 @@ func TestShieldIntegration(t *testing.T) {
 		body := chatBody("gpt-4", "hello")
 		req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-Shield-Profile-Slug", "test-profile")
 		engine.ServeHTTP(w, req)
 
 		if w.Code != http.StatusOK {
@@ -403,16 +374,17 @@ func TestShieldMiddleware_Metrics(t *testing.T) {
 			ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
 		},
 	}
-	mockRepo := &mockProfileRepo{
-		profile: newTestProfile("test-profile", true),
-	}
 	log := zap.NewNop()
 
 	promReg := prometheus.NewRegistry()
 	metrics.RegisterMetrics(promReg)
 
 	engine := gin.New()
-	engine.Use(ShieldMiddleware(mockEng, mockRepo, &config.ShieldConfig{}, log))
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", newTestTenant("test-tenant"))
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(mockEng, &config.ShieldConfig{}, log))
 	engine.POST("/v1/chat/completions", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -421,7 +393,6 @@ func TestShieldMiddleware_Metrics(t *testing.T) {
 	body := chatBody("gpt-4", "hello")
 	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Shield-Profile-Slug", "test-profile")
 	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {

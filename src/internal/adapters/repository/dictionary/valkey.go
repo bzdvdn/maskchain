@@ -1,4 +1,4 @@
-package profilerepo
+package dictionaryrepo
 
 import (
 	"context"
@@ -14,21 +14,22 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
 
-// @sk-task 102-profile-cache#T2.1: Implement ProfileValkeyRepo (RQ-002, RQ-003, RQ-009)
-type ProfileValkeyRepo struct {
+// @sk-task 102-profile-cache#T2.1: Implement DictionaryValkeyRepo (RQ-002, RQ-003, RQ-009)
+// @sk-task tenant-profile-sync#T4.1: Rename ProfileValkeyRepo → DictionaryValkeyRepo (AC-006)
+type DictionaryValkeyRepo struct {
 	client valkey.Client
 	ttl    time.Duration
 }
 
-func NewProfileValkeyRepo(client valkey.Client, ttl time.Duration) *ProfileValkeyRepo {
-	return &ProfileValkeyRepo{client: client, ttl: ttl}
+func NewDictionaryValkeyRepo(client valkey.Client, ttl time.Duration) *DictionaryValkeyRepo {
+	return &DictionaryValkeyRepo{client: client, ttl: ttl}
 }
 
-func (r *ProfileValkeyRepo) key(tenantID, slug string) string {
-	return "profile:" + tenantID + ":" + slug
+func (r *DictionaryValkeyRepo) key(tenantID, slug string) string {
+	return "dictionary:" + tenantID + ":" + slug
 }
 
-func (r *ProfileValkeyRepo) Get(ctx context.Context, tenantID, slug string) (*profileCacheValue, error) {
+func (r *DictionaryValkeyRepo) Get(ctx context.Context, tenantID, slug string) (*dictionaryCacheValue, error) {
 	if r.client == nil {
 		return nil, nil
 	}
@@ -39,14 +40,14 @@ func (r *ProfileValkeyRepo) Get(ctx context.Context, tenantID, slug string) (*pr
 		}
 		return nil, err
 	}
-	var val profileCacheValue
+	var val dictionaryCacheValue
 	if err := json.Unmarshal([]byte(data), &val); err != nil {
 		return nil, fmt.Errorf("unmarshal profile cache value: %w", err)
 	}
 	return &val, nil
 }
 
-func (r *ProfileValkeyRepo) Set(ctx context.Context, tenantID, slug string, val *profileCacheValue) error {
+func (r *DictionaryValkeyRepo) Set(ctx context.Context, tenantID, slug string, val *dictionaryCacheValue) error {
 	if r.client == nil {
 		return nil
 	}
@@ -60,24 +61,24 @@ func (r *ProfileValkeyRepo) Set(ctx context.Context, tenantID, slug string, val 
 		Build()).Error()
 }
 
-func (r *ProfileValkeyRepo) Del(ctx context.Context, tenantID, slug string) error {
+func (r *DictionaryValkeyRepo) Del(ctx context.Context, tenantID, slug string) error {
 	if r.client == nil {
 		return nil
 	}
 	return r.client.Do(ctx, r.client.B().Del().Key(r.key(tenantID, slug)).Build()).Error()
 }
 
-// @sk-task 102-profile-cache#T3.1: Add PubSub publish to ProfileCache (AC-005, AC-007)
-func (r *ProfileValkeyRepo) Publish(ctx context.Context, slug string) error {
+// @sk-task 102-profile-cache#T3.1: Add PubSub publish to DictionaryCache (AC-005, AC-007)
+func (r *DictionaryValkeyRepo) Publish(ctx context.Context, slug string) error {
 	if r.client == nil {
 		return nil
 	}
-	return r.client.Do(ctx, r.client.B().Publish().Channel("profile.invalidate:"+slug).Message("").Build()).Error()
+	return r.client.Do(ctx, r.client.B().Publish().Channel("dictionary.invalidate:"+slug).Message("").Build()).Error()
 }
 
-// profileCacheValue is a JSON-serializable DTO for full profile storage in Valkey.
+// dictionaryCacheValue is a JSON-serializable DTO for full profile storage in Valkey.
 // It mirrors entity.Profile fields (which are unexported in the domain entity).
-type profileCacheValue struct {
+type dictionaryCacheValue struct {
 	ID            string                          `json:"id"`
 	Slug          string                          `json:"slug"`
 	TenantID      string                          `json:"tenant_id"`
@@ -115,7 +116,7 @@ type dictionaryDTO struct {
 
 type preprocessorDTO = preprocessor.PreprocessorDef
 
-func profileToCacheValue(p *entity.Profile, version int) *profileCacheValue {
+func dictToCacheValue(p *entity.Profile, version int) *dictionaryCacheValue {
 	detDTOs := make([]detectorDTO, len(p.Detectors()))
 	for i, d := range p.Detectors() {
 		patDTOs := make([]patternDTO, len(d.Patterns()))
@@ -150,7 +151,7 @@ func profileToCacheValue(p *entity.Profile, version int) *profileCacheValue {
 		desc = d
 	}
 
-	return &profileCacheValue{
+	return &dictionaryCacheValue{
 		ID:            p.ID().String(),
 		Slug:          p.Slug().String(),
 		TenantID:      p.TenantID().String(),
@@ -166,7 +167,7 @@ func profileToCacheValue(p *entity.Profile, version int) *profileCacheValue {
 	}
 }
 
-func cacheValueToProfile(v *profileCacheValue) (*entity.Profile, error) {
+func cacheValueToDict(v *dictionaryCacheValue) (*entity.Profile, error) {
 	pid, err := value.NewProfileID(v.ID)
 	if err != nil {
 		return nil, fmt.Errorf("parse profile id: %w", err)

@@ -3,6 +3,7 @@ package detector
 import (
 	"context"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/dictionary"
@@ -40,33 +41,31 @@ func (d *DictionaryDetector) Scan(ctx context.Context, text string) ([]DetectorR
 
 func (d *DictionaryDetector) scanExact(text string) []DetectorResult {
 	entries := d.dict.AllValues()
-	set := make(map[string]struct{}, len(entries))
-	for _, e := range entries {
-		set[e] = struct{}{}
-	}
-
 	var results []DetectorResult
-	words := strings.Fields(text)
-	pos := 0
-	for _, word := range words {
-		idx := strings.Index(text[pos:], word)
-		if idx == -1 {
-			pos += len(word) + 1
+	for _, entry := range entries {
+		if entry == "" {
 			continue
 		}
-		start := pos + idx
-		end := start + len(word)
-		if _, ok := set[word]; ok {
+		start := 0
+		for {
+			idx := strings.Index(text[start:], entry)
+			if idx == -1 {
+				break
+			}
+			pos := start + idx
 			results = append(results, DetectorResult{
 				DetectorType: "dictionary",
-				Fragment:     word,
-				StartPos:     start,
-				EndPos:       end,
+				Fragment:     entry,
+				StartPos:     pos,
+				EndPos:       pos + len(entry),
 				Confidence:   1.0,
 			})
+			start = pos + 1
 		}
-		pos = end
 	}
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].StartPos < results[j].StartPos
+	})
 	return results
 }
 

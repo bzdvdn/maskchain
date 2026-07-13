@@ -10,7 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/valkey-io/valkey-go"
@@ -18,21 +17,15 @@ import (
 
 	"github.com/bzdvdn/maskchain/src/internal/adapters/egress"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
-	profilerepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/profile"
 	"github.com/bzdvdn/maskchain/src/internal/api"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/incident"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
-	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
 	maskrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/mask"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/detector"
-	"github.com/bzdvdn/maskchain/src/internal/domain/shield/dictionary"
 	domainMask "github.com/bzdvdn/maskchain/src/internal/domain/shield/mask"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
-	"github.com/bzdvdn/maskchain/src/internal/domain/shield/reaction"
-	"github.com/bzdvdn/maskchain/src/internal/domain/shield/service"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/resolver"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
-	"github.com/bzdvdn/maskchain/src/internal/domain/tenant"
-	tenantrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/tenant"
 	routingDomain "github.com/bzdvdn/maskchain/src/internal/domain/routing/service"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 	"github.com/bzdvdn/maskchain/src/internal/ports"
@@ -48,6 +41,7 @@ import (
 // @sk-task 90-production-hardening#T2.2: Wire debug routes with admin auth (<AC-001>)
 // @sk-task 100-admin-control-plane#T2.3: Remove ui import from gateway, move to admin (AC-001, AC-005)
 // @sk-task 100-admin-control-plane#T3.2: Final cleanup — no ui references in gateway (AC-001)
+// @sk-task tenant-profile-sync#T3.1: Remove profileRepo from ShieldMiddleware call (AC-006, AC-007)
 func main() {
 	cfg := config.MustLoadConfig()
 
@@ -152,25 +146,36 @@ func main() {
 	srv := api.New(cfg.Server, logger, serviceName)
 
 	if cfg.Tenants != nil {
-		tenants := make([]*tenant.Tenant, 0, len(cfg.Tenants))
-		for slug, tc := range cfg.Tenants {
-			apiKeys := make([]tenant.APIKey, 0, len(tc.APIKeys))
-			for _, k := range tc.APIKeys {
-				ak, err := tenant.NewAPIKey(k)
-				if err != nil {
-					logger.Fatal("invalid api key", zap.String("tenant", slug), zap.Error(err))
-				}
-				apiKeys = append(apiKeys, ak)
+		txMgr := postgres.NewPGXTransactionManager(pgPool)
+		tenantRepo := postgres.NewPostgresTenantRepo(pgPool, txMgr)
+
+		cfgTenants := make(map[string]*entity.Tenant, len(cfg.Tenants))
+		for slugStr, tc := range cfg.Tenants {
+			slug, err := value.NewTenantSlug(slugStr)
+			if err != nil {
+				logger.Fatal("invalid tenant slug", zap.String("tenant", slugStr), zap.Error(err))
 			}
-			tenants = append(tenants, tenant.NewTenant(slug, tc.Name, tc.ProfileSlug, apiKeys, tc.AuthHeader, tc.AuthScheme))
+			cfgTenants[slugStr] = entity.NewTenant(slug, tc.Name, tc.AuthHeader, tc.APIKeys)
 		}
-		tenantRepo, err := tenantrepo.NewInMemoryRepository(tenants)
+		tenantResolver := resolver.NewDBFirstTenantResolver(tenantRepo, cfgTenants)
+
+		syncCtx, syncCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if err := tenantResolver.SyncConfig(syncCtx, cfgTenants); err != nil {
+			syncCancel()
+			logger.Fatal("failed to sync tenants from config", zap.Error(err))
+		}
+		syncCancel()
+
+		loadCtx, loadCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		dbTenants, err := tenantResolver.List(loadCtx)
+		loadCancel()
 		if err != nil {
-			logger.Fatal("failed to build tenant repository", zap.Error(err))
+			logger.Fatal("failed to load tenants from db", zap.Error(err))
 		}
-		authMw := middleware.Auth(tenantRepo)
+
+		authMw := middleware.Auth(dbTenants)
 		srv.RegisterAuth(authMw)
-		logger.Info("auth middleware registered", zap.Int("tenants", len(tenants)))
+		logger.Info("auth middleware registered", zap.Int("tenants", len(dbTenants)))
 	} else {
 		logger.Warn("no tenants configured, auth disabled")
 	}
@@ -182,75 +187,15 @@ func main() {
 	srv.RegisterMaskHandler(maskHandler)
 
 	if pgPool != nil {
-		dictRepo := postgres.NewPostgresDictionaryRepo(pgPool)
-		txMgr := postgres.NewPGXTransactionManager(pgPool)
-		pgProfileRepo := postgres.NewPostgresProfileRepo(pgPool, dictRepo, txMgr)
-
-		pipelineFactory := appshield.NewScanPipelineFactory(detectorRegistry)
-		policyEval := service.NewPolicyEvaluator()
-		blockExec := reaction.NewBlockReaction()
-		redactExec := reaction.NewRedactReaction()
-		alertExec := reaction.NewAlertReaction(nil)
-		reactionPipeline := reaction.NewDefaultReactionPipeline(blockExec, redactExec, alertExec)
-
-		tenantID, err := value.NewTenantID("default")
-		if err != nil {
-			logger.Fatal("failed to create tenant ID", zap.Error(err))
-		}
-
-		// @sk-task 102-profile-cache#T2.5: Wire ProfileCache in gateway (AC-001, AC-002, AC-003, AC-004, AC-006, AC-009)
-		profileValkeyTTL := time.Duration(cfg.ProfileCache.ValkeyTTLSec) * time.Second
-		pvkRepo := profilerepo.NewProfileValkeyRepo(vkClient, profileValkeyTTL)
-		pLru := profilerepo.NewProfileLRUCache(cfg.ProfileCache.LRUSize)
-		dictLoader := profilerepo.NewDictLoader(func(ctx context.Context, slug string) (*dictionary.Dictionary, error) {
-			return dictRepo.FindByProfileSlug(ctx, slug)
-		})
-		versionFunc := func(ctx context.Context, tenantID, slug string) (int, error) {
-			var v int
-			err := pgPool.QueryRow(ctx, "SELECT version FROM profiles WHERE slug = $1 AND tenant_id = $2", slug, tenantID).Scan(&v)
-			return v, err
-		}
-		cacheMetrics := profilerepo.NewPromCacheMetrics(
-			metrics.ProfileCacheHitsTotal,
-			metrics.ProfileCacheMissesTotal,
-			metrics.ProfileCacheStaleTotal,
-			metrics.ProfileCacheInvalidationsTotal,
-		)
-		invalidated := profilerepo.NewInvalidationTracker()
-		profileRepo := profilerepo.NewProfileCache(pgProfileRepo, pvkRepo, pLru, dictLoader, slogLogger, versionFunc, cacheMetrics, invalidated)
-
-		scanUseCase := appshield.NewScanUseCase(profileRepo, pipelineFactory, policyEval, reactionPipeline, tenantID)
-		shieldEngine := appshield.NewShieldEngine(scanUseCase)
-		shieldMw := middleware.ShieldMiddleware(shieldEngine, profileRepo, cfg.Shield, logger)
-		srv.RegisterProxyRoute(shieldMw, routingHandler)
-		logger.Info("proxy routes with shield registered")
-
-		if cfg.ProfileCache.WarmOnStartup {
-			warmer := profilerepo.NewProfileCacheWarmer(pgProfileRepo, pvkRepo, pLru, slogLogger, versionFunc, cfg.ProfileCache.WarmConcurrency)
-			warmCtx, warmCancel := context.WithTimeout(context.Background(), 30*time.Second)
-			go func() {
-				defer warmCancel()
-				warmer.WarmTenant(warmCtx, tenantID)
-			}()
-			logger.Info("cache warming started", zap.Int("concurrency", cfg.ProfileCache.WarmConcurrency))
-		}
-
-		// @sk-task 102-profile-cache#T3.3: Wire PubSub subscriber in gateway (AC-005, AC-007)
-		pubSubSub := profilerepo.NewPubSubSubscriber(vkClient, invalidated, cacheMetrics, slogLogger)
-		pubSubSub.Start()
-		logger.Info("pubsub subscriber started", zap.String("pattern", "profile.invalidate:*"))
-
 		// @sk-task 60-audit-incidents#T2.3: Wire incident handler (AC-001, AC-002)
 		incidentRepo := postgres.NewPostgresIncidentRepo(pgPool)
 		incidentHandler := incident.New(incidentRepo)
 		srv.RegisterIncidentHandler(incidentHandler)
 		logger.Info("incident handler registered")
-	} else {
-		logger.Warn("no database configured, shield middleware disabled")
-		noopMw := func(c *gin.Context) { c.Next() }
-		srv.RegisterProxyRoute(noopMw, routingHandler)
-		logger.Info("proxy routes without shield registered")
 	}
+
+	srv.RegisterProxyRoute(middleware.ShieldMiddleware(nil, cfg.Shield, logger), routingHandler)
+	logger.Info("proxy routes registered")
 
 	go func() {
 		if err := srv.Start(); err != nil {

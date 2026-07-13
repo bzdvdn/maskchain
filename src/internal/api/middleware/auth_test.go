@@ -7,21 +7,20 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/bzdvdn/maskchain/src/internal/domain/tenant"
-	tenantrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/tenant"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
 
-func setupAuthTest() (*tenant.Tenant, *tenant.Tenant, tenant.Repository) {
-	k1, _ := tenant.NewAPIKey("sk-abc")
-	k2, _ := tenant.NewAPIKey("mk-xyz")
-	k3, _ := tenant.NewAPIKey("custom-token")
+func setupAuthTest() (*entity.Tenant, []*entity.Tenant) {
+	slugA, _ := value.NewTenantSlug("alpha")
+	slugB, _ := value.NewTenantSlug("beta")
+	slugC, _ := value.NewTenantSlug("gamma")
 
-	ta := tenant.NewTenant("alpha", "Alpha", "p1", []tenant.APIKey{k1}, "Authorization", "bearer")
-	tb := tenant.NewTenant("beta", "Beta", "p2", []tenant.APIKey{k2}, "", "")
-	tc := tenant.NewTenant("gamma", "Gamma", "p3", []tenant.APIKey{k3}, "X-Custom", "raw")
+	ta := entity.NewTenant(slugA, "Alpha", "Authorization", []string{"sk-abc"})
+	tb := entity.NewTenant(slugB, "Beta", "X-Mask-Authorization", []string{"mk-xyz"})
+	tc := entity.NewTenant(slugC, "Gamma", "X-Custom", []string{"custom-token"})
 
-	repo, _ := tenantrepo.NewInMemoryRepository([]*tenant.Tenant{ta, tb, tc})
-	return ta, tb, repo
+	return ta, []*entity.Tenant{ta, tb, tc}
 }
 
 func authTestRequest(method, path, header, value string) *httptest.ResponseRecorder {
@@ -29,8 +28,8 @@ func authTestRequest(method, path, header, value string) *httptest.ResponseRecor
 	w := httptest.NewRecorder()
 	_, engine := gin.CreateTestContext(w)
 
-	_, _, repo := setupAuthTest()
-	engine.Use(Auth(repo))
+	_, tenants := setupAuthTest()
+	engine.Use(Auth(tenants))
 	engine.GET("/api/v1/profiles", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -102,22 +101,22 @@ func TestAuthKeyInWrongHeader(t *testing.T) {
 	}
 }
 
-// @sk-test 80-tenant-isolation#T4.2: TestTenantFromContext (AC-001)
+// @sk-test tenant-profile-sync#T2.1: TestTenantFromContext returns entity (AC-005)
 func TestTenantFromContext(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	_, engine := gin.CreateTestContext(w)
 
-	_, _, repo := setupAuthTest()
-	engine.Use(Auth(repo))
+	ta, tenants := setupAuthTest()
+	engine.Use(Auth(tenants))
 	engine.GET("/api/v1/profiles", func(c *gin.Context) {
-		slug, ok := TenantFromContext(c)
+		got, ok := TenantFromContext(c)
 		if !ok {
 			t.Error("expected tenant in context")
 			return
 		}
-		if slug != "alpha" {
-			t.Errorf("expected alpha, got %s", slug)
+		if got.Slug() != ta.Slug() {
+			t.Errorf("expected %s, got %s", ta.Slug().String(), got.Slug().String())
 		}
 		c.Status(http.StatusOK)
 	})

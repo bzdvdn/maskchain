@@ -44,7 +44,11 @@ func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
 	}
 
 	// @sk-task 80-tenant-isolation#T2.4: Read tenant from auth middleware context (AC-006)
-	tenantID, _ := middleware.TenantFromContext(c)
+	tCtx, _ := middleware.TenantFromContext(c)
+	tenantID := ""
+	if tCtx != nil {
+		tenantID = tCtx.Slug().String()
+	}
 	if tenantID == "" {
 		tenantID = c.GetHeader("X-Tenant-ID")
 	}

@@ -4,7 +4,7 @@ bin/
 *.exe
 *.test
 coverage.out
-/gateway
-/admin
+**/gateway
+**/admin
 ui/dist/
 ui/node_modules/

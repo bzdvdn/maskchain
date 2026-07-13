@@ -42,7 +42,7 @@ func tenantIDFromContext(c *gin.Context) value.TenantID {
 		middleware.AbortWithError(c, http.StatusUnauthorized, middleware.ErrorCodeUnauthorized, "unauthorized")
 		return value.TenantID{}
 	}
-	tid, err := value.NewTenantID(slug)
+	tid, err := value.NewTenantID(slug.Slug().String())
 	if err != nil {
 		middleware.AbortWithError(c, http.StatusUnauthorized, middleware.ErrorCodeUnauthorized, "unauthorized")
 		return value.TenantID{}

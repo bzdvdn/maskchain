@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# @sk-task 102-profile-cache#examples: Seed profile with test dictionaries
+# @sk-task tenant-profile-sync#examples: Seed tenant dictionaries
 #
-# Creates/updates profile "pii-protect" with:
+# Updates dictionaries for tenant "default" with:
 #   - 500 users  (full names)
 #   - 50 departments
 #   - 300 projects
 #
-# Usage: ./seed-profile.sh [admin_url] [api_key]
-#   admin_url  — default: http://localhost:8081
+# Usage: ./seed-tenant.sh [admin_url] [api_key]
+#   admin_url  — default: http://localhost:8082
 #   api_key    — default: sk-test-default
 
 set -euo pipefail
@@ -16,7 +16,7 @@ ADMIN_URL="${1:-http://localhost:8082}"
 API_KEY="${2:-sk-test-default}"
 AUTH="Authorization: Bearer ${API_KEY}"
 
-echo "=== MaskChain Profile Seed ==="
+echo "=== MaskChain Tenant Dictionary Seed ==="
 echo "Admin: ${ADMIN_URL}"
 echo ""
 
@@ -43,12 +43,9 @@ DEPT_JSON=$(cat "${DATA_DIR}/departments.json")
 echo "Loading projects from data/projects.json..."
 PROJ_JSON=$(cat "${DATA_DIR}/projects.json")
 
-# ---- Build profile JSON (no preprocessors) ----
-PROFILE_JSON=$(cat <<EOF
+# ---- Build dictionaries payload ----
+DICT_JSON=$(cat <<EOF
 {
-  "slug": "pii-protect",
-  "name": "PII Protection",
-  "description": "Protects PII: user names, departments, projects via dictionary matching",
   "dictionaries": [
     {
       "name": "users",
@@ -70,35 +67,21 @@ PROFILE_JSON=$(cat <<EOF
 EOF
 )
 
-# ---- Create or Update ----
+# ---- Update tenant dictionaries ----
 echo ""
-echo "Creating/updating profile 'pii-protect'..."
+echo "Updating dictionaries for tenant 'default'..."
 
-HTTP_CODE=$(curl -s -o /tmp/seed-profile-response.json -w "%{http_code}" \
-  -X POST "${ADMIN_URL}/api/v1/profiles" \
+HTTP_CODE=$(curl -s -o /tmp/seed-dict-response.json -w "%{http_code}" \
+  -X PUT "${ADMIN_URL}/api/v1/tenants/default/dictionaries" \
   -H "Content-Type: application/json" \
   -H "${AUTH}" \
-  -d "${PROFILE_JSON}" 2>/dev/null || echo "000")
+  -d "${DICT_JSON}" 2>/dev/null || echo "000")
 
-if [ "${HTTP_CODE}" = "201" ]; then
-  echo "Profile created."
-elif [ "${HTTP_CODE}" = "409" ]; then
-  echo "Profile exists, updating..."
-  HTTP_CODE=$(curl -s -o /tmp/seed-profile-response.json -w "%{http_code}" \
-    -X PUT "${ADMIN_URL}/api/v1/profiles/pii-protect" \
-    -H "Content-Type: application/json" \
-    -H "${AUTH}" \
-    -d "${PROFILE_JSON}" 2>/dev/null || echo "000")
-  if [ "${HTTP_CODE}" = "200" ]; then
-    echo "Profile updated."
-  else
-    echo "FAILED to update profile (HTTP ${HTTP_CODE})"
-    cat /tmp/seed-profile-response.json
-    exit 1
-  fi
+if [ "${HTTP_CODE}" = "200" ]; then
+  echo "Tenant dictionaries updated."
 else
-  echo "FAILED to create profile (HTTP ${HTTP_CODE})"
-  cat /tmp/seed-profile-response.json
+  echo "FAILED to update dictionaries (HTTP ${HTTP_CODE})"
+  cat /tmp/seed-dict-response.json
   exit 1
 fi
 
@@ -107,5 +90,5 @@ echo "=== Seed complete ==="
 echo ""
 echo "Next steps:"
 echo "  1. Open examples/test-prompt.md for Postman test prompts"
-echo "  2. POST to http://localhost:8080/api/v1/shield/mask with X-Shield-Profile-Slug: pii-protect"
+echo "  2. POST to http://localhost:8080/api/v1/shield/mask with Authorization: Bearer sk-test-default"
 echo "  3. Use X-Mask-ID header from response to unmask via /api/v1/shield/unmask"

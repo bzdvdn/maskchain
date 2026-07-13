@@ -13,6 +13,8 @@ import (
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/routing"
 	routingSvc "github.com/bzdvdn/maskchain/src/internal/domain/routing/service"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 	"github.com/bzdvdn/maskchain/src/internal/ports"
 )
@@ -301,6 +303,11 @@ func TestSelectWithFallbackChain(t *testing.T) {
 }
 
 // @sk-test 80-tenant-isolation#T4.5: TestRoutingHandlerTenantContext verifies tenant-scoped routing and X-Tenant-ID propagation (AC-006, AC-007)
+func customTenant() *entity.Tenant {
+	slug, _ := value.NewTenantSlug("custom-tenant")
+	return entity.NewTenant(slug, "Custom", "", nil)
+}
+
 func TestRoutingHandlerTenantContext(t *testing.T) {
 	cfg := &config.RoutingConfig{
 		Providers: []config.ProviderConfig{
@@ -330,7 +337,7 @@ func TestRoutingHandlerTenantContext(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions",
 		strings.NewReader(`{"model":"gpt-4"}`))
 	c.Request.Header.Set("Content-Type", "application/json")
-	c.Set("tenant_slug", "custom-tenant")
+	c.Set("tenant", customTenant())
 
 	handler.HandleChatCompletion(c)
 

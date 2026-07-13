@@ -19,39 +19,18 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 )
 
-// @sk-test 80-tenant-isolation#T4.5: TestResolveTenantID reads tenant from auth context (AC-006)
-func TestResolveTenantID(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	t.Run("tenant in context", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		c.Set("tenant_slug", "alpha")
-		tid := resolveTenantID(c)
-		if tid.String() != "alpha" {
-			t.Errorf("expected alpha, got %s", tid.String())
-		}
-	})
-
-	t.Run("no tenant in context falls back to default", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		tid := resolveTenantID(c)
-		if tid.String() != "default" {
-			t.Errorf("expected default fallback, got %s", tid.String())
-		}
-	})
-}
-
 // @sk-test 51-shield-gateway-integration#T2.2: TestShieldBlocked returns 403 for critical content (AC-001)
 func TestShieldBlocked(t *testing.T) {
-	engine, mockEng, mockRepo, log := setupTest(t)
-	mockRepo.profile = newTestProfile("test-profile", true)
+	engine, mockEng, log := setupTest(t)
 	mockEng.resp = &appshield.ScanResponse{
 		ScanResult: entity.NewScanResult(value.ScanStatusBlocked, nil),
 	}
 
-	engine.Use(ShieldMiddleware(mockEng, mockRepo, &config.ShieldConfig{}, log))
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", newTestTenant("test-tenant"))
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(mockEng, &config.ShieldConfig{}, log))
 	engine.POST("/v1/chat/completions", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -59,7 +38,6 @@ func TestShieldBlocked(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "my SSN is 123-45-6789")))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Shield-Profile-Slug", "test-profile")
 	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusForbidden {
@@ -82,14 +60,17 @@ func TestShieldBlocked(t *testing.T) {
 
 // @sk-test 51-shield-gateway-integration#T2.2: TestShieldClean passes request to handler (AC-002)
 func TestShieldClean(t *testing.T) {
-	engine, mockEng, mockRepo, log := setupTest(t)
-	mockRepo.profile = newTestProfile("test-profile", true)
+	engine, mockEng, log := setupTest(t)
 	mockEng.resp = &appshield.ScanResponse{
 		ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
 	}
 
 	var handlerCalled bool
-	engine.Use(ShieldMiddleware(mockEng, mockRepo, &config.ShieldConfig{}, log))
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", newTestTenant("test-tenant"))
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(mockEng, &config.ShieldConfig{}, log))
 	engine.POST("/v1/chat/completions", func(c *gin.Context) {
 		handlerCalled = true
 		c.Status(http.StatusOK)
@@ -98,7 +79,6 @@ func TestShieldClean(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "hello")))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Shield-Profile-Slug", "test-profile")
 	engine.ServeHTTP(w, req)
 
 	if !handlerCalled {
@@ -112,68 +92,19 @@ func TestShieldClean(t *testing.T) {
 	}
 }
 
-// @sk-test 51-shield-gateway-integration#T2.2: TestShieldProfileResolution uses X-Shield-Profile-Slug header (AC-003)
-func TestShieldProfileResolution(t *testing.T) {
-	engine, mockEng, mockRepo, log := setupTest(t)
-	mockRepo.profile = newTestProfile("custom-slug", true)
-	mockEng.resp = &appshield.ScanResponse{
-		ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
-	}
-
-	engine.Use(ShieldMiddleware(mockEng, mockRepo, &config.ShieldConfig{}, log))
-	engine.POST("/v1/chat/completions", func(c *gin.Context) {
-		c.Status(http.StatusOK)
-	})
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "hello")))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Shield-Profile-Slug", "custom-slug")
-	engine.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200 for valid slug, got %d", w.Code)
-	}
-}
-
-// @sk-test 51-shield-gateway-integration#T2.2: TestShieldProfileNotFound returns 404 (AC-004)
-func TestShieldProfileNotFound(t *testing.T) {
-	engine, mockEng, mockRepo, log := setupTest(t)
-	mockRepo.profile = nil
-	mockRepo.err = nil
-	mockEng.resp = &appshield.ScanResponse{
-		ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
-	}
-
-	engine.Use(ShieldMiddleware(mockEng, mockRepo, &config.ShieldConfig{}, log))
-	engine.POST("/v1/chat/completions", func(c *gin.Context) {
-		c.Status(http.StatusOK)
-	})
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "hello")))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Shield-Profile-Slug", "nonexistent")
-	engine.ServeHTTP(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", w.Code)
-	}
-	if w.Header().Get("X-Shield-Status") != "error" {
-		t.Errorf("expected X-Shield-Status: error, got %s", w.Header().Get("X-Shield-Status"))
-	}
-}
-
 // @sk-test 51-shield-gateway-integration#T2.2: TestShieldEngineError returns 502 (AC-005)
 func TestShieldEngineError(t *testing.T) {
-	engine, mockEng, mockRepo, log := setupTest(t)
-	mockRepo.profile = newTestProfile("test-profile", true)
+	engine, mockEng, log := setupTest(t)
 	mockEng.err = nil
 	mockEng.resp = &appshield.ScanResponse{
 		ScanResult: entity.NewScanResult(value.ScanStatusError, nil),
 	}
 
-	engine.Use(ShieldMiddleware(mockEng, mockRepo, &config.ShieldConfig{}, log))
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", newTestTenant("test-tenant"))
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(mockEng, &config.ShieldConfig{}, log))
 	engine.POST("/v1/chat/completions", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -181,7 +112,6 @@ func TestShieldEngineError(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "hello")))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Shield-Profile-Slug", "test-profile")
 	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadGateway {
@@ -194,13 +124,16 @@ func TestShieldEngineError(t *testing.T) {
 
 // @sk-test 51-shield-gateway-integration#T2.2: TestShieldHeaders present in response (AC-006)
 func TestShieldHeaders(t *testing.T) {
-	engine, mockEng, mockRepo, log := setupTest(t)
-	mockRepo.profile = newTestProfile("test-profile", true)
+	engine, mockEng, log := setupTest(t)
 	mockEng.resp = &appshield.ScanResponse{
 		ScanResult: entity.NewScanResult(value.ScanStatusBlocked, nil),
 	}
 
-	engine.Use(ShieldMiddleware(mockEng, mockRepo, &config.ShieldConfig{}, log))
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", newTestTenant("test-tenant"))
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(mockEng, &config.ShieldConfig{}, log))
 	engine.POST("/v1/chat/completions", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -208,7 +141,6 @@ func TestShieldHeaders(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "test")))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Shield-Profile-Slug", "test-profile")
 	engine.ServeHTTP(w, req)
 
 	if w.Header().Get("X-Shield-Status") == "" {
@@ -224,11 +156,14 @@ func TestShieldHeaders(t *testing.T) {
 
 // @sk-test 51-shield-gateway-integration#T2.2: TestShieldEmptyMessages passes through (edge case)
 func TestShieldEmptyMessages(t *testing.T) {
-	engine, mockEng, mockRepo, log := setupTest(t)
-	mockRepo.profile = newTestProfile("test-profile", true)
+	engine, mockEng, log := setupTest(t)
 
 	var handlerCalled bool
-	engine.Use(ShieldMiddleware(mockEng, mockRepo, &config.ShieldConfig{}, log))
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", newTestTenant("test-tenant"))
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(mockEng, &config.ShieldConfig{}, log))
 	engine.POST("/v1/chat/completions", func(c *gin.Context) {
 		handlerCalled = true
 		c.Status(http.StatusOK)
@@ -241,7 +176,6 @@ func TestShieldEmptyMessages(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(string(body)))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Shield-Profile-Slug", "test-profile")
 	engine.ServeHTTP(w, req)
 
 	if !handlerCalled {
@@ -254,10 +188,13 @@ func TestShieldEmptyMessages(t *testing.T) {
 
 // @sk-test 51-shield-gateway-integration#T2.2: TestShieldNonJSONContentType returns 415 (edge case)
 func TestShieldNonJSONContentType(t *testing.T) {
-	engine, mockEng, mockRepo, log := setupTest(t)
-	mockRepo.profile = newTestProfile("test-profile", true)
+	engine, mockEng, log := setupTest(t)
 
-	engine.Use(ShieldMiddleware(mockEng, mockRepo, &config.ShieldConfig{}, log))
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", newTestTenant("test-tenant"))
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(mockEng, &config.ShieldConfig{}, log))
 	engine.POST("/v1/chat/completions", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -265,11 +202,32 @@ func TestShieldNonJSONContentType(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader("not json"))
 	req.Header.Set("Content-Type", "text/plain")
-	req.Header.Set("X-Shield-Profile-Slug", "test-profile")
 	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnsupportedMediaType {
 		t.Errorf("expected 415, got %d", w.Code)
+	}
+}
+
+// @sk-test tenant-profile-sync#T3.1: TestShieldMissingTenant returns 400 (AC-006, AC-007)
+func TestShieldMissingTenant(t *testing.T) {
+	engine, mockEng, log := setupTest(t)
+
+	engine.Use(ShieldMiddleware(mockEng, &config.ShieldConfig{}, log))
+	engine.POST("/v1/chat/completions", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "hello")))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+	if w.Header().Get("X-Shield-Status") != "error" {
+		t.Errorf("expected X-Shield-Status: error, got %s", w.Header().Get("X-Shield-Status"))
 	}
 }
 
@@ -285,11 +243,12 @@ func TestShieldLogging(t *testing.T) {
 			ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
 		},
 	}
-	mockRepo := &mockProfileRepo{
-		profile: newTestProfile("test-profile", true),
-	}
 
-	engine.Use(ShieldMiddleware(mockEng, mockRepo, &config.ShieldConfig{}, log))
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", newTestTenant("test-tenant"))
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(mockEng, &config.ShieldConfig{}, log))
 	engine.POST("/v1/chat/completions", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -297,7 +256,6 @@ func TestShieldLogging(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "hello")))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Shield-Profile-Slug", "test-profile")
 	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
@@ -314,7 +272,7 @@ func TestShieldLogging(t *testing.T) {
 			switch f.Key {
 			case "shield_status":
 				hasStatus = true
-			case "profile_slug":
+			case "tenant_slug":
 				hasSlug = true
 			case "model":
 				hasModel = true
@@ -330,7 +288,7 @@ func TestShieldLogging(t *testing.T) {
 		t.Error("expected shield_status in log")
 	}
 	if !hasSlug {
-		t.Error("expected profile_slug in log")
+		t.Error("expected tenant_slug in log")
 	}
 	if !hasModel {
 		t.Error("expected model in log")

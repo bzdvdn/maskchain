@@ -52,7 +52,7 @@ func TestMaskFromResults_EmptyResults(t *testing.T) {
 	store := newMemStorage()
 	uc := NewMaskUseCase(nil, store)
 
-	masked, entry, err := uc.MaskFromResults(context.Background(), "", "test-id", nil)
+	masked, entry, err := uc.MaskFromResults(context.Background(), "", "test-id", "test-id", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestMaskFromResults_NoResults(t *testing.T) {
 	store := newMemStorage()
 	uc := NewMaskUseCase(nil, store)
 
-	masked, entry, err := uc.MaskFromResults(context.Background(), "hello world", "test-id", nil)
+	masked, entry, err := uc.MaskFromResults(context.Background(), "hello world", "test-id", "test-id", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,10 +98,10 @@ func TestNewUUIDv7_Format(t *testing.T) {
 // @sk-test 22-shield-mask-storage#T2.2: Duplicate mask_id returns conflict
 func TestMaskFromResults_MaskIDConflict(t *testing.T) {
 	store := newMemStorage()
-	store.data["dup"] = &MaskEntry{MaskID: "dup", Replacements: map[string]string{}}
+	store.data["dup"] = &MaskEntry{MaskID: "dup", DocumentMaskID: "dup", Replacements: map[string]string{}}
 	uc := NewMaskUseCase(nil, store)
 
-	_, _, err := uc.MaskFromResults(context.Background(), "hello", "dup", nil)
+	_, _, err := uc.MaskFromResults(context.Background(), "hello", "dup", "dup", nil)
 	if !errors.Is(err, ErrMaskIDConflict) {
 		t.Errorf("expected ErrMaskIDConflict, got %v", err)
 	}
@@ -112,7 +112,7 @@ func TestMaskFromResults_SingleReplacement(t *testing.T) {
 	store := newMemStorage()
 	uc := NewMaskUseCase(nil, store)
 
-	masked, entry, err := uc.MaskFromResults(context.Background(), "Hi test@example.com!", "abc",
+	masked, entry, err := uc.MaskFromResults(context.Background(), "Hi test@example.com!", "abc", "abc",
 		[]detector.DetectorResult{
 			{DetectorType: "email", Fragment: "test@example.com", StartPos: 3, EndPos: 19, Confidence: 1.0},
 		},
@@ -134,6 +134,7 @@ func TestUnmaskText_Single(t *testing.T) {
 	store := newMemStorage()
 	store.data["abc"] = &MaskEntry{
 		MaskID: "abc",
+		DocumentMaskID: "abc",
 		Replacements: map[string]string{
 			"{{abc.1}}": "test@example.com",
 		},
@@ -156,7 +157,7 @@ func TestMaskUnmask_RoundTrip(t *testing.T) {
 	uc := NewMaskUseCase(nil, store)
 	original := "Contact: john@example.com, Phone: +1-555-1234"
 
-	masked, _, err := uc.MaskFromResults(context.Background(), original, "rt",
+	masked, _, err := uc.MaskFromResults(context.Background(), original, "rt", "rt",
 		[]detector.DetectorResult{
 			{DetectorType: "email", Fragment: "john@example.com", StartPos: 9, EndPos: 25, Confidence: 1.0},
 			{DetectorType: "phone", Fragment: "+1-555-1234", StartPos: 34, EndPos: 45, Confidence: 1.0},
@@ -180,12 +181,14 @@ func TestMaskText_MultipleMaskIDs(t *testing.T) {
 	store := newMemStorage()
 	store.data["a"] = &MaskEntry{
 		MaskID: "a",
+		DocumentMaskID: "a",
 		Replacements: map[string]string{
 			"{{a.1}}": "alice@example.com",
 		},
 	}
 	store.data["b"] = &MaskEntry{
 		MaskID: "b",
+		DocumentMaskID: "b",
 		Replacements: map[string]string{
 			"{{b.1}}": "+1-555-0000",
 		},
@@ -209,7 +212,7 @@ func TestMaskFromResults_OverlapFilter(t *testing.T) {
 	store := newMemStorage()
 	uc := NewMaskUseCase(nil, store)
 
-	masked, entry, err := uc.MaskFromResults(context.Background(), "john@example.com", "ov",
+	masked, entry, err := uc.MaskFromResults(context.Background(), "john@example.com", "ov", "ov",
 		[]detector.DetectorResult{
 			{DetectorType: "email", Fragment: "john@example.com", StartPos: 0, EndPos: 16, Confidence: 1.0},
 			{DetectorType: "domain", Fragment: "example.com", StartPos: 5, EndPos: 16, Confidence: 1.0},

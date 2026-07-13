@@ -6,19 +6,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/bzdvdn/maskchain/src/internal/domain/tenant"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 )
 
-const tenantKey = "tenant_slug"
+const tenantKey = "tenant"
 
-// @sk-task 80-tenant-isolation#T2.1: TenantFromContext helper for handlers (AC-001, AC-002, AC-003, AC-004)
-func TenantFromContext(c *gin.Context) (string, bool) {
+// @sk-task tenant-profile-sync#T2.1: TenantFromContext returns Tenant entity from context
+func TenantFromContext(c *gin.Context) (*entity.Tenant, bool) {
 	v, ok := c.Get(tenantKey)
 	if !ok {
-		return "", false
+		return nil, false
 	}
-	slug, ok := v.(string)
-	return slug, ok
+	t, ok := v.(*entity.Tenant)
+	return t, ok
 }
 
 var publicPaths = map[string]bool{
@@ -33,15 +33,10 @@ func isPublicPath(path string) bool {
 	return publicPaths[path]
 }
 
-// @sk-task 80-tenant-isolation#T2.1: Multi-header auth middleware (AC-001, AC-002, AC-003, AC-004)
-func Auth(repo tenant.Repository) gin.HandlerFunc {
+// @sk-task tenant-profile-sync#T2.1: Multi-header auth middleware using TenantResolver (AC-002, AC-005)
+func Auth(tenants []*entity.Tenant) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if repo == nil {
-			c.Next()
-			return
-		}
-		allTenants := repo.All()
-		if len(allTenants) == 0 {
+		if len(tenants) == 0 {
 			c.Next()
 			return
 		}
@@ -50,12 +45,12 @@ func Auth(repo tenant.Repository) gin.HandlerFunc {
 			return
 		}
 
-		t, ok := authenticate(c, repo)
+		t, ok := authenticate(c, tenants)
 		if !ok {
 			AbortWithError(c, http.StatusUnauthorized, ErrorCodeUnauthorized, "unauthorized")
 			return
 		}
-		c.Set(tenantKey, t.Slug())
+		c.Set(tenantKey, t)
 		c.Next()
 	}
 }
@@ -65,8 +60,8 @@ type candidate struct {
 	key    string
 }
 
-// @sk-task 80-tenant-isolation#T2.1: Collect candidate pairs for authentication (AC-001, AC-004)
-func collectCandidates(c *gin.Context, repo tenant.Repository) []candidate {
+// @sk-task tenant-profile-sync#T2.1: Collect candidate pairs for authentication
+func collectCandidates(c *gin.Context, tenants []*entity.Tenant) []candidate {
 	var candidates []candidate
 
 	authz := c.GetHeader("Authorization")
@@ -80,7 +75,7 @@ func collectCandidates(c *gin.Context, repo tenant.Repository) []candidate {
 	}
 
 	seen := map[string]bool{"Authorization": true, "X-Mask-Authorization": true}
-	for _, t := range repo.All() {
+	for _, t := range tenants {
 		h := t.AuthHeader()
 		if seen[h] {
 			continue
@@ -94,20 +89,22 @@ func collectCandidates(c *gin.Context, repo tenant.Repository) []candidate {
 	return candidates
 }
 
-func authenticate(c *gin.Context, repo tenant.Repository) (*tenant.Tenant, bool) {
-	for _, cand := range collectCandidates(c, repo) {
+func authenticate(c *gin.Context, tenants []*entity.Tenant) (*entity.Tenant, bool) {
+	for _, cand := range collectCandidates(c, tenants) {
 		if cand.key == "" {
 			continue
 		}
-		t, ok := repo.FindByAPIKey(cand.key)
-		if !ok {
-			continue
+		for _, t := range tenants {
+			for _, k := range t.APIKeys() {
+				if k == cand.key {
+					if t.AuthHeader() != cand.header {
+						AbortWithError(c, http.StatusUnauthorized, ErrorCodeUnauthorized, "unauthorized")
+						return nil, false
+					}
+					return t, true
+				}
+			}
 		}
-		if t.AuthHeader() != cand.header {
-			AbortWithError(c, http.StatusUnauthorized, ErrorCodeUnauthorized, "unauthorized")
-			return nil, false
-		}
-		return t, true
 	}
 	return nil, false
 }

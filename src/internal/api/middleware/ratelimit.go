@@ -22,11 +22,12 @@ func setRateLimitHeaders(c *gin.Context, rl *budget.RateLimit) {
 // @sk-task rate-limiting-budgets#T3.3: Add Prometheus metrics counters (AC-007)
 func RateLimit(repo budget.RateLimitRepository, cfg *config.RateLimitConfig, tokenBudgetRepo budget.TokenBudgetRepository) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tenantID, ok := TenantFromContext(c)
+		tenantCtx, ok := TenantFromContext(c)
 		if !ok {
 			c.Next()
 			return
 		}
+		tenantID := tenantCtx.Slug().String()
 
 		limit := int64(cfg.DefaultRatePerWindow)
 		windowSec := int64(cfg.DefaultWindowSec)

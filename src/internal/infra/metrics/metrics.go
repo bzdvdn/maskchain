@@ -21,10 +21,10 @@ func RegisterMetrics(reg *prometheus.Registry) {
 	reg.MustRegister(ShieldProfilesEvaluated)
 	reg.MustRegister(RateLimitExceededTotal)
 	reg.MustRegister(RateLimitRemaining)
-	reg.MustRegister(ProfileCacheHitsTotal)
-	reg.MustRegister(ProfileCacheMissesTotal)
-	reg.MustRegister(ProfileCacheStaleTotal)
-	reg.MustRegister(ProfileCacheInvalidationsTotal)
+	reg.MustRegister(DictionaryCacheHitsTotal)
+	reg.MustRegister(DictionaryCacheMissesTotal)
+	reg.MustRegister(DictionaryCacheStaleTotal)
+	reg.MustRegister(DictionaryCacheInvalidationsTotal)
 }
 
 // @sk-task 90-production-hardening#T3.2: Register PG pool metrics collector (<AC-003>)
@@ -129,38 +129,38 @@ var (
 		[]string{"tenant"},
 	)
 
-	// @sk-task 102-profile-cache#T2.3: Register ProfileCache Prometheus counter vectors (RQ-008)
-	ProfileCacheHitsTotal = prometheus.NewCounterVec(
+	// @sk-task tenant-profile-sync#T4.1: Register DictionaryCache Prometheus counter vectors (AC-006)
+	DictionaryCacheHitsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
-			Name:      "profile_cache_hits_total",
-			Help:      "Total number of profile cache hits",
+			Name:      "dictionary_cache_hits_total",
+			Help:      "Total number of dictionary cache hits",
 		},
 		[]string{"operation", "level"},
 	)
 
-	ProfileCacheMissesTotal = prometheus.NewCounterVec(
+	DictionaryCacheMissesTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
-			Name:      "profile_cache_misses_total",
-			Help:      "Total number of profile cache misses",
+			Name:      "dictionary_cache_misses_total",
+			Help:      "Total number of dictionary cache misses",
 		},
 		[]string{"operation", "level"},
 	)
 
-	ProfileCacheStaleTotal = prometheus.NewCounterVec(
+	DictionaryCacheStaleTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
-			Name:      "profile_cache_stale_total",
+			Name:      "dictionary_cache_stale_total",
 			Help:      "Total number of stale cache reads (Valkey degraded)",
 		},
 		[]string{"operation"},
 	)
 
-	ProfileCacheInvalidationsTotal = prometheus.NewCounterVec(
+	DictionaryCacheInvalidationsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
-			Name:      "profile_cache_invalidations_total",
+			Name:      "dictionary_cache_invalidations_total",
 			Help:      "Total number of cache invalidations",
 		},
 		[]string{"operation"},

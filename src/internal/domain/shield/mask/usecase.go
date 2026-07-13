@@ -24,11 +24,16 @@ func NewMaskUseCase(registry *detector.DetectorRegistry, storage MaskStorage) *M
 }
 
 // @sk-task 23-shield-reactions#T1.2: Implement MaskFromResults (DEC-002)
-func (uc *MaskUseCase) MaskFromResults(ctx context.Context, text string, maskID string, results []detector.DetectorResult) (maskedText string, entry *MaskEntry, err error) {
+func (uc *MaskUseCase) MaskFromResults(ctx context.Context, text string, maskID string, documentMaskID string, results []detector.DetectorResult) (maskedText string, entry *MaskEntry, err error) {
+	docID := documentMaskID
+	if docID == "" {
+		docID = maskID
+	}
 	entry = &MaskEntry{
-		MaskID:       maskID,
-		Replacements: make(map[string]string),
-		CreatedAt:    time.Now(),
+		MaskID:          maskID,
+		DocumentMaskID:  docID,
+		Replacements:    make(map[string]string),
+		CreatedAt:       time.Now(),
 	}
 
 	if len(results) == 0 {
@@ -71,7 +76,7 @@ func (uc *MaskUseCase) MaskFromResults(ctx context.Context, text string, maskID 
 	masked := []byte(text)
 	counter := 1
 	for _, r := range kept {
-		placeholder := fmt.Sprintf("{{%s.%d}}", maskID, counter)
+		placeholder := fmt.Sprintf("{{%s.%d}}", docID, counter)
 		entry.Replacements[placeholder] = r.Fragment
 
 		before := string(masked[:r.StartPos])

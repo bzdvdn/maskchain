@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.uber.org/zap"
 
+	"github.com/bzdvdn/maskchain/src/internal/api/handler/admin"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/incident"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/profile"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
@@ -78,6 +79,17 @@ func (s *AdminServer) RegisterProfileHandler(h *profile.ProfileHandler) {
 	group.PUT("/:slug", h.UpdateProfile)
 	group.DELETE("/:slug", h.DeleteProfile)
 	group.PATCH("/:slug/dictionary", h.PatchDictionary)
+}
+
+func (s *AdminServer) RegisterTenantHandler(h *admin.TenantHandler) {
+	group := s.engine.Group("/api/v1/tenants")
+	group.POST("", h.CreateTenant)
+	group.GET("", h.ListTenants)
+	group.GET("/:slug", h.GetTenant)
+	group.PUT("/:slug", h.UpdateTenant)
+	group.DELETE("/:slug", h.DeleteTenant)
+	group.GET("/:slug/dictionaries", h.GetDictionaries)
+	group.PUT("/:slug/dictionaries", h.UpdateDictionaries)
 }
 
 func (s *AdminServer) RegisterStaticFiles(fsys fs.FS) {

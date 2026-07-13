@@ -1,4 +1,4 @@
-package profilerepo
+package dictionaryrepo
 
 import (
 	"context"
@@ -12,17 +12,17 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
 
-// ProfileVersionFunc retrieves the current version of a profile from PG.
-type ProfileVersionFunc func(ctx context.Context, tenantID, slug string) (int, error)
+// DictionaryVersionFunc retrieves the current version of a profile from PG.
+type DictionaryVersionFunc func(ctx context.Context, tenantID, slug string) (int, error)
 
 type profileValkeyCache interface {
-	Get(ctx context.Context, tenantID, slug string) (*profileCacheValue, error)
-	Set(ctx context.Context, tenantID, slug string, val *profileCacheValue) error
+	Get(ctx context.Context, tenantID, slug string) (*dictionaryCacheValue, error)
+	Set(ctx context.Context, tenantID, slug string, val *dictionaryCacheValue) error
 	Del(ctx context.Context, tenantID, slug string) error
 	Publish(ctx context.Context, slug string) error
 }
 
-var _ profileValkeyCache = (*ProfileValkeyRepo)(nil)
+var _ profileValkeyCache = (*DictionaryValkeyRepo)(nil)
 
 // InvalidationTracker records slugs invalidated via PubSub for LRU skip-on-read.
 type InvalidationTracker struct {
@@ -51,15 +51,16 @@ func (t *InvalidationTracker) CheckAndClear(slug string) bool {
 	return ok
 }
 
-// @sk-task 102-profile-cache#T2.2: Implement ProfileCache (RQ-001, RQ-003, RQ-004, RQ-005, RQ-007, RQ-009, RQ-010, RQ-011)
+// @sk-task 102-profile-cache#T2.2: Implement DictionaryCache (RQ-001, RQ-003, RQ-004, RQ-005, RQ-007, RQ-009, RQ-010, RQ-011)
 // @sk-task 102-profile-cache#T3.1: Add PubSub publish to Save/Delete (AC-005, AC-007)
-type ProfileCache struct {
+// @sk-task tenant-profile-sync#T4.1: Rename ProfileCache → DictionaryCache (AC-006)
+type DictionaryCache struct {
 	pgRepo            shield.ProfileRepository
 	valkeyRepo        profileValkeyCache
-	lru               *ProfileLRUCache
+	lru               *DictionaryLRUCache
 	dictRepo          *DictLoader
 	logger            *slog.Logger
-	versionFunc       ProfileVersionFunc
+	versionFunc       DictionaryVersionFunc
 	metrics           cacheMetrics
 	invalidated       *InvalidationTracker
 }
@@ -71,17 +72,17 @@ type cacheMetrics interface {
 	IncInvalidations(operation string)
 }
 
-func NewProfileCache(
+func NewDictionaryCache(
 	pgRepo shield.ProfileRepository,
 	valkeyRepo profileValkeyCache,
-	lru *ProfileLRUCache,
+	lru *DictionaryLRUCache,
 	dictLoader *DictLoader,
 	logger *slog.Logger,
-	versionFunc ProfileVersionFunc,
+	versionFunc DictionaryVersionFunc,
 	metrics cacheMetrics,
 	invalidated *InvalidationTracker,
-) *ProfileCache {
-	return &ProfileCache{
+) *DictionaryCache {
+	return &DictionaryCache{
 		pgRepo:      pgRepo,
 		valkeyRepo:  valkeyRepo,
 		lru:         lru,
@@ -93,7 +94,7 @@ func NewProfileCache(
 	}
 }
 
-var _ shield.ProfileRepository = (*ProfileCache)(nil)
+var _ shield.ProfileRepository = (*DictionaryCache)(nil)
 
 // DictLoader is a thin wrapper that loads dictionary.Dictionary by profile slug.
 type DictLoader struct {
@@ -108,14 +109,14 @@ func (d *DictLoader) FindByProfileSlug(ctx context.Context, slug string) (*dicti
 	return d.loadFn(ctx, slug)
 }
 
-func (c *ProfileCache) Save(ctx context.Context, profile *entity.Profile) error {
+func (c *DictionaryCache) Save(ctx context.Context, profile *entity.Profile) error {
 	if err := c.pgRepo.Save(ctx, profile); err != nil {
 		return fmt.Errorf("pg save: %w", err)
 	}
 
 	version := c.resolveVersion(ctx, profile.TenantID().String(), profile.Slug().String())
 
-	val := profileToCacheValue(profile, version)
+	val := dictToCacheValue(profile, version)
 	slugStr := profile.Slug().String()
 	if err := c.valkeyRepo.Set(ctx, profile.TenantID().String(), slugStr, val); err != nil {
 		c.logger.Warn("valkey set failed after save", "slug", slugStr, "error", err)
@@ -127,18 +128,18 @@ func (c *ProfileCache) Save(ctx context.Context, profile *entity.Profile) error 
 		c.logger.Warn("pubsub publish failed on save", "slug", slugStr, "error", pubErr)
 	}
 
-	c.lru.Add(metadataKey(profile.TenantID().String(), slugStr), ProfileMetadataFromProfile(profile, version))
+	c.lru.Add(metadataKey(profile.TenantID().String(), slugStr), DictionaryMetadataFromProfile(profile, version))
 	return nil
 }
 
-func (c *ProfileCache) FindBySlug(ctx context.Context, tenantID value.TenantID, slug value.ProfileSlug) (*entity.Profile, error) {
+func (c *DictionaryCache) FindBySlug(ctx context.Context, tenantID value.TenantID, slug value.ProfileSlug) (*entity.Profile, error) {
 	tenantStr := tenantID.String()
 	slugStr := slug.String()
 
 	val, err := c.valkeyRepo.Get(ctx, tenantStr, slugStr)
 	if err == nil && val != nil {
 		c.metrics.IncHits("find_by_slug", "valkey")
-		return cacheValueToProfile(val)
+		return cacheValueToDict(val)
 	}
 	if err != nil {
 		c.logger.Warn("valkey get failed on FindBySlug", "slug", slugStr, "error", err)
@@ -166,23 +167,23 @@ func (c *ProfileCache) FindBySlug(ctx context.Context, tenantID value.TenantID, 
 	c.metrics.IncMisses("find_by_slug", "pg")
 
 	version := c.resolveVersion(ctx, tenantStr, slugStr)
-	val = profileToCacheValue(profile, version)
+	val = dictToCacheValue(profile, version)
 	if setErr := c.valkeyRepo.Set(ctx, tenantStr, slugStr, val); setErr != nil {
 		c.logger.Warn("valkey set failed on miss", "slug", slugStr, "error", setErr)
 	}
-	c.lru.Add(metadataKey(tenantStr, slugStr), ProfileMetadataFromProfile(profile, version))
+	c.lru.Add(metadataKey(tenantStr, slugStr), DictionaryMetadataFromProfile(profile, version))
 	return profile, nil
 }
 
-func (c *ProfileCache) FindByID(ctx context.Context, id value.ProfileID) (*entity.Profile, error) {
+func (c *DictionaryCache) FindByID(ctx context.Context, id value.ProfileID) (*entity.Profile, error) {
 	return c.pgRepo.FindByID(ctx, id)
 }
 
-func (c *ProfileCache) ListByTenant(ctx context.Context, tenantID value.TenantID) ([]*entity.Profile, error) {
+func (c *DictionaryCache) ListByTenant(ctx context.Context, tenantID value.TenantID) ([]*entity.Profile, error) {
 	return c.pgRepo.ListByTenant(ctx, tenantID)
 }
 
-func (c *ProfileCache) Delete(ctx context.Context, id value.ProfileID) error {
+func (c *DictionaryCache) Delete(ctx context.Context, id value.ProfileID) error {
 	profile, err := c.pgRepo.FindByID(ctx, id)
 	if err != nil {
 		return fmt.Errorf("pg find for delete: %w", err)
@@ -209,7 +210,7 @@ func (c *ProfileCache) Delete(ctx context.Context, id value.ProfileID) error {
 	return nil
 }
 
-func (c *ProfileCache) assembleDegraded(ctx context.Context, tenantID, slug string, meta *ProfileMetadata) (*entity.Profile, error) {
+func (c *DictionaryCache) assembleDegraded(ctx context.Context, tenantID, slug string, meta *DictionaryMetadata) (*entity.Profile, error) {
 	pid, err := value.NewProfileID(meta.ID)
 	if err != nil {
 		return nil, err
@@ -242,7 +243,7 @@ func (c *ProfileCache) assembleDegraded(ctx context.Context, tenantID, slug stri
 	return entity.NewProfile(pid, slugVal, tid, meta.Name, opts...), nil
 }
 
-func (c *ProfileCache) resolveVersion(ctx context.Context, tenantID, slug string) int {
+func (c *DictionaryCache) resolveVersion(ctx context.Context, tenantID, slug string) int {
 	if c.versionFunc == nil {
 		return 0
 	}

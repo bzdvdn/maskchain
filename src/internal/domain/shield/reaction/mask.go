@@ -61,8 +61,8 @@ func (r *MaskReaction) Execute(ctx context.Context, result *entity.ScanResult, t
 		return text, nil
 	}
 
-	maskID := mask.NewUUIDv7()
-	maskedText, _, err := r.useCase.MaskFromResults(ctx, text, maskID, results)
+	maskID := mask.NewShortID()
+	maskedText, _, err := r.useCase.MaskFromResults(ctx, text, maskID, maskID, results)
 	if err != nil {
 		return text, fmt.Errorf("mask: %w", err)
 	}

@@ -1,4 +1,4 @@
-package profilerepo
+package dictionaryrepo
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
 
-// @sk-task 102-profile-cache#T2.6: Test ProfileCache (AC-001, AC-002, AC-003, AC-004, AC-006, AC-008, AC-009, AC-010)
+// @sk-task 102-profile-cache#T2.6: Test DictionaryCache (AC-001, AC-002, AC-003, AC-004, AC-006, AC-008, AC-009, AC-010)
 
 type mockPGRepo struct {
 	shield.ProfileRepository
@@ -99,20 +99,20 @@ func (m *mockPGRepo) ListByTenant(ctx context.Context, tenantID value.TenantID) 
 
 type mockValkeyCache struct {
 	mu              sync.RWMutex
-	store           map[string]*profileCacheValue
+	store           map[string]*dictionaryCacheValue
 	getErr          error
 	publishedSlugs  []string
 }
 
 func newMockValkeyCache() *mockValkeyCache {
-	return &mockValkeyCache{store: make(map[string]*profileCacheValue)}
+	return &mockValkeyCache{store: make(map[string]*dictionaryCacheValue)}
 }
 
 func (m *mockValkeyCache) key(tenantID, slug string) string {
 	return tenantID + ":" + slug
 }
 
-func (m *mockValkeyCache) Get(ctx context.Context, tenantID, slug string) (*profileCacheValue, error) {
+func (m *mockValkeyCache) Get(ctx context.Context, tenantID, slug string) (*dictionaryCacheValue, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.getErr != nil {
@@ -125,7 +125,7 @@ func (m *mockValkeyCache) Get(ctx context.Context, tenantID, slug string) (*prof
 	return v, nil
 }
 
-func (m *mockValkeyCache) Set(ctx context.Context, tenantID, slug string, val *profileCacheValue) error {
+func (m *mockValkeyCache) Set(ctx context.Context, tenantID, slug string, val *dictionaryCacheValue) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.store[m.key(tenantID, slug)] = val
@@ -202,19 +202,19 @@ func makeTestProfile(tenantID, slug, name string) *entity.Profile {
 	)
 }
 
-func TestProfileCache_FindBySlug_ValkeyHit(t *testing.T) {
+func TestDictionaryCache_FindBySlug_ValkeyHit(t *testing.T) {
 	// AC-003: Valkey hit — no PG call
 	pg := newMockPGRepo()
 	vk := newMockValkeyCache()
-	lru := NewProfileLRUCache(100)
+	lru := NewDictionaryLRUCache(100)
 	dictLoader := NewDictLoader(newMockDictRepo().FindByProfileSlug)
 	metrics := newSpyMetrics()
 
 	profile := makeTestProfile("t1", "my-profile", "test")
-	val := profileToCacheValue(profile, 2)
+	val := dictToCacheValue(profile, 2)
 	vk.store["t1:my-profile"] = val
 
-	cache := NewProfileCache(pg, vk, lru, dictLoader, slog.Default(), nil, metrics, nil)
+	cache := NewDictionaryCache(pg, vk, lru, dictLoader, slog.Default(), nil, metrics, nil)
 
 	tid, _ := value.NewTenantID("t1")
 	slug, _ := value.NewProfileSlug("my-profile")
@@ -238,11 +238,11 @@ func TestProfileCache_FindBySlug_ValkeyHit(t *testing.T) {
 	}
 }
 
-func TestProfileCache_FindBySlug_ReadThrough(t *testing.T) {
+func TestDictionaryCache_FindBySlug_ReadThrough(t *testing.T) {
 	// AC-001: Valkey miss → PG → populate Valkey + LRU
 	pg := newMockPGRepo()
 	vk := newMockValkeyCache()
-	lru := NewProfileLRUCache(100)
+	lru := NewDictionaryLRUCache(100)
 	dictLoader := NewDictLoader(newMockDictRepo().FindByProfileSlug)
 	metrics := newSpyMetrics()
 
@@ -257,7 +257,7 @@ func TestProfileCache_FindBySlug_ReadThrough(t *testing.T) {
 		return 1, nil
 	}
 
-	cache := NewProfileCache(pg, vk, lru, dictLoader, slog.Default(), versionFunc, metrics, nil)
+	cache := NewDictionaryCache(pg, vk, lru, dictLoader, slog.Default(), versionFunc, metrics, nil)
 
 	result, err := cache.FindBySlug(context.Background(), tid, slug)
 	if err != nil {
@@ -294,11 +294,11 @@ func TestProfileCache_FindBySlug_ReadThrough(t *testing.T) {
 	}
 }
 
-func TestProfileCache_Save_WriteThrough(t *testing.T) {
+func TestDictionaryCache_Save_WriteThrough(t *testing.T) {
 	// AC-002: Save → PG + Valkey + invalidations
 	pg := newMockPGRepo()
 	vk := newMockValkeyCache()
-	lru := NewProfileLRUCache(100)
+	lru := NewDictionaryLRUCache(100)
 	dictLoader := NewDictLoader(newMockDictRepo().FindByProfileSlug)
 	metrics := newSpyMetrics()
 
@@ -306,7 +306,7 @@ func TestProfileCache_Save_WriteThrough(t *testing.T) {
 		return 1, nil
 	}
 
-	cache := NewProfileCache(pg, vk, lru, dictLoader, slog.Default(), versionFunc, metrics, nil)
+	cache := NewDictionaryCache(pg, vk, lru, dictLoader, slog.Default(), versionFunc, metrics, nil)
 
 	profile := makeTestProfile("t1", "my-profile", "test")
 	if err := cache.Save(context.Background(), profile); err != nil {
@@ -337,21 +337,21 @@ func TestProfileCache_Save_WriteThrough(t *testing.T) {
 	}
 }
 
-func TestProfileCache_FindBySlug_ValkeyError_LRUHit(t *testing.T) {
+func TestDictionaryCache_FindBySlug_ValkeyError_LRUHit(t *testing.T) {
 	// AC-004: Valkey error, LRU has metadata → degraded mode
 	pg := newMockPGRepo()
 	vk := newMockValkeyCache()
 	vk.getErr = errors.New("valkey down")
-	lru := NewProfileLRUCache(100)
+	lru := NewDictionaryLRUCache(100)
 
 	profile := makeTestProfile("t1", "my-profile", "test")
-	meta := ProfileMetadataFromProfile(profile, 2)
+	meta := DictionaryMetadataFromProfile(profile, 2)
 	lru.Add("t1:my-profile", meta)
 
 	dictLoader := NewDictLoader(newMockDictRepo().FindByProfileSlug)
 	metrics := newSpyMetrics()
 
-	cache := NewProfileCache(pg, vk, lru, dictLoader, slog.Default(), nil, metrics, nil)
+	cache := NewDictionaryCache(pg, vk, lru, dictLoader, slog.Default(), nil, metrics, nil)
 
 	tid, _ := value.NewTenantID("t1")
 	slug, _ := value.NewProfileSlug("my-profile")
@@ -374,12 +374,12 @@ func TestProfileCache_FindBySlug_ValkeyError_LRUHit(t *testing.T) {
 	}
 }
 
-func TestProfileCache_FindBySlug_ValkeyError_LRUMiss(t *testing.T) {
+func TestDictionaryCache_FindBySlug_ValkeyError_LRUMiss(t *testing.T) {
 	// AC-006: Valkey error, LRU empty → full PG read
 	pg := newMockPGRepo()
 	vk := newMockValkeyCache()
 	vk.getErr = errors.New("valkey down")
-	lru := NewProfileLRUCache(100)
+	lru := NewDictionaryLRUCache(100)
 
 	profile := makeTestProfile("t1", "my-profile", "test")
 	tid, _ := value.NewTenantID("t1")
@@ -393,7 +393,7 @@ func TestProfileCache_FindBySlug_ValkeyError_LRUMiss(t *testing.T) {
 		return 3, nil
 	}
 
-	cache := NewProfileCache(pg, vk, lru, dictLoader, slog.Default(), versionFunc, metrics, nil)
+	cache := NewDictionaryCache(pg, vk, lru, dictLoader, slog.Default(), versionFunc, metrics, nil)
 
 	result, err := cache.FindBySlug(context.Background(), tid, slug)
 	if err != nil {
@@ -418,23 +418,23 @@ func TestProfileCache_FindBySlug_ValkeyError_LRUMiss(t *testing.T) {
 	}
 }
 
-func TestProfileCache_Delete(t *testing.T) {
+func TestDictionaryCache_Delete(t *testing.T) {
 	// AC-009: Delete → PG + Valkey + LRU eviction
 	pg := newMockPGRepo()
 	vk := newMockValkeyCache()
-	lru := NewProfileLRUCache(100)
+	lru := NewDictionaryLRUCache(100)
 
 	profile := makeTestProfile("t1", "my-profile", "test")
 
 	pg.profilesByID[profile.ID().String()] = profile
 	pg.profilesBySlug["t1:my-profile"] = profile
-	vk.store["t1:my-profile"] = profileToCacheValue(profile, 1)
-	lru.Add("t1:my-profile", ProfileMetadataFromProfile(profile, 1))
+	vk.store["t1:my-profile"] = dictToCacheValue(profile, 1)
+	lru.Add("t1:my-profile", DictionaryMetadataFromProfile(profile, 1))
 
 	dictLoader := NewDictLoader(newMockDictRepo().FindByProfileSlug)
 	metrics := newSpyMetrics()
 
-	cache := NewProfileCache(pg, vk, lru, dictLoader, slog.Default(), nil, metrics, nil)
+	cache := NewDictionaryCache(pg, vk, lru, dictLoader, slog.Default(), nil, metrics, nil)
 
 	if err := cache.Delete(context.Background(), profile.ID()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -457,7 +457,7 @@ func TestProfileCache_Delete(t *testing.T) {
 	}
 }
 
-func TestProfileCache_PromMetrics(t *testing.T) {
+func TestDictionaryCache_PromMetrics(t *testing.T) {
 	// AC-008: Metrics export — verify counters are wired correctly
 	reg := prometheus.NewRegistry()
 	hits := prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_hits"}, []string{"operation", "level"})

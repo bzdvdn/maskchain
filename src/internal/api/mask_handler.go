@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/detector"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/mask"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/preprocessor"
@@ -34,9 +35,21 @@ func (h *MaskHandler) WithPreprocessors(pps []preprocessor.Processor) {
 func (h *MaskHandler) HandleMask(c *gin.Context) {
 	maskID := c.Query("mask_id")
 	ownID := false
+	var docMaskID string
 	if maskID == "" {
-		maskID = mask.NewUUIDv7()
+		maskID = mask.NewShortID()
+		docMaskID = maskID
 		ownID = true
+	} else {
+		if !validMaskID(maskID) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mask_id: only [a-zA-Z0-9-] allowed, max 64 chars"})
+			return
+		}
+		if len(maskID) > 12 {
+			docMaskID = mask.NewShortID()
+		} else {
+			docMaskID = maskID
+		}
 	}
 
 	body, err := c.GetRawData()
@@ -68,7 +81,18 @@ func (h *MaskHandler) HandleMask(c *gin.Context) {
 		allResults = append(allResults, results...)
 	}
 
-	maskedText, _, err := h.useCase.MaskFromResults(c.Request.Context(), processText, maskID, allResults)
+	if tenant, tenantOk := middleware.TenantFromContext(c); tenantOk {
+		for _, dict := range tenant.Dictionaries() {
+			dd := detector.NewDictionaryDetector(dict)
+			results, scanErr := dd.Scan(c.Request.Context(), processText)
+			if scanErr != nil {
+				continue
+			}
+			allResults = append(allResults, results...)
+		}
+	}
+
+	maskedText, _, err := h.useCase.MaskFromResults(c.Request.Context(), processText, maskID, docMaskID, allResults)
 	if err != nil {
 		if errors.Is(err, mask.ErrMaskIDConflict) {
 			c.JSON(http.StatusConflict, gin.H{"error": "mask_id already exists"})
@@ -81,7 +105,21 @@ func (h *MaskHandler) HandleMask(c *gin.Context) {
 	if ownID {
 		c.Header("X-Mask-ID", maskID)
 	}
+	c.Header("X-Document-Mask-ID", docMaskID)
 	c.String(http.StatusOK, maskedText)
+}
+
+func validMaskID(id string) bool {
+	if len(id) == 0 || len(id) > 64 {
+		return false
+	}
+	for i := 0; i < len(id); i++ {
+		b := id[i]
+		if (b < 'a' || b > 'z') && (b < 'A' || b > 'Z') && (b < '0' || b > '9') && b != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 func (h *MaskHandler) HandleUnmask(c *gin.Context) {

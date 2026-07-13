@@ -31,10 +31,10 @@ func (r *PostgresMaskRepo) Save(ctx context.Context, entry *mask.MaskEntry) erro
 	}
 
 	tag, err := r.pool.Exec(ctx,
-		`INSERT INTO mask_entries (mask_id, profile_id, replacements, created_at)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO mask_entries (mask_id, document_mask_id, profile_id, replacements, created_at)
+		 VALUES ($1, $2, $3, $4, $5)
 		 ON CONFLICT (mask_id) DO NOTHING`,
-		entry.MaskID, entry.ProfileID, data, entry.CreatedAt)
+		entry.MaskID, entry.DocumentMaskID, entry.ProfileID, data, entry.CreatedAt)
 	if err != nil {
 		return err
 	}
@@ -50,11 +50,12 @@ func (r *PostgresMaskRepo) Get(ctx context.Context, maskID string) (*mask.MaskEn
 	}
 	var replacementsJSON []byte
 	var profileID *string
+	var documentMaskID string
 	var createdAt time.Time
 
 	err := r.pool.QueryRow(ctx,
-		`SELECT mask_id, profile_id, replacements, created_at FROM mask_entries WHERE mask_id = $1`,
-		maskID).Scan(&maskID, &profileID, &replacementsJSON, &createdAt)
+		`SELECT mask_id, document_mask_id, profile_id, replacements, created_at FROM mask_entries WHERE mask_id = $1`,
+		maskID).Scan(&maskID, &documentMaskID, &profileID, &replacementsJSON, &createdAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, mask.ErrMaskNotFound
@@ -68,10 +69,11 @@ func (r *PostgresMaskRepo) Get(ctx context.Context, maskID string) (*mask.MaskEn
 	}
 
 	return &mask.MaskEntry{
-		MaskID:       maskID,
-		ProfileID:    profileID,
-		Replacements: replacements,
-		CreatedAt:    createdAt,
+		MaskID:          maskID,
+		DocumentMaskID:  documentMaskID,
+		ProfileID:       profileID,
+		Replacements:    replacements,
+		CreatedAt:       createdAt,
 	}, nil
 }
 

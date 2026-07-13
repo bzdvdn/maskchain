@@ -26,8 +26,8 @@ func Logger(log *zap.Logger) gin.HandlerFunc {
 			zap.Duration("duration", duration),
 			zap.String("request_id", ridStr),
 		}
-		if tid, ok := TenantFromContext(c); ok {
-			logFields = append(logFields, zap.String("tenant_id", tid))
+		if t, ok := TenantFromContext(c); ok {
+			logFields = append(logFields, zap.String("tenant_id", t.Slug().String()))
 		}
 		log.Info("request", logFields...)
 	}
