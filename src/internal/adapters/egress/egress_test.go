@@ -2,10 +2,18 @@ package egress
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -114,6 +122,57 @@ func TestConnectionReuse(t *testing.T) {
 	}
 
 	t.Logf("connection count: %d", connCount.Load())
+}
+
+// @sk-test 116-connection-pool-fixes#T2.4: TestMaxIdleConnsPerHost verifies bug fix (AC-001)
+func TestMaxIdleConnsPerHost(t *testing.T) {
+	cfg := &config.EgressConfig{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 5,
+	}
+	tp := NewTransport(cfg)
+	if tp.MaxIdleConnsPerHost != 5 {
+		t.Fatalf("expected MaxIdleConnsPerHost=5, got %d", tp.MaxIdleConnsPerHost)
+	}
+	if tp.MaxIdleConns != 100 {
+		t.Fatalf("expected MaxIdleConns=100, got %d", tp.MaxIdleConns)
+	}
+}
+
+// @sk-test 116-connection-pool-fixes#T2.4: TestPerProviderTimeoutFromClient verifies client-set timeout (AC-002)
+func TestPerProviderTimeoutFromClient(t *testing.T) {
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(5 * time.Second)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer slow.Close()
+
+	client := NewClientWithTransport(testConfig(), NewTransport(testConfig()), 100*time.Millisecond, nil)
+	start := time.Now()
+	_, err := client.Call(context.Background(), &ports.ProviderRequest{
+		Method: http.MethodGet,
+		URL:    slow.URL,
+	})
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("expected timeout error, got nil")
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("expected quick timeout, took %v", elapsed)
+	}
+}
+
+// @sk-test 116-connection-pool-fixes#T2.4: TestPerProviderTransportIsolation verifies per-provider transport (AC-008)
+func TestPerProviderTransportIsolation(t *testing.T) {
+	tp1 := NewTransport(&config.EgressConfig{MaxIdleConns: 10, MaxIdleConnsPerHost: 2})
+	tp2 := NewTransport(&config.EgressConfig{MaxIdleConns: 20, MaxIdleConnsPerHost: 5})
+
+	if tp1 == tp2 {
+		t.Fatal("expected different transport pointers")
+	}
+	if tp1.MaxIdleConns == tp2.MaxIdleConns {
+		t.Fatal("expected different MaxIdleConns values")
+	}
 }
 
 // @sk-test 71-egress-streaming#T2.2: TestPerProviderTimeout (AC-004)
@@ -305,6 +364,137 @@ func TestSSEChunkDelivery(t *testing.T) {
 	if elapsed > 2*time.Second {
 		t.Fatalf("streaming too slow: %v (server send time ~500ms)", elapsed)
 	}
+}
+
+// @sk-test 116-connection-pool-fixes#T3.5: TestTLSInsecureSkipVerify (AC-004)
+func TestTLSInsecureSkipVerify(t *testing.T) {
+	cfg := &config.EgressTLSConfig{InsecureSkipVerify: true}
+	tlsCfg := buildTLSConfig(cfg)
+	if tlsCfg == nil {
+		t.Fatal("expected non-nil tls.Config")
+	}
+	if !tlsCfg.InsecureSkipVerify {
+		t.Fatal("expected InsecureSkipVerify=true")
+	}
+}
+
+// @sk-test 116-connection-pool-fixes#T3.5: TestTLSCustomCA (AC-003)
+func TestTLSCustomCA(t *testing.T) {
+	caCertPEM, caKeyPEM := generateTestCert(t, "ca", true)
+	caFile := tempFile(t, "ca-cert.pem", caCertPEM)
+	_ = caKeyPEM
+
+	cfg := &config.EgressTLSConfig{CACert: caFile}
+	tlsCfg := buildTLSConfig(cfg)
+	if tlsCfg == nil {
+		t.Fatal("expected non-nil tls.Config")
+	}
+	if tlsCfg.RootCAs == nil {
+		t.Fatal("expected non-nil RootCAs")
+	}
+	subjects := tlsCfg.RootCAs.Subjects()
+	if len(subjects) == 0 {
+		t.Fatal("expected at least one CA subject")
+	}
+}
+
+// @sk-test 116-connection-pool-fixes#T3.5: TestTLSMutualTLS (AC-005)
+func TestTLSMutualTLS(t *testing.T) {
+	certPEM, keyPEM := generateTestCert(t, "client", false)
+	certFile := tempFile(t, "client-cert.pem", certPEM)
+	keyFile := tempFile(t, "client-key.pem", keyPEM)
+
+	cfg := &config.EgressTLSConfig{Cert: certFile, Key: keyFile}
+	tlsCfg := buildTLSConfig(cfg)
+	if tlsCfg == nil {
+		t.Fatal("expected non-nil tls.Config")
+	}
+	if len(tlsCfg.Certificates) == 0 {
+		t.Fatal("expected at least one client certificate")
+	}
+}
+
+// @sk-test 116-connection-pool-fixes#T3.5: TestCircuitBreakerOpen (AC-006)
+func TestCircuitBreakerOpen(t *testing.T) {
+	cb := NewCircuitBreaker(&config.CircuitBreakerConfig{MaxFailures: 3, Cooldown: time.Minute})
+
+	for i := 0; i < 3; i++ {
+		if !cb.Allow() {
+			t.Fatalf("expected Allow()=true before failures, got false at attempt %d", i)
+		}
+		cb.Fail()
+	}
+
+	if cb.Allow() {
+		t.Fatal("expected Allow()=false after 3 failures")
+	}
+}
+
+// @sk-test 116-connection-pool-fixes#T3.5: TestCircuitBreakerCooldown (AC-007)
+func TestCircuitBreakerCooldown(t *testing.T) {
+	cb := NewCircuitBreaker(&config.CircuitBreakerConfig{MaxFailures: 1, Cooldown: 50 * time.Millisecond})
+
+	cb.Fail()
+	if cb.Allow() {
+		t.Fatal("expected Allow()=false immediately after failure")
+	}
+
+	time.Sleep(60 * time.Millisecond)
+	if !cb.Allow() {
+		t.Fatal("expected Allow()=true after cooldown")
+	}
+}
+
+func generateTestCert(t *testing.T, cn string, isCA bool) (certPEM, keyPEM []byte) {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: cn},
+		NotBefore:             time.Now().Add(-1 * time.Hour),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  isCA,
+	}
+	if !isCA {
+		template.IsCA = false
+		template.KeyUsage = x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature
+	}
+
+	parent := template
+	parentKey := key
+	if isCA {
+		parent = template
+		parentKey = key
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, parent, &key.PublicKey, parentKey)
+	if err != nil {
+		t.Fatalf("failed to create certificate: %v", err)
+	}
+
+	certPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	keyBytes, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatalf("failed to marshal key: %v", err)
+	}
+	keyPEM = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyBytes})
+	return
+}
+
+func tempFile(t *testing.T, name string, data []byte) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+	return path
 }
 
 // @sk-test 71-egress-streaming#T4.2: TestSSEPrematureClose (AC-003)

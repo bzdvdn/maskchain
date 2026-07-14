@@ -128,14 +128,31 @@ type RateLimitOverride struct {
 
 // @sk-task 71-egress-streaming#T1.2: Add EgressConfig section (AC-002, AC-004, AC-006, AC-007)
 // @sk-task 90-production-hardening#T1.2: Add MaxIdleConnsPerHost and DisableKeepAlives (<AC-002>)
+// @sk-task 116-connection-pool-fixes#T1.1: Add TLS and CircuitBreaker to EgressConfig (AC-003, AC-004, AC-005, AC-006, AC-007)
 type EgressConfig struct {
-	MaxIdleConns        int           `mapstructure:"max_idle_conns" yaml:"max_idle_conns"`
-	IdleTimeout         time.Duration `mapstructure:"idle_timeout" yaml:"idle_timeout"`
-	MaxRetries          int           `mapstructure:"max_retries" yaml:"max_retries"`
-	BaseBackoff         time.Duration `mapstructure:"base_backoff" yaml:"base_backoff"`
-	RetryOn5xx          bool          `mapstructure:"retry_on_5xx" yaml:"retry_on_5xx"`
-	MaxIdleConnsPerHost int           `mapstructure:"max_idle_conns_per_host" yaml:"max_idle_conns_per_host"`
-	DisableKeepAlives   bool          `mapstructure:"disable_keep_alives" yaml:"disable_keep_alives"`
+	MaxIdleConns        int                    `mapstructure:"max_idle_conns" yaml:"max_idle_conns"`
+	IdleTimeout         time.Duration          `mapstructure:"idle_timeout" yaml:"idle_timeout"`
+	MaxRetries          int                    `mapstructure:"max_retries" yaml:"max_retries"`
+	BaseBackoff         time.Duration          `mapstructure:"base_backoff" yaml:"base_backoff"`
+	RetryOn5xx          bool                   `mapstructure:"retry_on_5xx" yaml:"retry_on_5xx"`
+	MaxIdleConnsPerHost int                    `mapstructure:"max_idle_conns_per_host" yaml:"max_idle_conns_per_host"`
+	DisableKeepAlives   bool                   `mapstructure:"disable_keep_alives" yaml:"disable_keep_alives"`
+	TLS                 *EgressTLSConfig       `mapstructure:"tls" yaml:"tls"`
+	CircuitBreaker      *CircuitBreakerConfig  `mapstructure:"circuit_breaker" yaml:"circuit_breaker"`
+}
+
+// @sk-task 116-connection-pool-fixes#T1.1: Add EgressTLSConfig struct (AC-003, AC-004, AC-005)
+type EgressTLSConfig struct {
+	CACert             string `mapstructure:"ca_cert" yaml:"ca_cert"`
+	InsecureSkipVerify bool   `mapstructure:"insecure_skip_verify" yaml:"insecure_skip_verify"`
+	Cert               string `mapstructure:"cert" yaml:"cert"`
+	Key                string `mapstructure:"key" yaml:"key"`
+}
+
+// @sk-task 116-connection-pool-fixes#T1.1: Add CircuitBreakerConfig struct (AC-006, AC-007)
+type CircuitBreakerConfig struct {
+	MaxFailures int           `mapstructure:"max_failures" yaml:"max_failures"`
+	Cooldown    time.Duration `mapstructure:"cooldown" yaml:"cooldown"`
 }
 
 // @sk-task 90-production-hardening#T1.1: Add DebugConfig struct (<AC-001>)
@@ -191,6 +208,8 @@ const defaultEgressBaseBackoff = 100 * time.Millisecond
 const defaultEgressRetryOn5xx = false
 const defaultEgressMaxIdleConnsPerHost = 2
 const defaultEgressDisableKeepAlives = false
+const defaultEgressCBMaxFailures = 3
+const defaultEgressCBCooldown = 30 * time.Second
 const defaultDebugEnabled = false
 const defaultDebugAdminToken = ""
 const defaultRateLimitRate = 100
@@ -243,6 +262,10 @@ func DefaultConfig() *Config {
 			RetryOn5xx:          defaultEgressRetryOn5xx,
 			MaxIdleConnsPerHost: defaultEgressMaxIdleConnsPerHost,
 			DisableKeepAlives:   defaultEgressDisableKeepAlives,
+			CircuitBreaker: &CircuitBreakerConfig{
+				MaxFailures: defaultEgressCBMaxFailures,
+				Cooldown:    defaultEgressCBCooldown,
+			},
 		},
 		Debug: &DebugConfig{
 			Enabled:    defaultDebugEnabled,
