@@ -17,6 +17,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/adapters/egress"
+	budgetrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/budget"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
 	"github.com/bzdvdn/maskchain/src/internal/api"
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
@@ -137,6 +138,22 @@ func main() {
 		logger.Fatal("failed to init valkey", zap.Error(err))
 	}
 
+	// @sk-task 115-rate-limit-wiring#T2.2: Initialize rate limit repos (AC-001, AC-002, AC-004, AC-005, AC-006, AC-007, AC-008)
+	// @sk-task 115-rate-limit-wiring#T3.1: Warn when rate limit configured but Valkey unavailable (AC-006)
+	var rlRepo *budgetrepo.ValkeyRateLimitRepo
+	var tbRepo *budgetrepo.ValkeyTokenBudgetRepo
+	if cfg.RateLimit != nil {
+		if vkClient == nil {
+			logger.Warn("rate limit configured but Valkey unavailable — rate limiting disabled, requests will pass through")
+		} else {
+			rlRepo = budgetrepo.NewValkeyRateLimitRepo(vkClient)
+			tbRepo = budgetrepo.NewValkeyTokenBudgetRepo(vkClient)
+			logger.Info("rate limit repositories initialized")
+		}
+	} else {
+		logger.Info("rate limit disabled — no ratelimit config section")
+	}
+
 	detectorRegistry := initDetectors(logger)
 
 	maskTTL := time.Duration(cfg.Mask.CacheTTLSec) * time.Second
@@ -204,6 +221,13 @@ func main() {
 		logger.Info("auth middleware registered", zap.Int("tenants", len(dbTenants)))
 	} else {
 		logger.Warn("no tenants configured, auth disabled")
+	}
+
+	// @sk-task 115-rate-limit-wiring#T2.2: Register rate limit middleware (AC-001, AC-002, AC-004, AC-005, AC-006, AC-007, AC-008)
+	if cfg.RateLimit != nil && rlRepo != nil {
+		rateLimitMw := middleware.RateLimit(rlRepo, cfg.RateLimit, tbRepo)
+		srv.RegisterRateLimit(rateLimitMw)
+		logger.Info("rate limit middleware registered")
 	}
 
 	adminMw := middleware.AdminAuth(cfg.Debug)

@@ -199,6 +199,7 @@ func TestRateLimitRecoversAfterWindow(t *testing.T) {
 }
 
 // @sk-test rate-limiting-budgets#T3.4: TestRateLimitHeadersOnSuccess checks headers on 200 (AC-003)
+// @sk-test 115-rate-limit-wiring#T4.1: Verify Retry-After absent on 200 (AC-003)
 func TestRateLimitHeadersOnSuccess(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
@@ -237,9 +238,13 @@ func TestRateLimitHeadersOnSuccess(t *testing.T) {
 	if w.Header().Get("X-RateLimit-Reset") == "" {
 		t.Error("expected X-RateLimit-Reset header")
 	}
+	if w.Header().Get("Retry-After") != "" {
+		t.Error("expected no Retry-After header on 200")
+	}
 }
 
 // @sk-test rate-limiting-budgets#T3.4: TestRateLimitHeadersOn429 checks headers on 429 (AC-003)
+// @sk-test 115-rate-limit-wiring#T4.1: Verify Retry-After present on 429 (AC-003)
 func TestRateLimitHeadersOn429(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
@@ -277,6 +282,9 @@ func TestRateLimitHeadersOn429(t *testing.T) {
 	}
 	if w.Header().Get("X-RateLimit-Remaining") == "" {
 		t.Error("expected X-RateLimit-Remaining header on 429")
+	}
+	if w.Header().Get("Retry-After") == "" {
+		t.Error("expected Retry-After header on 429")
 	}
 }
 

@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -52,6 +53,12 @@ func RateLimit(repo budget.RateLimitRepository, cfg *config.RateLimitConfig, tok
 
 		if !rl.Allowed {
 			setRateLimitHeaders(c, rl)
+			// @sk-task 115-rate-limit-wiring#T2.1: Add Retry-After header (AC-003)
+			retryAfter := (rl.ResetTime / 1000) - time.Now().Unix()
+			if retryAfter < 1 {
+				retryAfter = 1
+			}
+			c.Header("Retry-After", strconv.FormatInt(retryAfter, 10))
 			metrics.RateLimitExceededTotal.WithLabelValues(tenantID, "rate_limit_exceeded").Inc()
 			AbortWithError(c, http.StatusTooManyRequests, ErrorCodeRateLimitExceeded, "rate_limit_exceeded")
 			return
