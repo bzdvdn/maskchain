@@ -15,6 +15,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/admin"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/incident"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/profile"
+	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
@@ -28,9 +29,11 @@ type AdminServer struct {
 	log            *zap.Logger
 	serviceName    string
 	metricsHandler gin.HandlerFunc
+	healthHandler  *health.Handler
 }
 
-func NewAdminServer(cfg *config.ServerConfig, log *zap.Logger, serviceName string) *AdminServer {
+// @sk-task 114-real-health-probes#T2.2: Accept healthSvc and replace static handlers (AC-001, AC-005, AC-008)
+func NewAdminServer(cfg *config.ServerConfig, log *zap.Logger, serviceName string, healthSvc *health.HealthService) *AdminServer {
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
 
@@ -44,15 +47,17 @@ func NewAdminServer(cfg *config.ServerConfig, log *zap.Logger, serviceName strin
 	engine.Use(middleware.ErrorHandler())
 	engine.Use(metrics.Middleware())
 
-	engine.GET("/health", healthHandler("ok"))
-	engine.GET("/ready", healthHandler("ok"))
-	engine.GET("/live", healthHandler("alive"))
+	h := health.NewHandler(healthSvc)
+	engine.GET("/health", h.LivenessHandler())
+	engine.GET("/ready", h.ReadinessHandler())
+	engine.GET("/live", h.StartupHandler())
 
 	return &AdminServer{
-		engine:      engine,
-		cfg:         cfg,
-		log:         log,
-		serviceName: serviceName,
+		engine:        engine,
+		cfg:           cfg,
+		log:           log,
+		serviceName:   serviceName,
+		healthHandler: h,
 	}
 }
 

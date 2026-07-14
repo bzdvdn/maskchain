@@ -12,6 +12,7 @@ import (
 
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/incident"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/profile"
+	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
@@ -26,10 +27,11 @@ type Server struct {
 	log            *zap.Logger
 	serviceName    string
 	metricsHandler gin.HandlerFunc
+	healthHandler  *health.Handler
 }
 
-// @sk-task 61-observability#T2.1: Add OTel and metrics middleware to server (AC-001, AC-002, AC-003)
-func New(cfg *config.ServerConfig, log *zap.Logger, serviceName string) *Server {
+// @sk-task 114-real-health-probes#T2.2: Accept healthSvc and replace static handlers (AC-001, AC-005, AC-008)
+func New(cfg *config.ServerConfig, log *zap.Logger, serviceName string, healthSvc *health.HealthService) *Server {
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
 
@@ -43,21 +45,17 @@ func New(cfg *config.ServerConfig, log *zap.Logger, serviceName string) *Server 
 	engine.Use(middleware.ErrorHandler())
 	engine.Use(metrics.Middleware())
 
-	engine.GET("/health", healthHandler("ok"))
-	engine.GET("/ready", healthHandler("ok"))
-	engine.GET("/live", healthHandler("alive"))
+	h := health.NewHandler(healthSvc)
+	engine.GET("/health", h.LivenessHandler())
+	engine.GET("/ready", h.ReadinessHandler())
+	engine.GET("/live", h.StartupHandler())
 
 	return &Server{
-		engine:      engine,
-		cfg:         cfg,
-		log:         log,
-		serviceName: serviceName,
-	}
-}
-
-func healthHandler(status string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": status})
+		engine:        engine,
+		cfg:           cfg,
+		log:           log,
+		serviceName:   serviceName,
+		healthHandler: h,
 	}
 }
 

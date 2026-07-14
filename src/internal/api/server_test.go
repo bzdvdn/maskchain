@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 )
@@ -37,9 +38,6 @@ func TestReadyEndpoint(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
-	if w.Body.String() != `{"status":"ok"}` {
-		t.Errorf("expected body {\"status\":\"ok\"}, got %s", w.Body.String())
-	}
 }
 
 // @sk-test 10-gateway-skeleton#T4.1: TestLiveEndpoint (AC-003)
@@ -52,8 +50,8 @@ func TestLiveEndpoint(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
-	if w.Body.String() != `{"status":"alive"}` {
-		t.Errorf("expected body {\"status\":\"alive\"}, got %s", w.Body.String())
+	if w.Body.String() != `{"status":"ok"}` {
+		t.Errorf("expected body {\"status\":\"ok\"}, got %s", w.Body.String())
 	}
 }
 
@@ -88,7 +86,6 @@ func TestPanicRecovery(t *testing.T) {
 		t.Errorf("expected 500, got %d", w.Code)
 	}
 
-	// server still works after panic
 	w2 := httptest.NewRecorder()
 	req2, _ := http.NewRequest(http.MethodGet, "/panic", nil)
 	engine.ServeHTTP(w2, req2)
@@ -99,7 +96,10 @@ func TestPanicRecovery(t *testing.T) {
 
 func newTestServer() *Server {
 	gin.SetMode(gin.TestMode)
-	cfg := &config.ServerConfig{Port: 0}
+	cfg := &config.ServerConfig{
+		Port:        0,
+		HealthCheck: &config.HealthCheckConfig{CriticalDeps: []string{"database"}},
+	}
 	log, _ := zap.NewProduction()
-	return New(cfg, log, "")
+	return New(cfg, log, "", health.NewService(nil))
 }

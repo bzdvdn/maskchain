@@ -44,6 +44,7 @@
   - `src/internal/api/mask_handler.go` — POST /api/v1/shield/mask and /unmask handlers
   - `src/internal/api/provider_handler.go` — RoutingProxyHandler (proxy to LLM providers), legacy stubs
   - `src/internal/api/server.go` — gateway router setup, RegisterProxyRoute accepts RoutingProxyHandler
+  - `src/internal/api/health/` — health check endpoints (liveness/readiness probes), service status aggregation
 - `src/internal/api/admin.go` — admin router setup (AdminServer), static files, profile/incident handlers
   - `src/internal/api/handler/profile/` — Profile CRUD handlers (list, get, create, update, delete, patch dictionary)
   - `src/internal/api/handler/incident/` — Incident read/export handlers (list, get, export CSV/JSON)
@@ -72,6 +73,7 @@
 - New domain logic — `src/internal/domain/`
 - New use case / feature — `src/internal/app/` + `src/internal/ports/` + `src/internal/adapters/`
 - New API endpoint — `src/internal/api/` + `src/internal/ports/` (inbound interface)
+- Health check changes — `src/internal/api/health/`
 - Routing domain changes — `src/internal/domain/routing/` + `src/internal/domain/routing/service/`
 - New provider adapter — `src/internal/adapters/provider/` + `src/internal/ports/provider.go`
 - Configuration changes — `src/internal/infra/config/`

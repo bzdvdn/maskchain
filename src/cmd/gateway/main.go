@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -18,6 +19,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/adapters/egress"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
 	"github.com/bzdvdn/maskchain/src/internal/api"
+	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/incident"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	maskrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/mask"
@@ -144,7 +146,26 @@ func main() {
 	maskUseCase := domainMask.NewMaskUseCase(detectorRegistry, maskStorage)
 	maskHandler := api.NewMaskHandler(maskUseCase, detectorRegistry)
 
-	srv := api.New(cfg.Server, logger, serviceName)
+	// @sk-task 114-real-health-probes#T2.3: Create health service and wire into server (AC-001, AC-005, AC-008)
+	if cfg.Server.HealthCheck == nil {
+		cfg.Server.HealthCheck = &config.HealthCheckConfig{CriticalDeps: []string{"database"}}
+	}
+	healthSvc := health.NewService(cfg.Server.HealthCheck.CriticalDeps)
+
+	// @sk-task 114-real-health-probes#T3.2: Register PG, Valkey, and Egress probes for gateway (AC-002, AC-003, AC-004)
+	healthSvc.Register(health.NewPGProbe(pgPool))
+	healthSvc.Register(health.NewValkeyProbe(vkClient))
+	if cfg.Routing != nil {
+		var targets []string
+		for _, p := range cfg.Routing.Providers {
+			if p.BaseURL != "" {
+				targets = append(targets, extractHostPort(p.BaseURL))
+			}
+		}
+		healthSvc.Register(health.NewEgressProbe(targets))
+	}
+
+	srv := api.New(cfg.Server, logger, serviceName, healthSvc)
 
 	if cfg.Tenants != nil {
 		txMgr := postgres.NewPGXTransactionManager(pgPool)
@@ -311,4 +332,12 @@ func buildLogger(level string) (*zap.Logger, error) {
 		zapCfg.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
 	}
 	return zapCfg.Build()
+}
+
+func extractHostPort(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Host == "" {
+		return rawURL
+	}
+	return u.Host
 }

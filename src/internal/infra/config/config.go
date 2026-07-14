@@ -24,9 +24,15 @@ type LogConfig struct {
 }
 
 type ServerConfig struct {
-	Port            int      `mapstructure:"port" yaml:"port"`
-	ShutdownTimeout int      `mapstructure:"shutdown_timeout" yaml:"shutdown_timeout"`
-	CORSOrigins     []string `mapstructure:"cors_origins" yaml:"cors_origins"`
+	Port            int                `mapstructure:"port" yaml:"port"`
+	ShutdownTimeout int                `mapstructure:"shutdown_timeout" yaml:"shutdown_timeout"`
+	CORSOrigins     []string           `mapstructure:"cors_origins" yaml:"cors_origins"`
+	HealthCheck     *HealthCheckConfig `mapstructure:"health_check" yaml:"health_check"`
+}
+
+// @sk-task 114-real-health-probes#T1.2: Add HealthCheckConfig with CriticalDeps (AC-006)
+type HealthCheckConfig struct {
+	CriticalDeps []string `mapstructure:"critical_deps" yaml:"critical_deps"`
 }
 
 // @sk-task 22-shield-mask-storage#T5.1: Add Database/Valkey/Mask config (AC-all)
@@ -193,6 +199,7 @@ const defaultDictionaryCacheValkeyTTL = 300
 const defaultDictionaryCacheLRUSize = 10000
 const defaultDictionaryCacheWarmOnStartup = true
 const defaultDictionaryCacheWarmConcurrency = 5
+const defaultHealthCheckCriticalDeps = "database"
 
 // @sk-task 10-gateway-skeleton#T1.2: Set ServerConfig defaults in DefaultConfig (AC-001, AC-005)
 func DefaultConfig() *Config {
@@ -203,6 +210,9 @@ func DefaultConfig() *Config {
 		Server: &ServerConfig{
 			Port:            defaultPort,
 			ShutdownTimeout: defaultShutdownTimeout,
+			HealthCheck: &HealthCheckConfig{
+				CriticalDeps: []string{defaultHealthCheckCriticalDeps},
+			},
 		},
 		DB: &DatabaseConfig{
 			MaxConns:        defaultMaxDBConns,
