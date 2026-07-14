@@ -44,6 +44,10 @@ func setupTest(t *testing.T) (*gin.Engine, *mockEngine, *zap.Logger) {
 	return engine, mockEng, log
 }
 
+func testShieldConfig() *config.ShieldConfig {
+	return &config.ShieldConfig{}
+}
+
 func chatBody(model, content string) string {
 	b, _ := json.Marshal(map[string]interface{}{
 		"model": model,
@@ -265,6 +269,7 @@ func TestCORS_Wildcard(t *testing.T) {
 }
 
 // @sk-test 51-shield-gateway-integration#T3.2: TestShieldIntegration full cycle blocked and clean (AC-007)
+// @sk-test 13-shield-middleware-wiring#T4.2: Updated to use newPIITenant with PIIConfig
 func TestShieldIntegration(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	log, _ := zap.NewProduction()
@@ -273,10 +278,10 @@ func TestShieldIntegration(t *testing.T) {
 
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
-		c.Set("tenant", newTestTenant("test-tenant"))
+		c.Set("tenant", newPIITenant("test-tenant"))
 		c.Next()
 	})
-	engine.Use(ShieldMiddleware(mockEng, &config.ShieldConfig{}, log))
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
 	engine.POST("/v1/chat/completions", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"choices": []gin.H{
@@ -388,6 +393,7 @@ func TestMetricsMiddleware(t *testing.T) {
 }
 
 // @sk-test 61-observability#T4.1: TestShieldMiddleware_Metrics verifies shield metrics with mock (AC-004)
+// @sk-test 13-shield-middleware-wiring#T4.2: Updated to use newPIITenant with PIIConfig
 func TestShieldMiddleware_Metrics(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	mockEng := &mockEngine{
@@ -402,10 +408,10 @@ func TestShieldMiddleware_Metrics(t *testing.T) {
 
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
-		c.Set("tenant", newTestTenant("test-tenant"))
+		c.Set("tenant", newPIITenant("test-tenant"))
 		c.Next()
 	})
-	engine.Use(ShieldMiddleware(mockEng, &config.ShieldConfig{}, log))
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
 	engine.POST("/v1/chat/completions", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})

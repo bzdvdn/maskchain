@@ -21,6 +21,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/incident"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	maskrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/mask"
+	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/detector"
 	domainMask "github.com/bzdvdn/maskchain/src/internal/domain/shield/mask"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
@@ -155,7 +156,11 @@ func main() {
 			if err != nil {
 				logger.Fatal("invalid tenant slug", zap.String("tenant", slugStr), zap.Error(err))
 			}
-			cfgTenants[slugStr] = entity.NewTenant(slug, tc.Name, tc.AuthHeader, tc.APIKeys)
+			opts := []entity.TenantOption{entity.WithTenantDictionaries(nil)}
+			if tc.PIIConfig != nil {
+				opts = append(opts, entity.WithTenantPIIConfig(*tc.PIIConfig))
+			}
+			cfgTenants[slugStr] = entity.NewTenant(slug, tc.Name, tc.AuthHeader, tc.APIKeys, opts...)
 		}
 		tenantResolver := resolver.NewDBFirstTenantResolver(tenantRepo, cfgTenants)
 
@@ -186,15 +191,21 @@ func main() {
 	srv.RegisterMetricsRoute(metricsHandler)
 	srv.RegisterMaskHandler(maskHandler)
 
+	// @sk-task 60-audit-incidents#T2.3: Wire incident handler (AC-001, AC-002)
 	if pgPool != nil {
-		// @sk-task 60-audit-incidents#T2.3: Wire incident handler (AC-001, AC-002)
 		incidentRepo := postgres.NewPostgresIncidentRepo(pgPool)
 		incidentHandler := incident.New(incidentRepo)
 		srv.RegisterIncidentHandler(incidentHandler)
 		logger.Info("incident handler registered")
 	}
 
-	srv.RegisterProxyRoute(middleware.ShieldMiddleware(nil, cfg.Shield, logger), routingHandler)
+	// @sk-task 13-shield-middleware-wiring#T2.3: Simplified — no ProfileRepository DI (AC-005)
+	pipelineFactory := appshield.NewScanPipelineFactory(detectorRegistry)
+	scanUseCase := appshield.NewScanUseCase(pipelineFactory)
+	shieldEngine := appshield.NewShieldEngine(scanUseCase)
+	logger.Info("shield engine initialized")
+
+	srv.RegisterProxyRoute(middleware.ShieldMiddleware(shieldEngine, cfg.Shield, logger), routingHandler)
 	logger.Info("proxy routes registered")
 
 	go func() {

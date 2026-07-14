@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,10 +16,22 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/dictionary"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
-	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 )
+
+func newPIITenant(slug string, opts ...entity.TenantOption) *entity.Tenant {
+	s, _ := value.NewTenantSlug(slug)
+	return entity.NewTenant(s, "test-"+slug, "Authorization", nil, append([]entity.TenantOption{
+		entity.WithTenantPIIConfig(entity.PIIConfig{
+			Enabled: true,
+			Rules: []entity.PIARule{
+				{Label: "email", Type: "regex", Pattern: "EMAIL", Action: "block"},
+			},
+		}),
+	}, opts...)...)
+}
 
 // @sk-test 51-shield-gateway-integration#T2.2: TestShieldBlocked returns 403 for critical content (AC-001)
 func TestShieldBlocked(t *testing.T) {
@@ -27,10 +41,10 @@ func TestShieldBlocked(t *testing.T) {
 	}
 
 	engine.Use(func(c *gin.Context) {
-		c.Set("tenant", newTestTenant("test-tenant"))
+		c.Set("tenant", newPIITenant("test-tenant"))
 		c.Next()
 	})
-	engine.Use(ShieldMiddleware(mockEng, &config.ShieldConfig{}, log))
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
 	engine.POST("/v1/chat/completions", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -67,10 +81,10 @@ func TestShieldClean(t *testing.T) {
 
 	var handlerCalled bool
 	engine.Use(func(c *gin.Context) {
-		c.Set("tenant", newTestTenant("test-tenant"))
+		c.Set("tenant", newPIITenant("test-tenant"))
 		c.Next()
 	})
-	engine.Use(ShieldMiddleware(mockEng, &config.ShieldConfig{}, log))
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
 	engine.POST("/v1/chat/completions", func(c *gin.Context) {
 		handlerCalled = true
 		c.Status(http.StatusOK)
@@ -101,10 +115,10 @@ func TestShieldEngineError(t *testing.T) {
 	}
 
 	engine.Use(func(c *gin.Context) {
-		c.Set("tenant", newTestTenant("test-tenant"))
+		c.Set("tenant", newPIITenant("test-tenant"))
 		c.Next()
 	})
-	engine.Use(ShieldMiddleware(mockEng, &config.ShieldConfig{}, log))
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
 	engine.POST("/v1/chat/completions", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -130,10 +144,10 @@ func TestShieldHeaders(t *testing.T) {
 	}
 
 	engine.Use(func(c *gin.Context) {
-		c.Set("tenant", newTestTenant("test-tenant"))
+		c.Set("tenant", newPIITenant("test-tenant"))
 		c.Next()
 	})
-	engine.Use(ShieldMiddleware(mockEng, &config.ShieldConfig{}, log))
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
 	engine.POST("/v1/chat/completions", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -160,10 +174,10 @@ func TestShieldEmptyMessages(t *testing.T) {
 
 	var handlerCalled bool
 	engine.Use(func(c *gin.Context) {
-		c.Set("tenant", newTestTenant("test-tenant"))
+		c.Set("tenant", newPIITenant("test-tenant"))
 		c.Next()
 	})
-	engine.Use(ShieldMiddleware(mockEng, &config.ShieldConfig{}, log))
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
 	engine.POST("/v1/chat/completions", func(c *gin.Context) {
 		handlerCalled = true
 		c.Status(http.StatusOK)
@@ -191,10 +205,10 @@ func TestShieldNonJSONContentType(t *testing.T) {
 	engine, mockEng, log := setupTest(t)
 
 	engine.Use(func(c *gin.Context) {
-		c.Set("tenant", newTestTenant("test-tenant"))
+		c.Set("tenant", newPIITenant("test-tenant"))
 		c.Next()
 	})
-	engine.Use(ShieldMiddleware(mockEng, &config.ShieldConfig{}, log))
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
 	engine.POST("/v1/chat/completions", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -213,7 +227,7 @@ func TestShieldNonJSONContentType(t *testing.T) {
 func TestShieldMissingTenant(t *testing.T) {
 	engine, mockEng, log := setupTest(t)
 
-	engine.Use(ShieldMiddleware(mockEng, &config.ShieldConfig{}, log))
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
 	engine.POST("/v1/chat/completions", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -245,10 +259,10 @@ func TestShieldLogging(t *testing.T) {
 	}
 
 	engine.Use(func(c *gin.Context) {
-		c.Set("tenant", newTestTenant("test-tenant"))
+		c.Set("tenant", newPIITenant("test-tenant"))
 		c.Next()
 	})
-	engine.Use(ShieldMiddleware(mockEng, &config.ShieldConfig{}, log))
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
 	engine.POST("/v1/chat/completions", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -266,7 +280,7 @@ func TestShieldLogging(t *testing.T) {
 		t.Fatal("expected log entry")
 	}
 
-	var hasStatus, hasSlug, hasModel, hasLatency, hasIncidentID bool
+	var hasStatus, hasSlug, hasPIIEnabled, hasRulesCount, hasModel, hasLatency, hasIncidentID, hasUnmasked bool
 	for _, entry := range recorded.All() {
 		for _, f := range entry.Context {
 			switch f.Key {
@@ -274,12 +288,18 @@ func TestShieldLogging(t *testing.T) {
 				hasStatus = true
 			case "tenant_slug":
 				hasSlug = true
+			case "pii_enabled":
+				hasPIIEnabled = true
+			case "rules_count":
+				hasRulesCount = true
 			case "model":
 				hasModel = true
 			case "latency":
 				hasLatency = true
 			case "incident_id":
 				hasIncidentID = true
+			case "unmasked":
+				hasUnmasked = true
 			}
 		}
 	}
@@ -290,6 +310,12 @@ func TestShieldLogging(t *testing.T) {
 	if !hasSlug {
 		t.Error("expected tenant_slug in log")
 	}
+	if !hasPIIEnabled {
+		t.Error("expected pii_enabled in log")
+	}
+	if !hasRulesCount {
+		t.Error("expected rules_count in log")
+	}
 	if !hasModel {
 		t.Error("expected model in log")
 	}
@@ -298,5 +324,405 @@ func TestShieldLogging(t *testing.T) {
 	}
 	if !hasIncidentID {
 		t.Error("expected incident_id in log")
+	}
+	if !hasUnmasked {
+		t.Error("expected unmasked in log")
+	}
+}
+
+// @sk-test 13-shield-middleware-wiring#T3.1: TestPIIConfig_BlocksEmail — AC-001 integration
+func TestPIIConfig_BlocksEmail(t *testing.T) {
+	engine, mockEng, log := setupTest(t)
+	mockEng.resp = &appshield.ScanResponse{
+		ScanResult: entity.NewScanResult(value.ScanStatusBlocked, nil),
+	}
+
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", newPIITenant("test-tenant"))
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
+	engine.POST("/v1/chat/completions", func(c *gin.Context) {
+		t.Error("handler should not be called when PII is blocked")
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "my email is test@example.com")))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", w.Code)
+	}
+	if w.Header().Get("X-Shield-Status") != "blocked" {
+		t.Errorf("expected X-Shield-Status: blocked, got %s", w.Header().Get("X-Shield-Status"))
+	}
+}
+
+// @sk-test 13-shield-middleware-wiring#T3.1: TestPIIConfig_Disabled — AC-003 integration
+func TestPIIConfig_Disabled(t *testing.T) {
+	engine, mockEng, log := setupTest(t)
+
+	var handlerCalled bool
+	slug, _ := value.NewTenantSlug("test-tenant")
+	tenant := entity.NewTenant(slug, "test-tenant", "Authorization", nil, entity.WithTenantPIIConfig(entity.PIIConfig{Enabled: false}))
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", tenant)
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
+	engine.POST("/v1/chat/completions", func(c *gin.Context) {
+		handlerCalled = true
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "hello")))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+
+	if !handlerCalled {
+		t.Error("expected handler to be called when PIIConfig is disabled")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+// @sk-test 13-shield-middleware-wiring#T3.1: TestPIIConfig_EmptyRules — AC-007 integration
+func TestPIIConfig_EmptyRules(t *testing.T) {
+	engine, mockEng, log := setupTest(t)
+
+	var handlerCalled bool
+	slug, _ := value.NewTenantSlug("test-tenant")
+	tenant := entity.NewTenant(slug, "test-tenant", "Authorization", nil, entity.WithTenantPIIConfig(entity.PIIConfig{
+		Enabled: true,
+		Rules:   []entity.PIARule{},
+	}))
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", tenant)
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
+	engine.POST("/v1/chat/completions", func(c *gin.Context) {
+		handlerCalled = true
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "hello")))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+
+	if !handlerCalled {
+		t.Error("expected handler to be called when rules are empty")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+// @sk-test 13-shield-middleware-wiring#T3.1: Graceful degradation on engine.Scan error — applies default_action (AC-004)
+func TestShieldGracefulDegradation(t *testing.T) {
+	t.Run("engine_error_default_block", func(t *testing.T) {
+		engine, mockEng, log := setupTest(t)
+		mockEng.err = fmt.Errorf("scan service unavailable")
+
+		slug, _ := value.NewTenantSlug("test-tenant")
+		tenant := entity.NewTenant(slug, "test-tenant", "Authorization", nil, entity.WithTenantPIIConfig(entity.PIIConfig{
+			Enabled:       true,
+			DefaultAction: "block",
+			Rules:         []entity.PIARule{{Label: "email", Type: "regex", Pattern: "EMAIL", Action: "block"}},
+		}))
+		engine.Use(func(c *gin.Context) {
+			c.Set("tenant", tenant)
+			c.Next()
+		})
+		engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
+		engine.POST("/v1/chat/completions", func(c *gin.Context) {
+			t.Error("handler should not be called when default_action=block")
+		})
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "hello")))
+		req.Header.Set("Content-Type", "application/json")
+		engine.ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("expected 403, got %d", w.Code)
+		}
+		if w.Header().Get("X-Shield-Status") != "blocked" {
+			t.Errorf("expected X-Shield-Status: blocked, got %s", w.Header().Get("X-Shield-Status"))
+		}
+	})
+
+	t.Run("engine_error_default_allow", func(t *testing.T) {
+		engine, mockEng, log := setupTest(t)
+		mockEng.err = fmt.Errorf("scan service unavailable")
+		mockEng.resp = nil
+
+		var handlerCalled bool
+		slug, _ := value.NewTenantSlug("test-tenant")
+		tenant := entity.NewTenant(slug, "test-tenant", "Authorization", nil, entity.WithTenantPIIConfig(entity.PIIConfig{
+			Enabled:       true,
+			DefaultAction: "allow",
+			Rules:         []entity.PIARule{{Label: "email", Type: "regex", Pattern: "EMAIL", Action: "block"}},
+		}))
+		engine.Use(func(c *gin.Context) {
+			c.Set("tenant", tenant)
+			c.Next()
+		})
+		engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
+		engine.POST("/v1/chat/completions", func(c *gin.Context) {
+			handlerCalled = true
+			c.Status(http.StatusOK)
+		})
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "hello")))
+		req.Header.Set("Content-Type", "application/json")
+		engine.ServeHTTP(w, req)
+
+		if !handlerCalled {
+			t.Error("expected handler to be called when default_action=allow")
+		}
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d", w.Code)
+		}
+	})
+}
+
+// @sk-test 13-shield-middleware-wiring#T3.2: TestDictUnmask — AC-005 integration
+func TestDictUnmask(t *testing.T) {
+	engine, mockEng, log := setupTest(t)
+	mockEng.resp = &appshield.ScanResponse{
+		ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
+	}
+
+	dictSlug, _ := value.NewProfileSlug("test-dict")
+	dict := dictionary.NewDictionary(dictSlug, "names", []interface{}{"original-name"}, dictionary.MatchModeExact)
+	tenantSlug, _ := value.NewTenantSlug("test-tenant")
+	tenant := entity.NewTenant(tenantSlug, "test-tenant", "Authorization", nil,
+		entity.WithTenantDictionaries([]*dictionary.Dictionary{dict}),
+		entity.WithTenantPIIConfig(entity.PIIConfig{
+			Enabled: true,
+			Rules:   []entity.PIARule{{Label: "detect", Type: "regex", Pattern: "SOME", Action: "block"}},
+		}),
+	)
+
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", tenant)
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
+	engine.POST("/v1/chat/completions", func(c *gin.Context) {
+		buf := new(strings.Builder)
+		io.Copy(buf, c.Request.Body)
+		var chatReq chatRequest
+		json.Unmarshal([]byte(buf.String()), &chatReq)
+		echoContent := chatReq.Messages[0].Content
+		c.JSON(http.StatusOK, map[string]interface{}{
+			"choices": []map[string]interface{}{
+				{"message": map[string]interface{}{
+					"role":    "assistant",
+					"content": "The employee " + echoContent + " did a great job!",
+				}},
+			},
+		})
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "tell me about original-name")))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "original-name") {
+		t.Errorf("expected response to contain unmasked 'original-name', got: %s", w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "{{dict.") {
+		t.Errorf("expected no dict placeholders in response, got: %s", w.Body.String())
+	}
+}
+
+// @sk-test 13-shield-middleware-wiring#T3.2: TestStreamingDictUnmask — AC-006 integration
+func TestStreamingDictUnmask(t *testing.T) {
+	engine, mockEng, log := setupTest(t)
+	mockEng.resp = &appshield.ScanResponse{
+		ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
+	}
+
+	dictSlug, _ := value.NewProfileSlug("test-stream-dict")
+	dict := dictionary.NewDictionary(dictSlug, "names", []interface{}{"original-name"}, dictionary.MatchModeExact)
+	tenantSlug, _ := value.NewTenantSlug("test-tenant")
+	tenant := entity.NewTenant(tenantSlug, "test-tenant", "Authorization", nil,
+		entity.WithTenantDictionaries([]*dictionary.Dictionary{dict}),
+		entity.WithTenantPIIConfig(entity.PIIConfig{
+			Enabled: true,
+			Rules:   []entity.PIARule{{Label: "detect", Type: "regex", Pattern: "SOME", Action: "block"}},
+		}),
+	)
+
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", tenant)
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
+	engine.POST("/v1/chat/completions", func(c *gin.Context) {
+		bodyBytes, _ := io.ReadAll(c.Request.Body)
+		var chatReq chatRequest
+		json.Unmarshal(bodyBytes, &chatReq)
+		content := chatReq.Messages[0].Content
+
+		c.Writer.WriteHeader(http.StatusOK)
+		c.Writer.Write([]byte(fmt.Sprintf("data: {\"choices\":[{\"delta\":{\"content\":\"The person %s did great\"}}]}\n\n", content)))
+		c.Writer.Write([]byte("data: [DONE]\n\n"))
+	})
+
+	w := httptest.NewRecorder()
+	body := `{"model":"gpt-4","messages":[{"role":"user","content":"tell me about original-name"}],"stream":true}`
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "original-name") {
+		t.Errorf("expected response to contain unmasked 'original-name', got: %s", w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "{{dict.") {
+		t.Errorf("expected no dict placeholders in streaming response, got: %s", w.Body.String())
+	}
+}
+
+// @sk-test 13-shield-middleware-wiring#T4.1: Tenant without PIIConfig → PII disabled (edge case)
+func TestShieldEdge_NoPIIConfig(t *testing.T) {
+	engine, mockEng, log := setupTest(t)
+
+	var handlerCalled bool
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", newTestTenant("test-tenant"))
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
+	engine.POST("/v1/chat/completions", func(c *gin.Context) {
+		handlerCalled = true
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "hello")))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+
+	if !handlerCalled {
+		t.Error("expected handler to be called when tenant has no PIIConfig")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+// @sk-test 13-shield-middleware-wiring#T4.1: LLM response without placeholders → unmask no-op (edge case)
+func TestShieldEdge_UnmaskNoopNoPlaceholders(t *testing.T) {
+	engine, mockEng, log := setupTest(t)
+	mockEng.resp = &appshield.ScanResponse{
+		ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
+	}
+
+	dictSlug, _ := value.NewProfileSlug("test-dict")
+	dict := dictionary.NewDictionary(dictSlug, "names", []interface{}{"original-name"}, dictionary.MatchModeExact)
+	tenantSlug, _ := value.NewTenantSlug("test-tenant")
+	tenant := entity.NewTenant(tenantSlug, "test-tenant", "Authorization", nil,
+		entity.WithTenantDictionaries([]*dictionary.Dictionary{dict}),
+		entity.WithTenantPIIConfig(entity.PIIConfig{
+			Enabled: true,
+			Rules:   []entity.PIARule{{Label: "detect", Type: "regex", Pattern: "SOME", Action: "block"}},
+		}),
+	)
+
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", tenant)
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
+	engine.POST("/v1/chat/completions", func(c *gin.Context) {
+		c.JSON(http.StatusOK, map[string]interface{}{
+			"choices": []map[string]interface{}{
+				{"message": map[string]interface{}{
+					"role":    "assistant",
+					"content": "The employee did a great job!",
+				}},
+			},
+		})
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "tell me about original-name")))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "did a great job") {
+		t.Errorf("expected unchanged response, got: %s", w.Body.String())
+	}
+}
+
+// @sk-test 13-shield-middleware-wiring#T4.1: Placeholder with invalid index not in mapping → not replaced (edge case)
+func TestShieldEdge_InvalidPlaceholderNotReplaced(t *testing.T) {
+	engine, mockEng, log := setupTest(t)
+	mockEng.resp = &appshield.ScanResponse{
+		ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
+	}
+
+	dictSlug, _ := value.NewProfileSlug("test-dict")
+	dict := dictionary.NewDictionary(dictSlug, "names", []interface{}{"original-name"}, dictionary.MatchModeExact)
+	tenantSlug, _ := value.NewTenantSlug("test-tenant")
+	tenant := entity.NewTenant(tenantSlug, "test-tenant", "Authorization", nil,
+		entity.WithTenantDictionaries([]*dictionary.Dictionary{dict}),
+		entity.WithTenantPIIConfig(entity.PIIConfig{
+			Enabled: true,
+			Rules:   []entity.PIARule{{Label: "detect", Type: "regex", Pattern: "SOME", Action: "block"}},
+		}),
+	)
+
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", tenant)
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
+	engine.POST("/v1/chat/completions", func(c *gin.Context) {
+		bodyBytes, _ := io.ReadAll(c.Request.Body)
+		var chatReq chatRequest
+		json.Unmarshal(bodyBytes, &chatReq)
+		echoContent := chatReq.Messages[0].Content
+		c.JSON(http.StatusOK, map[string]interface{}{
+			"choices": []map[string]interface{}{
+				{"message": map[string]interface{}{
+					"role":    "assistant",
+					"content": "The employee " + echoContent + " did great, ref: {{dict.unknown.99}}",
+				}},
+			},
+		})
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "tell me about original-name")))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "original-name") {
+		t.Errorf("expected valid placeholder to be unmasked, got: %s", w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "{{dict.unknown.99}}") {
+		t.Errorf("expected unknown placeholder to remain unchanged, got: %s", w.Body.String())
 	}
 }

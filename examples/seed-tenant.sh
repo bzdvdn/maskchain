@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # @sk-task tenant-profile-sync#examples: Seed tenant dictionaries
 #
-# Updates dictionaries for tenant "default" with:
+# Updates dictionaries + PIIConfig for tenant "default" with:
 #   - 500 users  (full names)
 #   - 50 departments
 #   - 300 projects
+#   - PII rules (email, phone, SSN via PIIConfig)
 #
 # Usage: ./seed-tenant.sh [admin_url] [api_key]
 #   admin_url  — default: http://localhost:8082
@@ -67,7 +68,50 @@ DICT_JSON=$(cat <<EOF
 EOF
 )
 
-# ---- Update tenant dictionaries ----
+# ---- Build PIIConfig payload ----
+# PII rules are per-tenant via PIIConfig (email, phone, SSN).
+# Note: requires Admin API support for pii_config field.
+PII_JSON=$(cat <<EOF
+{
+  "name": "Default Tenant",
+  "auth_header": "Authorization",
+  "api_keys": ["sk-test-default"],
+  "pii_config": {
+    "enabled": true,
+    "default_action": "block",
+    "rules": [
+      {"label": "email", "type": "pii", "pattern": "EMAIL", "action": "block"},
+      {"label": "phone", "type": "pii", "pattern": "PHONE", "action": "block"},
+      {"label": "ssn", "type": "pii", "pattern": "SSN", "action": "block"}
+    ]
+  }
+}
+EOF
+)
+
+# ---- Update tenant PIIConfig FIRST ----
+# Must come BEFORE dictionaries: PUT /api/v1/tenants/:slug updates ALL fields,
+# and the payload does not include dictionaries (to avoid duplicating 900+ entries).
+echo ""
+echo "Updating PIIConfig for tenant 'default'..."
+
+HTTP_CODE_PII=$(curl -s -o /tmp/seed-pii-response.json -w "%{http_code}" \
+  -X PUT "${ADMIN_URL}/api/v1/tenants/default" \
+  -H "Content-Type: application/json" \
+  -H "${AUTH}" \
+  -d "${PII_JSON}" 2>/dev/null || echo "000")
+
+if [ "${HTTP_CODE_PII}" = "200" ]; then
+  echo "Tenant PIIConfig updated."
+else
+  echo "WARN: Failed to update PIIConfig (HTTP ${HTTP_CODE_PII})"
+  echo "       Admin API may not support pii_config field yet."
+  cat /tmp/seed-pii-response.json 2>/dev/null || true
+fi
+
+# ---- Update tenant dictionaries SECOND ----
+# Uses dedicated /dictionaries endpoint which only touches dictionaries + updated_at,
+# so it does NOT overwrite pii_config set above.
 echo ""
 echo "Updating dictionaries for tenant 'default'..."
 
@@ -92,3 +136,4 @@ echo "Next steps:"
 echo "  1. Open examples/test-prompt.md for Postman test prompts"
 echo "  2. POST to http://localhost:8080/api/v1/shield/mask with Authorization: Bearer sk-test-default"
 echo "  3. Use X-Mask-ID header from response to unmask via /api/v1/shield/unmask"
+echo "  4. PII rules (email/phone/SSN) are configured per-tenant via PIIConfig"

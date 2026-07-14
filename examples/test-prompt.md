@@ -2,7 +2,9 @@
 
 ## Flow A: Mask/Unmask — PII Regex + Dictionary (plain text)
 
-Маскирует встроенными PII-детекторами (email, phone, SSN) и словарными значениями (имена, должности, отделы, проекты) из тенанта. Тело — `text/plain`.
+Маскирует PII-детекторами (email, phone, SSN) по правилам из **tenant.PIIConfig** и словарными значениями (имена, должности, отделы, проекты) из тенанта. Тело — `text/plain`.
+
+PII-правила per-tenant: email→block, phone→block, ssn→block (настраивается в `config.yaml` или через admin API).
 
 `X-Mask-ID` генерируется сервером (uuid v7), клиент его не передаёт.
 
@@ -82,7 +84,7 @@ Body: замаскированный текст из ответа на шаге 
 Никак не связан с Flow A — это два разных эндпоинта.
 
 Тенант определяется по API-ключу из заголовка `Authorization: Bearer <key>`.
-Профиль и словари загружаются из тенанта — заголовок `X-Shield-Profile-Slug` не используется.
+PII-правила (PIIConfig) и словари загружаются из тенанта.
 
 ### Request
 

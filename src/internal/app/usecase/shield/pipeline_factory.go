@@ -73,3 +73,20 @@ func (f *ScanPipelineFactory) Build(ctx context.Context, profile *entity.Profile
 		Detectors:     detectors,
 	}, nil
 }
+
+// @sk-task 13-shield-middleware-wiring#T1.3: BuildFromRules creates detectors from tenant rules (AC-001)
+func (f *ScanPipelineFactory) BuildFromRules(ctx context.Context, rules []entity.PIARule) (*Pipeline, error) {
+	var detectors []DetectorBinding
+	for _, rule := range rules {
+		concrete := f.registry.Get(entity.DetectorType(rule.Type))
+		if concrete == nil {
+			return nil, fmt.Errorf("no registered detector for type %q", rule.Type)
+		}
+		detectors = append(detectors, DetectorBinding{
+			Interface: concrete,
+			Label:     rule.Label,
+			Severity:  value.SeverityMedium,
+		})
+	}
+	return &Pipeline{Detectors: detectors}, nil
+}

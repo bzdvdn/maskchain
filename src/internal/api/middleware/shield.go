@@ -28,6 +28,70 @@ import (
 
 const maxBodySize = 1 << 20 // 1MB
 
+// @sk-task 13-shield-middleware-wiring#T2.3: Custom ResponseWriter for dict unmask (AC-006)
+type dictUnmaskWriter struct {
+	gin.ResponseWriter
+	buf         bytes.Buffer
+	mapping     map[string]string
+	statusCode  int
+	wroteHeader bool
+}
+
+func (w *dictUnmaskWriter) Write(data []byte) (int, error) {
+	return w.buf.Write(data)
+}
+
+func (w *dictUnmaskWriter) WriteHeader(code int) {
+	if w.wroteHeader {
+		return
+	}
+	w.statusCode = code
+	w.wroteHeader = true
+}
+
+func (w *dictUnmaskWriter) flush() {
+	if !w.wroteHeader {
+		w.statusCode = http.StatusOK
+	}
+	body := w.buf.String()
+	for placeholder, original := range w.mapping {
+		body = strings.ReplaceAll(body, placeholder, original)
+	}
+	w.ResponseWriter.WriteHeader(w.statusCode)
+	w.ResponseWriter.Write([]byte(body))
+	w.buf.Reset()
+}
+
+func wrapUnmaskWriter(c *gin.Context, mapping map[string]string) *dictUnmaskWriter {
+	if len(mapping) == 0 {
+		return nil
+	}
+	w := &dictUnmaskWriter{ResponseWriter: c.Writer, mapping: mapping}
+	c.Writer = w
+	return w
+}
+
+// @sk-task 13-shield-middleware-wiring#T3.2: Streaming writer for SSE chunk unmask (AC-007)
+type streamDictUnmaskWriter struct {
+	gin.ResponseWriter
+	mapping map[string]string
+}
+
+func (w *streamDictUnmaskWriter) Write(data []byte) (int, error) {
+	s := string(data)
+	for placeholder, original := range w.mapping {
+		s = strings.ReplaceAll(s, placeholder, original)
+	}
+	return w.ResponseWriter.Write([]byte(s))
+}
+
+func wrapStreamUnmaskWriter(c *gin.Context, mapping map[string]string) {
+	if len(mapping) == 0 {
+		return
+	}
+	c.Writer = &streamDictUnmaskWriter{ResponseWriter: c.Writer, mapping: mapping}
+}
+
 type shieldResponse struct {
 	ShieldStatus string `json:"shield_status"`
 	IncidentID   string `json:"incident_id,omitempty"`
@@ -37,6 +101,7 @@ type shieldResponse struct {
 type chatRequest struct {
 	Model    string        `json:"model"`
 	Messages []chatMessage `json:"messages"`
+	Stream   bool          `json:"stream"`
 }
 
 type chatMessage struct {
@@ -99,6 +164,7 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger)
 		}
 
 		tenantSlug := tenant.Slug().String()
+		piiCfg := tenant.PIIConfig()
 
 		var incidents []entity.Incident
 
@@ -120,23 +186,8 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger)
 			}
 		}
 
-		incidentID := uuid.New().String()
-
-		var resp *appshield.ScanResponse
-		if engine != nil {
-			resp, err = engine.Scan(c.Request.Context(), appshield.ScanRequest{
-				Text:        promptText,
-				ProfileSlug: tenantSlug,
-			})
-			if err != nil {
-				log.Warn("engine scan (profile-based) failed, using dictionary-only results",
-					zap.Error(err),
-					zap.String("tenant_slug", tenantSlug),
-				)
-			}
-		}
-
-		// Mask dictionary values in each message before passing to provider
+		// @sk-task 13-shield-middleware-wiring#T2.2: Store dict mask mapping per-request for later unmask (AC-006)
+		dictMaskMapping := make(map[string]string)
 		if len(incidents) > 0 {
 			dictMaskID := mask.NewShortID()
 			phCounter := 0
@@ -155,6 +206,7 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger)
 					})
 					for _, r := range results {
 						ph := fmt.Sprintf("{{dict.%s.%d}}", dictMaskID, phCounter)
+						dictMaskMapping[ph] = r.Fragment
 						phCounter++
 						chatReq.Messages[mi].Content = chatReq.Messages[mi].Content[:r.StartPos] + ph + chatReq.Messages[mi].Content[r.StartPos+len(r.Fragment):]
 					}
@@ -164,6 +216,49 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger)
 				newBody, _ := json.Marshal(chatReq)
 				c.Request.Body = io.NopCloser(bytes.NewBuffer(newBody))
 				c.Header("X-Shield-Dict-Mask-ID", dictMaskID)
+			}
+		}
+
+		incidentID := uuid.New().String()
+
+		// @sk-task 13-shield-middleware-wiring#T2.1: Read PIIConfig from tenant, scan with Rules (AC-001, AC-003, AC-007)
+		var resp *appshield.ScanResponse
+		// Dictionaries have priority: re-extract promptText after dict masking
+		// so PII scan sees already-masked text (no false positives on known terms)
+		piiText := extractPromptText(chatReq.Messages)
+		if engine != nil && piiCfg.Enabled && len(piiCfg.Rules) > 0 {
+			resp, err = engine.Scan(c.Request.Context(), appshield.ScanRequest{
+				Text:  piiText,
+
+// @sk-task 13-shield-middleware-wiring#T4.2: After dict masking, re-extract text for PII scan
+				Rules: piiCfg.Rules,
+			})
+			// @sk-task 13-shield-middleware-wiring#T2.1: Graceful degradation on engine.Scan error (AC-004)
+			if err != nil {
+				defaultAction := piiCfg.DefaultAction
+				if defaultAction == "" {
+					defaultAction = "block"
+				}
+				log.Warn("engine scan failed, applying default_action",
+					zap.Error(err),
+					zap.String("tenant_slug", tenantSlug),
+					zap.String("default_action", defaultAction),
+				)
+				if defaultAction == "block" {
+					c.Header("X-Shield-Status", "blocked")
+					c.AbortWithStatusJSON(http.StatusForbidden, shieldResponse{
+						ShieldStatus: "blocked",
+						Error:        "shield scan unavailable, blocked by default action",
+					})
+					return
+				}
+				if chatReq.Stream {
+					wrapStreamUnmaskWriter(c, dictMaskMapping)
+				} else if w := wrapUnmaskWriter(c, dictMaskMapping); w != nil {
+					defer w.flush()
+				}
+				c.Next()
+				return
 			}
 		}
 
@@ -180,13 +275,18 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger)
 		metrics.ShieldScanDuration.WithLabelValues(tenantSlug, scanStatus).Observe(float64(duration.Milliseconds()))
 		metrics.ShieldProfilesEvaluated.WithLabelValues(tenantSlug).Inc()
 
+		// @sk-task 13-shield-middleware-wiring#T3.3: Log pii_enabled, rules_count and unmasked fields
+		unmasked := len(dictMaskMapping) > 0
 		log.Info("shield scan",
 			zap.String("shield_status", scanStatus),
 			zap.String("tenant_slug", tenantSlug),
+			zap.Bool("pii_enabled", piiCfg.Enabled),
+			zap.Int("rules_count", len(piiCfg.Rules)),
 			zap.String("model", chatReq.Model),
 			zap.Duration("latency", duration),
 			zap.String("incident_id", incidentID),
 			zap.Int("dictionary_incidents", len(incidents)),
+			zap.Bool("unmasked", unmasked),
 		)
 
 		status := respStatus(resp, incidents)
@@ -217,12 +317,22 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger)
 				})
 			} else {
 				setShieldCleanHeaders(c, incidentID)
+				if chatReq.Stream {
+					wrapStreamUnmaskWriter(c, dictMaskMapping)
+				} else if w := wrapUnmaskWriter(c, dictMaskMapping); w != nil {
+					defer w.flush()
+				}
 				c.Next()
 			}
 
 		default:
 			metrics.ShieldIncidentsBySeverity.WithLabelValues("clean").Inc()
 			setShieldCleanHeaders(c, incidentID)
+			if chatReq.Stream {
+				wrapStreamUnmaskWriter(c, dictMaskMapping)
+			} else if w := wrapUnmaskWriter(c, dictMaskMapping); w != nil {
+				defer w.flush()
+			}
 			c.Next()
 		}
 	}

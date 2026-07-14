@@ -7,3 +7,23 @@ tenants:
     auth_header: "Authorization"
     api_keys:
       - "sk-test-default"
+    # PII rules are per-tenant via PIIConfig.
+    # Enabled=false → PII scanning disabled (dict-only mode).
+    # DefaultAction применяется при ошибке engine.Scan (block|allow).
+    # Rules: каждый rule содержит тип детектора (pii, financial, secrets) и action (block|allow).
+    pii_config:
+      enabled: true
+      default_action: block
+      rules:
+        - label: "email"
+          type: "pii"
+          pattern: "EMAIL"
+          action: "block"
+        - label: "phone"
+          type: "pii"
+          pattern: "PHONE"
+          action: "block"
+        - label: "ssn"
+          type: "pii"
+          pattern: "SSN"
+          action: "block"

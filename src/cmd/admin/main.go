@@ -95,7 +95,11 @@ func main() {
 			if err != nil {
 				logger.Fatal("invalid tenant slug", zap.String("tenant", slugStr), zap.Error(err))
 			}
-			cfgTenants[slugStr] = entity.NewTenant(slug, tc.Name, tc.AuthHeader, tc.APIKeys)
+			opts := []entity.TenantOption{entity.WithTenantDictionaries(nil)}
+			if tc.PIIConfig != nil {
+				opts = append(opts, entity.WithTenantPIIConfig(*tc.PIIConfig))
+			}
+			cfgTenants[slugStr] = entity.NewTenant(slug, tc.Name, tc.AuthHeader, tc.APIKeys, opts...)
 		}
 		tenantResolver := resolver.NewDBFirstTenantResolver(tenantRepo, cfgTenants)
 

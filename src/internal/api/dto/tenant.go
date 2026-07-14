@@ -20,6 +20,7 @@ type CreateTenantRequest struct {
 	AuthHeader   string           `json:"auth_header"`
 	APIKeys      []string         `json:"api_keys" binding:"required"`
 	Dictionaries []DictionaryItem `json:"dictionaries"`
+	PIIConfig    *entity.PIIConfig `json:"pii_config"`
 }
 
 type UpdateTenantRequest struct {
@@ -27,6 +28,7 @@ type UpdateTenantRequest struct {
 	AuthHeader   string           `json:"auth_header"`
 	APIKeys      []string         `json:"api_keys" binding:"required"`
 	Dictionaries []DictionaryItem `json:"dictionaries"`
+	PIIConfig    *entity.PIIConfig `json:"pii_config"`
 }
 
 type TenantResponse struct {
@@ -35,6 +37,7 @@ type TenantResponse struct {
 	AuthHeader   string           `json:"auth_header"`
 	APIKeys      []string         `json:"api_keys"`
 	Dictionaries []DictionaryItem `json:"dictionaries,omitempty"`
+	PIIConfig    *entity.PIIConfig `json:"pii_config,omitempty"`
 	CreatedAt    time.Time        `json:"created_at"`
 	UpdatedAt    time.Time        `json:"updated_at"`
 }
@@ -48,12 +51,16 @@ type DictionaryResponse struct {
 }
 
 func TenantToResponse(t *entity.Tenant) TenantResponse {
+	piiCfg := t.PIIConfig()
 	return TenantResponse{
 		Slug:       t.Slug().String(),
 		Name:       t.Name(),
 		AuthHeader: t.AuthHeader(),
 		APIKeys:    t.APIKeys(),
+		PIIConfig:  &piiCfg,
 		CreatedAt:  t.CreatedAt(),
 		UpdatedAt:  t.UpdatedAt(),
 	}
 }
+
+

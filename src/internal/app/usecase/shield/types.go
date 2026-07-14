@@ -5,9 +5,10 @@ import (
 )
 
 // @sk-task 50-shield-engine#T1.1: Create ScanRequest and ScanResponse DTOs
+// @sk-task 13-shield-middleware-wiring#T1.2: Rules replaces ProfileSlug (AC-001)
 type ScanRequest struct {
-	Text        string
-	ProfileSlug string
+	Text  string
+	Rules []entity.PIARule
 }
 
 // @sk-task 50-shield-engine#T1.1: Create ScanRequest and ScanResponse DTOs

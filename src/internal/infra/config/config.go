@@ -10,6 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 )
 
 // envVarReplacer maps viper key format to env var format (reverse of SetEnvKeyReplacer).
@@ -49,9 +51,10 @@ type MaskConfig struct {
 }
 
 // @sk-task 51-shield-gateway-integration#T1.1: Add ShieldConfig section (AC-001, AC-002)
+// @sk-task 13-shield-middleware-wiring#T2.2: Remove ProfileMapping and DefaultAction (AC-005)
 type ShieldConfig struct {
-	ActionOnSuspicious string              `mapstructure:"action_on_suspicious" yaml:"action_on_suspicious"`
-	TenantModelMapping map[string]map[string]string `mapstructure:"tenant_model_mapping" yaml:"tenant_model_mapping"`
+	ActionOnSuspicious string                       `mapstructure:"action_on_suspicious" yaml:"action_on_suspicious"`
+	TenantModelMapping map[string]map[string]string  `mapstructure:"tenant_model_mapping" yaml:"tenant_model_mapping"`
 }
 
 // @sk-task 70-routing-engine#T1.2: Add routing config structs (AC-001, AC-002, AC-005)
@@ -95,11 +98,12 @@ type OtelConfig struct {
 
 // @sk-task 80-tenant-isolation#T1.2: Add TenantConfig struct (AC-001, AC-003, AC-004)
 type TenantConfig struct {
-	Name        string   `mapstructure:"name" yaml:"name"`
-	ProfileSlug string   `mapstructure:"profile_slug" yaml:"profile_slug"`
-	AuthHeader  string   `mapstructure:"auth_header" yaml:"auth_header"`
-	AuthScheme  string   `mapstructure:"auth_scheme" yaml:"auth_scheme"`
-	APIKeys     []string `mapstructure:"api_keys" yaml:"api_keys" validate:"required"`
+	Name        string                `mapstructure:"name" yaml:"name"`
+	ProfileSlug string                `mapstructure:"profile_slug" yaml:"profile_slug"`
+	AuthHeader  string                `mapstructure:"auth_header" yaml:"auth_header"`
+	AuthScheme  string                `mapstructure:"auth_scheme" yaml:"auth_scheme"`
+	APIKeys     []string              `mapstructure:"api_keys" yaml:"api_keys" validate:"required"`
+	PIIConfig   *entity.PIIConfig     `mapstructure:"pii_config" yaml:"pii_config"`
 }
 
 // @sk-task rate-limiting-budgets#T1.1: Add RateLimitConfig with defaults (AC-006)

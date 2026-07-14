@@ -32,7 +32,7 @@ func (r *PostgresTenantRepo) List(ctx context.Context) ([]*entity.Tenant, error)
 	q := getQuerier(ctx, r.pool)
 
 	rows, err := q.Query(ctx, `
-		SELECT slug, name, auth_header, api_keys, dictionaries, created_at, updated_at
+		SELECT slug, name, auth_header, api_keys, dictionaries, pii_config, created_at, updated_at
 		FROM tenants
 		ORDER BY created_at DESC`)
 	if err != nil {
@@ -61,7 +61,7 @@ func (r *PostgresTenantRepo) Get(ctx context.Context, slug value.TenantSlug) (*e
 	q := getQuerier(ctx, r.pool)
 
 	t, err := r.scanTenant(q.QueryRow(ctx, `
-		SELECT slug, name, auth_header, api_keys, dictionaries, created_at, updated_at
+		SELECT slug, name, auth_header, api_keys, dictionaries, pii_config, created_at, updated_at
 		FROM tenants
 		WHERE slug = $1`, slug.String()))
 	if err != nil {
@@ -86,15 +86,21 @@ func (r *PostgresTenantRepo) Create(ctx context.Context, tenant *entity.Tenant) 
 		return fmt.Errorf("marshal dictionaries: %w", err)
 	}
 
+	piiCfgJSON, err := json.Marshal(tenant.PIIConfig())
+	if err != nil {
+		return fmt.Errorf("marshal pii_config: %w", err)
+	}
+
 	now := time.Now().UTC()
 	_, err = q.Exec(ctx, `
-		INSERT INTO tenants (slug, name, auth_header, api_keys, dictionaries, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		INSERT INTO tenants (slug, name, auth_header, api_keys, dictionaries, pii_config, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		tenant.Slug().String(),
 		tenant.Name(),
 		tenant.AuthHeader(),
 		apiKeysJSON,
 		dictsJSON,
+		piiCfgJSON,
 		now,
 		now,
 	)
@@ -121,14 +127,20 @@ func (r *PostgresTenantRepo) Update(ctx context.Context, tenant *entity.Tenant) 
 		return fmt.Errorf("marshal dictionaries: %w", err)
 	}
 
+	piiCfgJSON, err := json.Marshal(tenant.PIIConfig())
+	if err != nil {
+		return fmt.Errorf("marshal pii_config: %w", err)
+	}
+
 	tag, err := q.Exec(ctx, `
 		UPDATE tenants
-		SET name = $1, auth_header = $2, api_keys = $3, dictionaries = $4, updated_at = $5
-		WHERE slug = $6`,
+		SET name = $1, auth_header = $2, api_keys = $3, dictionaries = $4, pii_config = $5, updated_at = $6
+		WHERE slug = $7`,
 		tenant.Name(),
 		tenant.AuthHeader(),
 		apiKeysJSON,
 		dictsJSON,
+		piiCfgJSON,
 		time.Now().UTC(),
 		tenant.Slug().String(),
 	)
@@ -196,10 +208,10 @@ func (r *PostgresTenantRepo) UpdateDictionaries(ctx context.Context, slug value.
 
 func (r *PostgresTenantRepo) scanTenant(row interface{ Scan(dest ...any) error }) (*entity.Tenant, error) {
 	var slugStr, name, authHeader string
-	var apiKeysJSON, dictsJSON []byte
+	var apiKeysJSON, dictsJSON, piiCfgJSON []byte
 	var createdAt, updatedAt time.Time
 
-	err := row.Scan(&slugStr, &name, &authHeader, &apiKeysJSON, &dictsJSON, &createdAt, &updatedAt)
+	err := row.Scan(&slugStr, &name, &authHeader, &apiKeysJSON, &dictsJSON, &piiCfgJSON, &createdAt, &updatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("scan tenant: %w", err)
 	}
@@ -219,7 +231,15 @@ func (r *PostgresTenantRepo) scanTenant(row interface{ Scan(dest ...any) error }
 		return nil, fmt.Errorf("unmarshal dictionaries: %w", err)
 	}
 
-	t := entity.NewTenant(slug, name, authHeader, apiKeys, entity.WithTenantDictionaries(dicts))
+	opts := []entity.TenantOption{entity.WithTenantDictionaries(dicts)}
+	if len(piiCfgJSON) > 0 && string(piiCfgJSON) != "null" && string(piiCfgJSON) != "{}" {
+		var cfg entity.PIIConfig
+		if err := json.Unmarshal(piiCfgJSON, &cfg); err != nil {
+			return nil, fmt.Errorf("unmarshal pii_config: %w", err)
+		}
+		opts = append(opts, entity.WithTenantPIIConfig(cfg))
+	}
+	t := entity.NewTenant(slug, name, authHeader, apiKeys, opts...)
 	return t, nil
 }
 
