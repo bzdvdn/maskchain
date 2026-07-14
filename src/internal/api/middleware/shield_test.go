@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -724,5 +725,96 @@ func TestShieldEdge_InvalidPlaceholderNotReplaced(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "{{dict.unknown.99}}") {
 		t.Errorf("expected unknown placeholder to remain unchanged, got: %s", w.Body.String())
+	}
+}
+
+// @sk-test 117-critical-test-coverage#T3.1: TestShieldNilScanResult — no panic when Scan returns (nil,nil) (AC-003)
+func TestShieldNilScanResult(t *testing.T) {
+	engine, mockEng, log := setupTest(t)
+	mockEng.resp = nil
+	mockEng.err = nil
+
+	var handlerCalled bool
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", newPIITenant("test-tenant"))
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
+	engine.POST("/v1/chat/completions", func(c *gin.Context) {
+		handlerCalled = true
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "hello")))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+
+	if !handlerCalled {
+		t.Error("expected handler to be called when Scan returns (nil, nil)")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+// @sk-test 117-critical-test-coverage#T3.1: TestShieldContextCancel — no panic on cancelled context (AC-003)
+func TestShieldContextCancel(t *testing.T) {
+	engine, mockEng, log := setupTest(t)
+	mockEng.resp = nil
+	mockEng.err = nil
+
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", newPIITenant("test-tenant"))
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
+
+	var handlerCalled bool
+	engine.POST("/v1/chat/completions", func(c *gin.Context) {
+		handlerCalled = true
+		c.Status(http.StatusOK)
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "hello")))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+
+	if !handlerCalled {
+		t.Error("expected handler to be called even on cancelled context")
+	}
+}
+
+// @sk-test 117-critical-test-coverage#T3.1: TestShieldNilEngine — nil engine skips scan (disabled shield) (AC-003)
+func TestShieldNilEngine(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	log, _ := zap.NewProduction()
+
+	var handlerCalled bool
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", newPIITenant("test-tenant"))
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(nil, testShieldConfig(), log))
+	engine.POST("/v1/chat/completions", func(c *gin.Context) {
+		handlerCalled = true
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "hello")))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+
+	if !handlerCalled {
+		t.Error("expected handler to be called when engine is nil")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
 	}
 }

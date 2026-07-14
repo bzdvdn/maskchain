@@ -20,9 +20,10 @@ import (
 
 // @sk-task 10-gateway-skeleton#T2.1: Implement Server struct with New/Start/Shutdown (AC-001, AC-002, AC-003, AC-005)
 // @sk-task 61-observability#T2.1: Add OTel and metrics middleware (AC-001, AC-002, AC-003)
+// @sk-task 117-critical-test-coverage#T2.1: Export http field for test access (AC-001)
 type Server struct {
 	engine         *gin.Engine
-	http           *http.Server
+	HTTP           *http.Server
 	cfg            *config.ServerConfig
 	log            *zap.Logger
 	serviceName    string
@@ -114,12 +115,12 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 // @sk-task 101-gateway-diet#T1.1: Remove RegisterStaticFiles from Server (AC-001, AC-005)
 func (s *Server) Start() error {
 	addr := fmt.Sprintf(":%d", s.cfg.Port)
-	s.http = &http.Server{
+	s.HTTP = &http.Server{
 		Addr:    addr,
 		Handler: s.engine,
 	}
 	s.log.Info("server starting", zap.String("addr", addr))
-	return s.http.ListenAndServe()
+	return s.HTTP.ListenAndServe()
 }
 
 // @sk-task 90-production-hardening#T2.2: Register pprof routes behind admin auth (<AC-001>)
@@ -136,5 +137,5 @@ func (s *Server) RegisterDebugRoutes(adminMw gin.HandlerFunc) {
 // @sk-task 90-production-hardening#T2.4: Graceful shutdown with config timeout (<SC-003>)
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.log.Info("shutting down server")
-	return s.http.Shutdown(ctx)
+	return s.HTTP.Shutdown(ctx)
 }

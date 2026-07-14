@@ -1,9 +1,14 @@
 package api
 
 import (
+	"context"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -91,6 +96,96 @@ func TestPanicRecovery(t *testing.T) {
 	engine.ServeHTTP(w2, req2)
 	if w2.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500 on second request, got %d", w2.Code)
+	}
+}
+
+// @sk-test 117-critical-test-coverage#T2.1: TestGracefulShutdown (AC-001)
+func TestGracefulShutdown(t *testing.T) {
+	srv := newTestServer()
+	srv.engine.GET("/slow", func(c *gin.Context) {
+		time.Sleep(200 * time.Millisecond)
+		c.Status(http.StatusOK)
+	})
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+
+	srv.HTTP = &http.Server{Handler: srv.engine}
+	go srv.HTTP.Serve(listener)
+	defer srv.HTTP.Close()
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/slow", port))
+		errCh <- err
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		t.Errorf("Shutdown returned error: %v", err)
+	}
+
+	select {
+	case <-errCh:
+	case <-time.After(1 * time.Second):
+		t.Error("request did not complete after shutdown")
+	}
+}
+
+// @sk-test 117-critical-test-coverage#T3.5: TestNotFoundRoute (AC-001)
+func TestNotFoundRoute(t *testing.T) {
+	srv := newTestServer()
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/nonexistent", nil)
+	srv.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Code)
+	}
+}
+
+// @sk-test 117-critical-test-coverage#T3.5: TestMetricsRoute (AC-001)
+func TestMetricsRoute(t *testing.T) {
+	srv := newTestServer()
+	var called bool
+	srv.RegisterMetricsRoute(func(c *gin.Context) {
+		called = true
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/metrics", nil)
+	srv.engine.ServeHTTP(w, req)
+
+	if !called {
+		t.Error("expected metrics handler to be called")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+// @sk-test 117-critical-test-coverage#T3.5: TestNilRoutingHandler (AC-001)
+func TestNilRoutingHandler(t *testing.T) {
+	srv := newTestServer()
+
+	srv.RegisterProxyRoute(nil, nil)
+
+	w := httptest.NewRecorder()
+	body := `{"model":"gpt-4","messages":[{"role":"user","content":"hello"}]}`
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	srv.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 from legacy handler, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

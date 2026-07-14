@@ -527,3 +527,21 @@ func TestStreamingNonStreamingUnchanged(t *testing.T) {
 		// Content-Type will be set by mock provider, may vary
 	}
 }
+
+// @sk-test 117-critical-test-coverage#T3.2: TestProxyCompletionHandler (AC-006)
+func TestProxyCompletionHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/completions", strings.NewReader(`{"model":"gpt-4"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	ProxyCompletionHandler(c)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "ok") {
+		t.Errorf("expected response body to contain completion, got %s", w.Body.String())
+	}
+}
