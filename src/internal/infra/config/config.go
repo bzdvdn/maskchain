@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"reflect"
 	"strings"
@@ -55,14 +56,18 @@ type ShieldConfig struct {
 
 // @sk-task 70-routing-engine#T1.2: Add routing config structs (AC-001, AC-002, AC-005)
 // @sk-task 110-provider-adapters#T1.1: Add APIType and APIKey fields (AC-007, AC-008)
+// @sk-task 111-provider-auth-and-config#T1.1: Add APIKeys, AuthScheme, AuthHeader, AdditionalHeaders (AC-003)
 type ProviderConfig struct {
-	Name           string `mapstructure:"name" yaml:"name"`
-	BaseURL        string `mapstructure:"base_url" yaml:"base_url"`
-	HealthEndpoint string `mapstructure:"health_endpoint" yaml:"health_endpoint"`
-	Timeout        string `mapstructure:"timeout" yaml:"timeout"`
-	Priority       int    `mapstructure:"priority" yaml:"priority"`
-	APIType        string `mapstructure:"api_type" yaml:"api_type"`
-	APIKey         string `mapstructure:"api_key" yaml:"api_key"`
+	Name              string            `mapstructure:"name" yaml:"name"`
+	BaseURL           string            `mapstructure:"base_url" yaml:"base_url"`
+	HealthEndpoint    string            `mapstructure:"health_endpoint" yaml:"health_endpoint"`
+	Timeout           string            `mapstructure:"timeout" yaml:"timeout"`
+	Priority          int               `mapstructure:"priority" yaml:"priority"`
+	APIType           string            `mapstructure:"api_type" yaml:"api_type"`
+	APIKeys           []string          `mapstructure:"api_keys" yaml:"api_keys" validate:"required"`
+	AuthScheme        string            `mapstructure:"auth_scheme" yaml:"auth_scheme"`
+	AuthHeader        string            `mapstructure:"auth_header" yaml:"auth_header"`
+	AdditionalHeaders map[string]string `mapstructure:"additional_headers" yaml:"additional_headers"`
 }
 
 type RouteConfig struct {
@@ -310,6 +315,8 @@ func LoadConfig(cmd *cobra.Command) (*Config, error) {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
 
+	normalizeProviderConfig(cfg, v)
+
 	if err := validateConfig(cfg, v); err != nil {
 		return nil, err
 	}
@@ -335,7 +342,73 @@ func MustLoadConfig() *Config {
 	return cfg
 }
 
+// @sk-task 111-provider-auth-and-config#T1.2: Fallback for old api_key + apply defaults (AC-003)
+func normalizeProviderConfig(cfg *Config, v *viper.Viper) {
+	if cfg.Routing == nil {
+		return
+	}
+	for i := range cfg.Routing.Providers {
+		p := &cfg.Routing.Providers[i]
+		if len(p.APIKeys) == 0 {
+			oldKey := v.GetString(fmt.Sprintf("routing.providers.%d.api_key", i))
+			if oldKey != "" {
+				p.APIKeys = []string{oldKey}
+			}
+		}
+		if p.AuthScheme == "" {
+			p.AuthScheme = "bearer"
+		}
+		if p.AuthHeader == "" {
+			p.AuthHeader = "Authorization"
+		}
+	}
+}
+
+// @sk-task 111-provider-auth-and-config#T2.1: Validate APIKeys required + auth_scheme enum (AC-005)
+func validateProviderAuth(cfg *Config) error {
+	if cfg.Routing == nil {
+		return nil
+	}
+	for i, p := range cfg.Routing.Providers {
+		if p.Name == "" {
+			continue
+		}
+		if len(p.APIKeys) == 0 {
+			return fmt.Errorf("routing.providers.%d.api_keys: required for provider %q", i, p.Name)
+		}
+		switch p.AuthScheme {
+		case "bearer", "api-key", "basic":
+		default:
+			return fmt.Errorf("routing.providers.%d.auth_scheme: unsupported %q (must be bearer, api-key, or basic)", i, p.AuthScheme)
+		}
+	}
+	return nil
+}
+
+// @sk-task 111-provider-auth-and-config#T2.2: Mask APIKeys via slog.LogValuer (AC-006)
+func (p ProviderConfig) LogValue() slog.Value {
+	masked := make([]string, len(p.APIKeys))
+	for i := range p.APIKeys {
+		masked[i] = "****"
+	}
+	return slog.GroupValue(
+		slog.String("name", p.Name),
+		slog.String("base_url", p.BaseURL),
+		slog.String("health_endpoint", p.HealthEndpoint),
+		slog.String("timeout", p.Timeout),
+		slog.Int("priority", p.Priority),
+		slog.String("api_type", p.APIType),
+		slog.Any("api_keys", masked),
+		slog.String("auth_scheme", p.AuthScheme),
+		slog.String("auth_header", p.AuthHeader),
+		slog.Any("additional_headers", p.AdditionalHeaders),
+	)
+}
+
 func validateConfig(cfg *Config, v *viper.Viper) error {
+	if err := validateProviderAuth(cfg); err != nil {
+		return err
+	}
 	val := reflect.ValueOf(cfg).Elem()
 	t := val.Type()
 

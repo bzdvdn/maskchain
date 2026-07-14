@@ -12,32 +12,50 @@ import (
 )
 
 // @sk-task 110-provider-adapters#T4.1: Implement AnthropicClient with Call and Stream (AC-004, AC-006)
+// @sk-task 111-provider-auth-and-config#T3.2: Config-driven auth + additional_headers (AC-004, AC-007)
 type AnthropicClient struct {
-	baseURL string
-	apiKey  string
-	ec      *egress.Client
+	baseURL           string
+	apiKey            string
+	authScheme        string
+	authHeader        string
+	additionalHeaders map[string]string
+	ec                *egress.Client
 }
 
 func newAnthropicClient(cfg *config.ProviderConfig, ec *egress.Client) *AnthropicClient {
 	baseURL := strings.TrimRight(cfg.BaseURL, "/")
+	var apiKey string
+	if len(cfg.APIKeys) > 0 {
+		apiKey = cfg.APIKeys[0]
+	}
+	authScheme := cfg.AuthScheme
+	if authScheme == "" {
+		authScheme = "bearer"
+	}
+	authHeader := cfg.AuthHeader
+	if authHeader == "" {
+		authHeader = "Authorization"
+	}
 	return &AnthropicClient{
-		baseURL: baseURL,
-		apiKey:  cfg.APIKey,
-		ec:      ec,
+		baseURL:           baseURL,
+		apiKey:            apiKey,
+		authScheme:        authScheme,
+		authHeader:        authHeader,
+		additionalHeaders: cfg.AdditionalHeaders,
+		ec:                ec,
 	}
 }
 
 func (c *AnthropicClient) Call(ctx context.Context, req *ports.ProviderRequest) (*ports.ProviderResponse, error) {
+	authKey, authValue := buildAuthHeader(c.authScheme, c.authHeader, c.apiKey)
 	providerReq := &ports.ProviderRequest{
-		Method: "POST",
-		URL:    c.baseURL + "/v1/messages",
-		Body:   req.Body,
-		Headers: map[string]string{
-			"x-api-key":         c.apiKey,
-			"anthropic-version": "2023-06-01",
-			"Content-Type":      "application/json",
-		},
+		Method:  "POST",
+		URL:     c.baseURL + "/v1/messages",
+		Body:    req.Body,
+		Headers: mergeHeaders(authKey, authValue, c.additionalHeaders),
 	}
+	providerReq.Headers["anthropic-version"] = "2023-06-01"
+	providerReq.Headers["Content-Type"] = "application/json"
 
 	resp, err := c.ec.Call(ctx, providerReq)
 	if err != nil {
@@ -54,17 +72,16 @@ func (c *AnthropicClient) Call(ctx context.Context, req *ports.ProviderRequest) 
 }
 
 func (c *AnthropicClient) Stream(ctx context.Context, req *ports.ProviderRequest) (<-chan ports.ProviderChunk, error) {
+	authKey, authValue := buildAuthHeader(c.authScheme, c.authHeader, c.apiKey)
 	providerReq := &ports.ProviderRequest{
-		Method: "POST",
-		URL:    c.baseURL + "/v1/messages",
-		Body:   req.Body,
-		Headers: map[string]string{
-			"x-api-key":         c.apiKey,
-			"anthropic-version": "2023-06-01",
-			"Content-Type":      "application/json",
-			"Accept":            "text/event-stream",
-		},
+		Method:  "POST",
+		URL:     c.baseURL + "/v1/messages",
+		Body:    req.Body,
+		Headers: mergeHeaders(authKey, authValue, c.additionalHeaders),
 	}
+	providerReq.Headers["anthropic-version"] = "2023-06-01"
+	providerReq.Headers["Content-Type"] = "application/json"
+	providerReq.Headers["Accept"] = "text/event-stream"
 
 	ch, err := c.ec.Stream(ctx, providerReq)
 	if err != nil {

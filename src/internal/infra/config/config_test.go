@@ -1,6 +1,9 @@
 package config
 
 import (
+	"bytes"
+	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -80,8 +83,8 @@ func TestProviderConfig_APITypeAnthropic(t *testing.T) {
 // @sk-test 110-provider-adapters#T1.2: TestProviderConfig_APIKey (AC-008)
 func TestProviderConfig_APIKey(t *testing.T) {
 	cfg := testProviderConfig(t, "openai", "sk-test-key-123")
-	if cfg.Routing.Providers[0].APIKey != "sk-test-key-123" {
-		t.Errorf("expected APIKey=sk-test-key-123, got %q", cfg.Routing.Providers[0].APIKey)
+	if len(cfg.Routing.Providers[0].APIKeys) == 0 || cfg.Routing.Providers[0].APIKeys[0] != "sk-test-key-123" {
+		t.Errorf("expected APIKeys[0]=sk-test-key-123, got %v", cfg.Routing.Providers[0].APIKeys)
 	}
 }
 
@@ -90,7 +93,7 @@ func testProviderConfig(t *testing.T, apiType, apiKey string) *Config {
 	t.Helper()
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	content := []byte("log:\n  level: debug\nrouting:\n  providers:\n    - name: test\n      base_url: https://api.example.com/v1\n      api_type: " + apiType + "\n      api_key: " + apiKey + "\n")
+	content := []byte("log:\n  level: debug\nrouting:\n  providers:\n    - name: test\n      base_url: https://api.example.com/v1\n      api_type: " + apiType + "\n      api_keys:\n        - " + apiKey + "\n")
 	if err := os.WriteFile(cfgPath, content, 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -100,6 +103,102 @@ func testProviderConfig(t *testing.T, apiType, apiKey string) *Config {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	return cfg
+}
+
+// @sk-test 111-provider-auth-and-config#T4.1: TestProviderConfig_APIKeys — чтение api_keys из YAML (AC-001)
+func TestProviderConfig_APIKeys(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	content := []byte("log:\n  level: debug\nrouting:\n  providers:\n    - name: test\n      base_url: https://api.example.com/v1\n      api_type: openai\n      api_keys:\n        - sk-abc123\n")
+	if err := os.WriteFile(cfgPath, content, 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := ParseAndLoadConfig([]string{"--config=" + cfgPath})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.Routing.Providers[0].APIKeys) != 1 || cfg.Routing.Providers[0].APIKeys[0] != "sk-abc123" {
+		t.Errorf("expected APIKeys=[sk-abc123], got %v", cfg.Routing.Providers[0].APIKeys)
+	}
+}
+
+// @sk-test 111-provider-auth-and-config#T4.1: TestProviderConfig_EnvAPIKeys — чтение api_key из env + fallback (AC-002)
+func TestProviderConfig_EnvAPIKeys(t *testing.T) {
+	t.Setenv("CONFIG_ROUTING_PROVIDERS_0_API_KEY", "sk-env-key")
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	// No api_keys in YAML, only name+base_url+api_type — fallback должен скопировать api_key → api_keys[0]
+	content := []byte("log:\n  level: debug\nrouting:\n  providers:\n    - name: test\n      base_url: https://api.example.com/v1\n      api_type: openai\n")
+	if err := os.WriteFile(cfgPath, content, 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := ParseAndLoadConfig([]string{"--config=" + cfgPath})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.Routing.Providers[0].APIKeys) != 1 || cfg.Routing.Providers[0].APIKeys[0] != "sk-env-key" {
+		t.Errorf("expected APIKeys=[sk-env-key] via fallback, got %v", cfg.Routing.Providers[0].APIKeys)
+	}
+}
+
+// @sk-test 111-provider-auth-and-config#T4.1: TestProviderConfig_AuthDefaults — defaults для auth_scheme/auth_header (AC-003)
+func TestProviderConfig_AuthDefaults(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	content := []byte("log:\n  level: debug\nrouting:\n  providers:\n    - name: test\n      base_url: https://api.example.com/v1\n      api_type: openai\n      api_keys:\n        - sk-key\n")
+	if err := os.WriteFile(cfgPath, content, 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := ParseAndLoadConfig([]string{"--config=" + cfgPath})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Routing.Providers[0].AuthScheme != "bearer" {
+		t.Errorf("expected AuthScheme=bearer, got %q", cfg.Routing.Providers[0].AuthScheme)
+	}
+	if cfg.Routing.Providers[0].AuthHeader != "Authorization" {
+		t.Errorf("expected AuthHeader=Authorization, got %q", cfg.Routing.Providers[0].AuthHeader)
+	}
+}
+
+// @sk-test 111-provider-auth-and-config#T4.3: TestProviderConfig_RequireAPIKeys — ошибка при отсутствии api_keys (AC-005)
+func TestProviderConfig_RequireAPIKeys(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	// Provider with name but no api_keys — should fail validation
+	content := []byte("log:\n  level: debug\nrouting:\n  providers:\n    - name: test\n      base_url: https://api.example.com/v1\n      api_type: openai\n")
+	if err := os.WriteFile(cfgPath, content, 0644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := ParseAndLoadConfig([]string{"--config=" + cfgPath})
+	if err == nil {
+		t.Fatal("expected error for missing api_keys, got nil")
+	}
+}
+
+// @sk-test 111-provider-auth-and-config#T4.3: TestProviderConfig_RedactAPIKeys — маскировка ключей в логах (AC-006)
+func TestProviderConfig_RedactAPIKeys(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	cfg := ProviderConfig{
+		Name:       "test",
+		APIKeys:    []string{"secret-value"},
+		AuthScheme: "bearer",
+		AuthHeader: "Authorization",
+	}
+	logger.LogAttrs(context.Background(), slog.LevelDebug, "config", slog.Any("provider", cfg))
+	output := buf.String()
+	if output == "" {
+		t.Fatal("expected log output, got empty")
+	}
+	// The original key must NOT appear in the log
+	if bytes.Contains(buf.Bytes(), []byte("secret-value")) {
+		t.Errorf("expected APIKey to be masked, but found 'secret-value' in log output:\n%s", output)
+	}
+	// The masked value should appear
+	if !bytes.Contains(buf.Bytes(), []byte("****")) {
+		t.Errorf("expected masked value '****' in log output:\n%s", output)
+	}
 }
 
 // @sk-test 30-shield-persistence#T1.3: TestDatabaseConfig_PoolDefaults (AC-005)

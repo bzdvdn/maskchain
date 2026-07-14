@@ -1,6 +1,9 @@
 package provider
 
-import "encoding/json"
+import (
+	"encoding/base64"
+	"encoding/json"
+)
 
 // @sk-task 110-provider-adapters#T2.1: Create ProviderError type and ParseProviderError (AC-005)
 type ProviderError struct {
@@ -55,4 +58,30 @@ func ParseProviderError(statusCode int, body []byte, apiType string) *ProviderEr
 		StatusCode: statusCode,
 		Message:    string(body),
 	}
+}
+
+// @sk-task 111-provider-auth-and-config#T3.1: Build auth headers from ProviderConfig (AC-004, AC-007)
+func buildAuthHeader(scheme, headerName, key string) (string, string) {
+	switch scheme {
+	case "bearer":
+		return headerName, "Bearer " + key
+	case "api-key":
+		return headerName, key
+	case "basic":
+		encoded := base64.StdEncoding.EncodeToString([]byte(":" + key))
+		return "Authorization", "Basic " + encoded
+	default:
+		return headerName, key
+	}
+}
+
+// @sk-task 111-provider-auth-and-config#T3.1: Merge headers with auth priority (AC-004, AC-007)
+func mergeHeaders(authKey, authValue string, additional map[string]string) map[string]string {
+	h := make(map[string]string, len(additional)+1)
+	for k, v := range additional {
+		h[k] = v
+	}
+	// Auth header has priority — always set after additional so it wins
+	h[authKey] = authValue
+	return h
 }

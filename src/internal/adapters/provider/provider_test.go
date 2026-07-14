@@ -177,7 +177,7 @@ func TestProviderClient_Factory(t *testing.T) {
 		Name:    "test-openai",
 		APIType: "openai",
 		BaseURL: "https://api.example.com",
-		APIKey:  "sk-test",
+		APIKeys: []string{"sk-test"},
 	}, egressCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -187,10 +187,12 @@ func TestProviderClient_Factory(t *testing.T) {
 	}
 
 	client, err = NewProviderClient(&config.ProviderConfig{
-		Name:    "test-anthropic",
-		APIType: "anthropic",
-		BaseURL: "https://api.anthropic.com",
-		APIKey:  "sk-ant-test",
+		Name:       "test-anthropic",
+		APIType:    "anthropic",
+		BaseURL:    "https://api.anthropic.com",
+		APIKeys:    []string{"sk-ant-test"},
+		AuthScheme: "api-key",
+		AuthHeader: "x-api-key",
 	}, egressCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -289,6 +291,7 @@ func newTestServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(handler))
 }
 
+// @sk-test 111-provider-auth-and-config#T3.3: Updated test helper for APIKeys (AC-004, AC-007)
 func newTestOpenAI(t *testing.T, baseURL, apiKey string) *OpenAIClient {
 	t.Helper()
 	ec := egress.NewClient(&config.EgressConfig{
@@ -298,10 +301,11 @@ func newTestOpenAI(t *testing.T, baseURL, apiKey string) *OpenAIClient {
 	return newOpenAIClient(&config.ProviderConfig{
 		Name:    "test-openai",
 		BaseURL: baseURL,
-		APIKey:  apiKey,
+		APIKeys: []string{apiKey},
 	}, ec)
 }
 
+// @sk-test 111-provider-auth-and-config#T3.3: Updated test helper for APIKeys + auth config (AC-004, AC-007)
 func newTestAnthropic(t *testing.T, baseURL, apiKey string) *AnthropicClient {
 	t.Helper()
 	ec := egress.NewClient(&config.EgressConfig{
@@ -309,10 +313,73 @@ func newTestAnthropic(t *testing.T, baseURL, apiKey string) *AnthropicClient {
 		IdleTimeout:  time.Second,
 	})
 	return newAnthropicClient(&config.ProviderConfig{
-		Name:    "test-anthropic",
-		BaseURL: baseURL,
-		APIKey:  apiKey,
+		Name:       "test-anthropic",
+		BaseURL:    baseURL,
+		APIKeys:    []string{apiKey},
+		AuthScheme: "api-key",
+		AuthHeader: "x-api-key",
 	}, ec)
+}
+
+// @sk-test 111-provider-auth-and-config#T4.2: TestProviderClient_AuthHeader — кастомный заголовок (AC-004)
+func TestProviderClient_AuthHeader(t *testing.T) {
+	srv := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertHeader(t, r, "X-API-Key", "sk-custom")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	defer srv.Close()
+
+	ec := egress.NewClient(&config.EgressConfig{MaxIdleConns: 1, IdleTimeout: time.Second})
+	client := newOpenAIClient(&config.ProviderConfig{
+		Name:       "test",
+		BaseURL:    srv.URL,
+		APIKeys:    []string{"sk-custom"},
+		AuthScheme: "api-key",
+		AuthHeader: "X-API-Key",
+	}, ec)
+
+	resp, err := client.Call(context.Background(), &ports.ProviderRequest{
+		Body: []byte(`{"model":"gpt-4"}`),
+	})
+	if err != nil {
+		t.Fatalf("Call failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+// @sk-test 111-provider-auth-and-config#T4.2: TestProviderClient_AdditionalHeaders — произвольные заголовки (AC-007)
+func TestProviderClient_AdditionalHeaders(t *testing.T) {
+	srv := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertHeader(t, r, "Authorization", "Bearer sk-key")
+		assertHeader(t, r, "X-Org-Id", "acme")
+		assertHeader(t, r, "X-Custom", "value")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	defer srv.Close()
+
+	ec := egress.NewClient(&config.EgressConfig{MaxIdleConns: 1, IdleTimeout: time.Second})
+	client := newOpenAIClient(&config.ProviderConfig{
+		Name:              "test",
+		BaseURL:           srv.URL,
+		APIKeys:           []string{"sk-key"},
+		AuthScheme:        "bearer",
+		AuthHeader:        "Authorization",
+		AdditionalHeaders: map[string]string{"X-Org-Id": "acme", "X-Custom": "value"},
+	}, ec)
+
+	resp, err := client.Call(context.Background(), &ports.ProviderRequest{
+		Body: []byte(`{"model":"gpt-4"}`),
+	})
+	if err != nil {
+		t.Fatalf("Call failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
 }
 
 func assertHeader(t *testing.T, r *http.Request, key, expected string) {
