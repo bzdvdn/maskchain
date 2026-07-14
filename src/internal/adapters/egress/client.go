@@ -47,7 +47,9 @@ func (c *Client) Call(ctx context.Context, req *ports.ProviderRequest) (*ports.P
 		return nil, ErrCircuitBreakerOpen
 	}
 
-	ctx = c.withTimeout(ctx)
+	var cancel context.CancelFunc
+	ctx, cancel = c.withTimeout(ctx)
+	defer cancel()
 
 	var body io.Reader
 	if len(req.Body) > 0 {
@@ -104,20 +106,22 @@ func (c *Client) Stream(ctx context.Context, req *ports.ProviderRequest) (<-chan
 		return nil, ErrCircuitBreakerOpen
 	}
 
-	ctx = c.withTimeout(ctx)
+	var cancel context.CancelFunc
+	ctx, cancel = c.withTimeout(ctx)
+	defer cancel()
+
 	return c.streamSSE(ctx, req)
 }
 
 // @sk-task 116-connection-pool-fixes#T2.2: Apply per-provider timeout if ctx has no deadline (AC-002)
-func (c *Client) withTimeout(ctx context.Context) context.Context {
+func (c *Client) withTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
 	if c.timeout <= 0 {
-		return ctx
+		return ctx, func() {}
 	}
 	if _, ok := ctx.Deadline(); ok {
-		return ctx
+		return ctx, func() {}
 	}
-	newCtx, _ := context.WithTimeout(ctx, c.timeout)
-	return newCtx
+	return context.WithTimeout(ctx, c.timeout)
 }
 
 const defaultDialTimeout = 30 * time.Second

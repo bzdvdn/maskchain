@@ -16,7 +16,7 @@ import (
 	"github.com/valkey-io/valkey-go"
 	"go.uber.org/zap"
 
-	"github.com/bzdvdn/maskchain/src/internal/adapters/egress"
+	"github.com/bzdvdn/maskchain/src/internal/adapters/provider"
 	budgetrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/budget"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
 	"github.com/bzdvdn/maskchain/src/internal/api"
@@ -80,14 +80,31 @@ func main() {
 	}
 	selector := routingDomain.NewRouteSelector(registry)
 	clients := make(map[string]ports.ProviderClient)
-	if cfg.Egress != nil {
-		egClient := egress.NewClient(cfg.Egress)
-		for _, p := range registry.List() {
-			clients[p.Name] = egClient
+	if cfg.Egress != nil && cfg.Routing != nil {
+		for i := range cfg.Routing.Providers {
+			pcfg := &cfg.Routing.Providers[i]
+			client, err := provider.NewProviderClient(pcfg, cfg.Egress)
+			if err != nil {
+				logger.Fatal("failed to create provider client", zap.String("provider", pcfg.Name), zap.Error(err))
+			}
+			clients[pcfg.Name] = client
+			logger.Info("provider client created",
+				zap.String("provider", pcfg.Name),
+				zap.String("api_type", pcfg.APIType),
+				zap.String("base_url", pcfg.BaseURL),
+			)
 		}
 	}
 	fallbackHandler := routingDomain.NewFallbackHandler(clients)
 	routingHandler := api.NewRoutingProxyHandler(selector, fallbackHandler)
+
+	healthCtx, healthCancel := context.WithCancel(context.Background())
+	defer healthCancel()
+	if cfg.Routing != nil {
+		healthChecker := routingDomain.NewHealthChecker(registry, nil)
+		go healthChecker.Start(healthCtx, 30*time.Second)
+		logger.Info("provider health checker started")
+	}
 
 	slogLogger := logging.NewLogger(io.Discard, slog.LevelInfo)
 

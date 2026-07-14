@@ -48,11 +48,17 @@ func newOpenAIClient(cfg *config.ProviderConfig, ec *egress.Client) *OpenAIClien
 
 func (c *OpenAIClient) Call(ctx context.Context, req *ports.ProviderRequest) (*ports.ProviderResponse, error) {
 	authKey, authValue := buildAuthHeader(c.authScheme, c.authHeader, c.apiKey)
+	headers := mergeHeaders(authKey, authValue, c.additionalHeaders)
+	for k, v := range req.Headers {
+		if _, exists := headers[k]; !exists {
+			headers[k] = v
+		}
+	}
 	providerReq := &ports.ProviderRequest{
 		Method:  "POST",
 		URL:     c.baseURL + "/v1/chat/completions",
 		Body:    req.Body,
-		Headers: mergeHeaders(authKey, authValue, c.additionalHeaders),
+		Headers: headers,
 	}
 	providerReq.Headers["Content-Type"] = "application/json"
 
@@ -72,11 +78,17 @@ func (c *OpenAIClient) Call(ctx context.Context, req *ports.ProviderRequest) (*p
 
 func (c *OpenAIClient) Stream(ctx context.Context, req *ports.ProviderRequest) (<-chan ports.ProviderChunk, error) {
 	authKey, authValue := buildAuthHeader(c.authScheme, c.authHeader, c.apiKey)
+	headers := mergeHeaders(authKey, authValue, c.additionalHeaders)
+	for k, v := range req.Headers {
+		if _, exists := headers[k]; !exists {
+			headers[k] = v
+		}
+	}
 	providerReq := &ports.ProviderRequest{
 		Method:  "POST",
 		URL:     c.baseURL + "/v1/chat/completions",
 		Body:    req.Body,
-		Headers: mergeHeaders(authKey, authValue, c.additionalHeaders),
+		Headers: headers,
 	}
 	providerReq.Headers["Content-Type"] = "application/json"
 	providerReq.Headers["Accept"] = "text/event-stream"
