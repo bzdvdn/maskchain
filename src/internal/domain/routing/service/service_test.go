@@ -172,9 +172,12 @@ func TestRouteSelectorTenantScoped(t *testing.T) {
 }
 
 type mockProviderClient struct {
-	name       string
-	statusCode int
-	err        error
+	name        string
+	statusCode  int
+	err         error
+	streamErr   error
+	streamCh    chan ports.ProviderChunk
+	streamChunk ports.ProviderChunk
 }
 
 // @sk-test 70-routing-engine#T4.1: TestFallbackHandler (AC-002, AC-007)
@@ -189,8 +192,14 @@ func (m *mockProviderClient) Call(_ context.Context, req *ports.ProviderRequest)
 }
 
 func (m *mockProviderClient) Stream(_ context.Context, _ *ports.ProviderRequest) (<-chan ports.ProviderChunk, error) {
+	if m.streamErr != nil {
+		return nil, m.streamErr
+	}
+	if m.streamCh != nil {
+		return m.streamCh, nil
+	}
 	ch := make(chan ports.ProviderChunk, 1)
-	ch <- ports.ProviderChunk{Done: true}
+	ch <- m.streamChunk
 	close(ch)
 	return ch, nil
 }
@@ -316,6 +325,74 @@ func TestHealthCheckerUnhealthyEndpoint(t *testing.T) {
 
 	if status := reg.Get("p1").HealthStatus(); status != routing.HealthUnhealthy {
 		t.Errorf("expected unhealthy, got %v", status)
+	}
+}
+
+// @sk-test 112-proxy-streaming-wiring#T1.2: TestFallbackHandlerStream_Success (AC-006)
+func TestFallbackHandlerStream_Success(t *testing.T) {
+	chunk := ports.ProviderChunk{Data: []byte(`{"token":"hello"}`)}
+	clients := map[string]ports.ProviderClient{
+		"p1": &mockProviderClient{name: "p1", streamChunk: chunk},
+		"p2": &mockProviderClient{name: "p2", streamChunk: ports.ProviderChunk{Done: true}},
+	}
+
+	fb := NewFallbackHandler(clients)
+	ch, name, err := fb.Stream(context.Background(), []string{"p1", "p2"}, &ports.ProviderRequest{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if name != "p1" {
+		t.Errorf("expected p1, got %s", name)
+	}
+
+	got := <-ch
+	if string(got.Data) != `{"token":"hello"}` {
+		t.Errorf("expected chunk data, got %s", string(got.Data))
+	}
+}
+
+// @sk-test 112-proxy-streaming-wiring#T1.2: TestFallbackHandlerStream_Fallback (AC-006)
+func TestFallbackHandlerStream_Fallback(t *testing.T) {
+	chunk := ports.ProviderChunk{Data: []byte(`{"token":"world"}`)}
+	clients := map[string]ports.ProviderClient{
+		"p1": &mockProviderClient{name: "p1", streamErr: errors.New("connection refused")},
+		"p2": &mockProviderClient{name: "p2", streamChunk: chunk},
+	}
+
+	fb := NewFallbackHandler(clients)
+	ch, name, err := fb.Stream(context.Background(), []string{"p1", "p2"}, &ports.ProviderRequest{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if name != "p2" {
+		t.Errorf("expected p2 (fallback), got %s", name)
+	}
+
+	got := <-ch
+	if string(got.Data) != `{"token":"world"}` {
+		t.Errorf("expected chunk data, got %s", string(got.Data))
+	}
+}
+
+// @sk-test 112-proxy-streaming-wiring#T1.2: TestFallbackHandlerStream_AllFailed (AC-006)
+func TestFallbackHandlerStream_AllFailed(t *testing.T) {
+	clients := map[string]ports.ProviderClient{
+		"p1": &mockProviderClient{name: "p1", streamErr: errors.New("timeout")},
+		"p2": &mockProviderClient{name: "p2", streamErr: errors.New("connection refused")},
+	}
+
+	fb := NewFallbackHandler(clients)
+	ch, name, err := fb.Stream(context.Background(), []string{"p1", "p2"}, &ports.ProviderRequest{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if name != "" {
+		t.Errorf("expected empty name when all fail, got %s", name)
+	}
+
+	got := <-ch
+	if got.Err == nil {
+		t.Fatal("expected error chunk when all providers fail")
 	}
 }
 

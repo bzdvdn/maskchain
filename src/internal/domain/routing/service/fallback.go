@@ -44,6 +44,31 @@ func (h *FallbackHandler) Call(ctx context.Context, providers []string, req *por
 	return nil, "", lastErr
 }
 
+// @sk-task 112-proxy-streaming-wiring#T1.1: Implement FallbackHandler.Stream() (AC-006)
+func (h *FallbackHandler) Stream(ctx context.Context, providers []string, req *ports.ProviderRequest) (<-chan ports.ProviderChunk, string, error) {
+	var lastErr error
+	for _, name := range providers {
+		client, ok := h.clients[name]
+		if !ok {
+			lastErr = fmt.Errorf("provider %s not configured", name)
+			continue
+		}
+		ch, err := client.Stream(ctx, req)
+		if err != nil {
+			if isRetriableError(err) {
+				lastErr = err
+				continue
+			}
+			return ch, name, err
+		}
+		return ch, name, nil
+	}
+	ch := make(chan ports.ProviderChunk, 1)
+	ch <- ports.ProviderChunk{Err: lastErr, Done: true}
+	close(ch)
+	return ch, "", nil
+}
+
 func isRetriableError(err error) bool {
 	if err == nil {
 		return false

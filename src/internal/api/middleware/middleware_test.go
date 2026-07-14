@@ -324,6 +324,27 @@ func TestShieldIntegration(t *testing.T) {
 	})
 }
 
+// @sk-test 112-proxy-streaming-wiring#T2.3: TestWrapSSEHeaders (AC-002)
+func TestWrapSSEHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(WrapSSE())
+	engine.GET("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
+	engine.ServeHTTP(w, req)
+
+	if ct := w.Header().Get("Content-Type"); ct != "text/event-stream" {
+		t.Errorf("expected Content-Type: text/event-stream, got %s", ct)
+	}
+	if te := w.Header().Get("Transfer-Encoding"); te != "chunked" {
+		t.Errorf("expected Transfer-Encoding: chunked, got %s", te)
+	}
+}
+
 // @sk-test 10-gateway-skeleton#T4.2: TestCORS handles preflight (AC-008)
 func TestCORS_Preflight(t *testing.T) {
 	gin.SetMode(gin.TestMode)

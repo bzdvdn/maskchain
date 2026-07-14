@@ -102,10 +102,11 @@ func (s *Server) RegisterProfileHandler(h *profile.ProfileHandler) {
 }
 
 // @sk-task 70-routing-engine#T3.2: Register proxy routes with routing handler (AC-003, AC-004)
+// @sk-task 112-proxy-streaming-wiring#T2.2: Register WrapSSE middleware on streaming route (AC-002)
 func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHandler *RoutingProxyHandler) {
 	group := s.engine.Group("/v1")
 	if routingHandler != nil {
-		group.POST("/chat/completions", shieldMiddleware, routingHandler.HandleChatCompletion)
+		group.POST("/chat/completions", middleware.WrapSSE(), shieldMiddleware, routingHandler.HandleChatCompletion)
 	} else {
 		group.POST("/chat/completions", shieldMiddleware, ProxyChatCompletionHandler)
 	}

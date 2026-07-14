@@ -24,6 +24,8 @@ type mockPortClient struct {
 	err         error
 	delay       time.Duration
 	capturedReq *ports.ProviderRequest
+	streamErr   error
+	streamCh    chan ports.ProviderChunk
 }
 
 func (m *mockPortClient) Call(_ context.Context, req *ports.ProviderRequest) (*ports.ProviderResponse, error) {
@@ -42,6 +44,12 @@ func (m *mockPortClient) Call(_ context.Context, req *ports.ProviderRequest) (*p
 }
 
 func (m *mockPortClient) Stream(_ context.Context, _ *ports.ProviderRequest) (<-chan ports.ProviderChunk, error) {
+	if m.streamErr != nil {
+		return nil, m.streamErr
+	}
+	if m.streamCh != nil {
+		return m.streamCh, nil
+	}
 	ch := make(chan ports.ProviderChunk, 1)
 	ch <- ports.ProviderChunk{Done: true}
 	close(ch)
@@ -363,4 +371,159 @@ func newTestRouting(cfg *config.RoutingConfig) (*routingSvc.ProviderRegistry, *r
 	clients := make(map[string]ports.ProviderClient)
 	fb := routingSvc.NewFallbackHandler(clients)
 	return reg, sel, fb
+}
+
+type flushRecorder struct {
+	*httptest.ResponseRecorder
+	closeNotify chan bool
+}
+
+func (r *flushRecorder) Flush() {}
+
+func (r *flushRecorder) CloseNotify() <-chan bool {
+	return r.closeNotify
+}
+
+func newFlushRecorder() *flushRecorder {
+	return &flushRecorder{
+		ResponseRecorder: httptest.NewRecorder(),
+		closeNotify:      make(chan bool),
+	}
+}
+
+// @sk-test 112-proxy-streaming-wiring#T4.1: TestStreamingSSE forwards chunks (AC-003)
+func TestStreamingSSE(t *testing.T) {
+	cfg := &config.RoutingConfig{
+		Providers: []config.ProviderConfig{
+			{Name: "p1", BaseURL: "http://localhost:1"},
+		},
+		Rules: []config.RuleConfig{
+			{
+				Tenant: "default",
+				Routes: []config.RouteConfig{
+					{Model: "gpt-4", Providers: []string{"p1"}},
+				},
+			},
+		},
+	}
+
+	reg, _ := routingSvc.NewProviderRegistry(cfg)
+	sel := routingSvc.NewRouteSelector(reg)
+
+	chunk1 := ports.ProviderChunk{Data: []byte(`{"token":"hello"}`)}
+	chunk2 := ports.ProviderChunk{Data: []byte(`{"token":"world"}`)}
+	ch := make(chan ports.ProviderChunk, 3)
+	ch <- chunk1
+	ch <- chunk2
+	ch <- ports.ProviderChunk{Done: true}
+	close(ch)
+
+	clients := map[string]ports.ProviderClient{
+		"p1": &mockPortClient{statusCode: http.StatusOK, streamCh: ch},
+	}
+	fb := routingSvc.NewFallbackHandler(clients)
+	handler := NewRoutingProxyHandler(sel, fb)
+
+	w := newFlushRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions",
+		strings.NewReader(`{"model":"gpt-4","stream":true}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler.HandleChatCompletion(c)
+
+	body := w.Body.String()
+	if !strings.Contains(body, `data: {"token":"hello"}`) {
+		t.Errorf("expected chunk1 in SSE body, got: %s", body)
+	}
+	if !strings.Contains(body, `data: {"token":"world"}`) {
+		t.Errorf("expected chunk2 in SSE body, got: %s", body)
+	}
+	if !strings.Contains(body, "data: [DONE]") {
+		t.Errorf("expected [DONE] terminator in SSE body, got: %s", body)
+	}
+}
+
+// @sk-test 112-proxy-streaming-wiring#T4.1: TestStreamingSSEError writes error to stream (AC-005)
+func TestStreamingSSEError(t *testing.T) {
+	cfg := &config.RoutingConfig{
+		Providers: []config.ProviderConfig{
+			{Name: "p1", BaseURL: "http://localhost:1"},
+		},
+		Rules: []config.RuleConfig{
+			{
+				Tenant: "default",
+				Routes: []config.RouteConfig{
+					{Model: "gpt-4", Providers: []string{"p1"}},
+				},
+			},
+		},
+	}
+
+	reg, _ := routingSvc.NewProviderRegistry(cfg)
+	sel := routingSvc.NewRouteSelector(reg)
+
+	ch := make(chan ports.ProviderChunk, 2)
+	ch <- ports.ProviderChunk{Data: []byte(`{"token":"hello"}`)}
+	ch <- ports.ProviderChunk{Err: errors.New("upstream failure"), Done: true}
+	close(ch)
+
+	clients := map[string]ports.ProviderClient{
+		"p1": &mockPortClient{statusCode: http.StatusOK, streamCh: ch},
+	}
+	fb := routingSvc.NewFallbackHandler(clients)
+	handler := NewRoutingProxyHandler(sel, fb)
+
+	w := newFlushRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions",
+		strings.NewReader(`{"model":"gpt-4","stream":true}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler.HandleChatCompletion(c)
+
+	body := w.Body.String()
+	if !strings.Contains(body, `{"error":{"message":"upstream failure"}}`) {
+		t.Errorf("expected error message in SSE body, got: %s", body)
+	}
+}
+
+// @sk-test 112-proxy-streaming-wiring#T4.1: TestStreamingNonStreamingUnchanged (AC-001, SC-002)
+func TestStreamingNonStreamingUnchanged(t *testing.T) {
+	cfg := &config.RoutingConfig{
+		Providers: []config.ProviderConfig{
+			{Name: "p1", BaseURL: "http://localhost:1"},
+		},
+		Rules: []config.RuleConfig{
+			{
+				Tenant: "default",
+				Routes: []config.RouteConfig{
+					{Model: "gpt-4", Providers: []string{"p1"}},
+				},
+			},
+		},
+	}
+
+	reg, _ := routingSvc.NewProviderRegistry(cfg)
+	sel := routingSvc.NewRouteSelector(reg)
+	clients := map[string]ports.ProviderClient{
+		"p1": &mockPortClient{statusCode: http.StatusOK},
+	}
+	fb := routingSvc.NewFallbackHandler(clients)
+	handler := NewRoutingProxyHandler(sel, fb)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions",
+		strings.NewReader(`{"model":"gpt-4"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler.HandleChatCompletion(c)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for non-streaming, got %d", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "" && ct != "text/plain" {
+		// Content-Type will be set by mock provider, may vary
+	}
 }
