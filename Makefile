@@ -7,7 +7,7 @@ GOPATH := $(shell $(GOCMD) env GOPATH)
 .PHONY: build build-gateway build-admin test lint clean ui-build ui-dev docker-build docker-build-gateway docker-build-admin check-structure security-check load-test
 
 # @sk-task 100-admin-control-plane#T1.2: Add build-gateway, build-admin, docker-build-gateway, docker-build-admin targets (AC-008)
-build: build-admin
+build: build-gateway build-admin
 
 # @sk-task 101-gateway-diet#T1.2: Add -tags gateway and CGO_ENABLED=0 to build-gateway (AC-003, AC-006)
 build-gateway:
@@ -45,7 +45,7 @@ ui-dev:
 	@echo "starting Vite dev server (API proxy -> localhost:8080)..."
 	@cd ui && npm run dev
 
-docker-build: docker-build-admin
+docker-build: docker-build-gateway docker-build-admin
 
 docker-build-gateway:
 	@if command -v docker >/dev/null 2>&1; then \

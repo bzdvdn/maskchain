@@ -3,19 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
-	"log/slog"
-	"net/url"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/valkey-io/valkey-go"
 	"go.uber.org/zap"
 
+	"github.com/bzdvdn/maskchain/src/cmd/internal/bootstrap"
 	"github.com/bzdvdn/maskchain/src/internal/api"
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/admin"
@@ -26,7 +23,6 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/resolver"
 	shvalue "github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
-	"github.com/bzdvdn/maskchain/src/internal/infra/logging"
 	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
 	"github.com/bzdvdn/maskchain/src/internal/infra/telemetry"
 	"github.com/bzdvdn/maskchain/ui"
@@ -35,23 +31,25 @@ import (
 // @sk-task 100-admin-control-plane#T2.2: Admin binary entrypoint with UI, profile/incident handlers (AC-002, AC-004, AC-006, AC-007, AC-010)
 // @sk-task tenant-profile-sync#T2.1: Wire TenantResolver and new Auth middleware (AC-002, AC-005)
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "health" {
+		os.Exit(bootstrap.HealthCheck(config.MustLoadConfig().Server))
+	}
+
 	cfg := config.MustLoadConfig()
 
-	logger, err := buildLogger(cfg.Log.Level)
+	logger, err := bootstrap.BuildLogger(cfg.Log.Level)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 	defer logger.Sync()
 
-	slogLogger := logging.NewLogger(io.Discard, slog.LevelInfo)
-
 	serviceName := "maskchain-admin"
 	if cfg.OTel != nil && cfg.OTel.ServiceName != "" {
 		serviceName = cfg.OTel.ServiceName + "-admin"
 	}
 
-	otelShutdown := noopShutdown
+	otelShutdown := bootstrap.NoopShutdown
 	if cfg.OTel != nil {
 		shutdown, err := telemetry.InitProvider(
 			context.Background(),
@@ -59,10 +57,10 @@ func main() {
 			serviceName,
 			cfg.OTel.Environment,
 			cfg.OTel.SamplingRatio,
-			slogLogger,
+			logger,
 		)
 		if err != nil {
-			slogLogger.Warn("telemetry init", "error", err)
+			logger.Warn("telemetry init", zap.Error(err))
 		}
 		otelShutdown = shutdown
 	}
@@ -71,7 +69,7 @@ func main() {
 	metrics.RegisterMetrics(promRegistry)
 	metricsHandler := metrics.Handler(promRegistry)
 
-	pgPool, err := initPG(context.Background(), cfg.DB, logger)
+	pgPool, err := bootstrap.InitPG(context.Background(), cfg.DB, logger)
 	if err != nil {
 		logger.Fatal("failed to init postgres", zap.Error(err))
 	}
@@ -83,7 +81,10 @@ func main() {
 		metrics.RegisterPGPoolCollector(promRegistry, pgPool)
 	}
 
-	vkClient := initValkey(cfg.Valkey, logger)
+	vkClient, err := bootstrap.InitValkey(cfg.Valkey, logger)
+	if err != nil {
+		logger.Warn("valkey init failed", zap.Error(err))
+	}
 
 	// @sk-task 114-real-health-probes#T2.3: Create health service and wire into admin server (AC-001, AC-005, AC-008)
 	if cfg.Server.HealthCheck == nil {
@@ -98,7 +99,7 @@ func main() {
 		var targets []string
 		for _, p := range cfg.Routing.Providers {
 			if p.BaseURL != "" {
-				targets = append(targets, extractHostPort(p.BaseURL))
+				targets = append(targets, bootstrap.ExtractHostPort(p.BaseURL))
 			}
 		}
 		healthSvc.Register(health.NewEgressProbe(targets))
@@ -164,23 +165,37 @@ func main() {
 		srv.RegisterIncidentHandler(incidentHandler)
 	}
 
+	errCh := make(chan error, 1)
 	go func() {
-		if err := srv.Start(); err != nil {
-			logger.Error("admin server error", zap.Error(err))
-			os.Exit(1)
+		if err := srv.Start(); err != nil && err != http.ErrServerClosed {
+			errCh <- err
 		}
 	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	sig := <-quit
-	logger.Info("admin shutting down", zap.String("signal", sig.String()))
+
+	var sig os.Signal
+	select {
+	case sig = <-quit:
+		logger.Info("admin shutting down", zap.String("signal", sig.String()))
+	case err := <-errCh:
+		logger.Error("admin server error", zap.Error(err))
+		os.Exit(1)
+	}
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), time.Duration(cfg.Server.ShutdownTimeout)*time.Second)
 	defer shutdownCancel()
 
 	if err := otelShutdown(shutdownCtx); err != nil {
 		logger.Error("otel shutdown error", zap.Error(err))
+	}
+
+	if pgPool != nil {
+		pgPool.Close()
+	}
+	if vkClient != nil {
+		vkClient.Close()
 	}
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
@@ -190,56 +205,4 @@ func main() {
 	logger.Info("admin server stopped")
 }
 
-func noopShutdown(_ context.Context) error { return nil }
 
-func initPG(ctx context.Context, dbCfg *config.DatabaseConfig, log *zap.Logger) (*pgxpool.Pool, error) {
-	pool, err := postgres.NewPool(ctx, dbCfg)
-	if err != nil {
-		return nil, fmt.Errorf("init pool: %w", err)
-	}
-	if pool == nil {
-		log.Warn("no database configured, persistence disabled")
-	}
-	return pool, nil
-}
-
-func initValkey(vkCfg *config.ValkeyConfig, log *zap.Logger) valkey.Client {
-	if vkCfg == nil || vkCfg.Addr == "" {
-		log.Warn("no valkey configured, admin cache disabled")
-		return nil
-	}
-	client, err := valkey.NewClient(valkey.ClientOption{
-		InitAddress: []string{vkCfg.Addr},
-		Password:    vkCfg.Password,
-	})
-	if err != nil {
-		log.Warn("valkey client init failed", zap.Error(err))
-		return nil
-	}
-	return client
-}
-
-func buildLogger(level string) (*zap.Logger, error) {
-	zapCfg := zap.NewProductionConfig()
-	switch level {
-	case "debug":
-		zapCfg.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
-	case "info":
-		zapCfg.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
-	case "warn":
-		zapCfg.Level = zap.NewAtomicLevelAt(zap.WarnLevel)
-	case "error":
-		zapCfg.Level = zap.NewAtomicLevelAt(zap.ErrorLevel)
-	default:
-		zapCfg.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
-	}
-	return zapCfg.Build()
-}
-
-func extractHostPort(rawURL string) string {
-	u, err := url.Parse(rawURL)
-	if err != nil || u.Host == "" {
-		return rawURL
-	}
-	return u.Host
-}

@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/routing"
-	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 )
 
 // @sk-task 70-routing-engine#T2.1: Implement ProviderRegistry (AC-001)
@@ -13,7 +12,7 @@ type ProviderRegistry struct {
 	rules     []routing.RoutingRule
 }
 
-func NewProviderRegistry(cfg *config.RoutingConfig) (*ProviderRegistry, error) {
+func NewProviderRegistry(cfg *routing.RoutingConfig) (*ProviderRegistry, error) {
 	reg := &ProviderRegistry{
 		providers: make(map[string]*routing.Provider),
 	}

@@ -15,7 +15,6 @@ import (
 	routingSvc "github.com/bzdvdn/maskchain/src/internal/domain/routing/service"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
-	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 	"github.com/bzdvdn/maskchain/src/internal/ports"
 )
 
@@ -58,15 +57,15 @@ func (m *mockPortClient) Stream(_ context.Context, _ *ports.ProviderRequest) (<-
 
 // @sk-test 70-routing-engine#T4.2: TestRoutingHandlerFallbackIntegration (AC-002)
 func TestRoutingHandlerFallbackIntegration(t *testing.T) {
-	cfg := &config.RoutingConfig{
-		Providers: []config.ProviderConfig{
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
 			{Name: "primary", BaseURL: "http://localhost:1"},
 			{Name: "fallback", BaseURL: "http://localhost:2"},
 		},
-		Rules: []config.RuleConfig{
+		Rules: []routing.RuleConfig{
 			{
 				Tenant: "default",
-				Routes: []config.RouteConfig{
+				Routes: []routing.RouteConfig{
 					{Model: "gpt-4", Providers: []string{"primary", "fallback"}},
 				},
 			},
@@ -99,15 +98,15 @@ func TestRoutingHandlerFallbackIntegration(t *testing.T) {
 
 // @sk-test 70-routing-engine#T4.2: TestRoutingHandlerWithMockClientsFallback (AC-002, AC-007)
 func TestRoutingHandlerWithMockClientsFallback(t *testing.T) {
-	cfg := &config.RoutingConfig{
-		Providers: []config.ProviderConfig{
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
 			{Name: "primary", BaseURL: "http://localhost:1"},
 			{Name: "fallback", BaseURL: "http://localhost:2"},
 		},
-		Rules: []config.RuleConfig{
+		Rules: []routing.RuleConfig{
 			{
 				Tenant: "default",
-				Routes: []config.RouteConfig{
+				Routes: []routing.RouteConfig{
 					{Model: "gpt-4", Providers: []string{"primary", "fallback"}},
 				},
 			},
@@ -147,14 +146,14 @@ func TestRoutingHandlerWithMockClientsFallback(t *testing.T) {
 
 // @sk-test 70-routing-engine#T4.2: TestRoutingHandlerUnknownModel (AC-004)
 func TestRoutingHandlerUnknownModel(t *testing.T) {
-	cfg := &config.RoutingConfig{
-		Providers: []config.ProviderConfig{
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
 			{Name: "openai", BaseURL: "http://localhost:1"},
 		},
-		Rules: []config.RuleConfig{
+		Rules: []routing.RuleConfig{
 			{
 				Tenant: "default",
-				Routes: []config.RouteConfig{
+				Routes: []routing.RouteConfig{
 					{Model: "gpt-4", Providers: []string{"openai"}},
 				},
 			},
@@ -179,14 +178,14 @@ func TestRoutingHandlerUnknownModel(t *testing.T) {
 
 // @sk-test 70-routing-engine#T4.2: TestRoutingHandlerAllUnhealthy (AC-003)
 func TestRoutingHandlerAllUnhealthy(t *testing.T) {
-	cfg := &config.RoutingConfig{
-		Providers: []config.ProviderConfig{
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
 			{Name: "openai", BaseURL: "http://localhost:1"},
 		},
-		Rules: []config.RuleConfig{
+		Rules: []routing.RuleConfig{
 			{
 				Tenant: "default",
-				Routes: []config.RouteConfig{
+				Routes: []routing.RouteConfig{
 					{Model: "gpt-4", Providers: []string{"openai"}},
 				},
 			},
@@ -212,15 +211,15 @@ func TestRoutingHandlerAllUnhealthy(t *testing.T) {
 
 // @sk-test 70-routing-engine#T4.2: TestGetProviderList (AC-001)
 func TestGetProviderList(t *testing.T) {
-	cfg := &config.RoutingConfig{
-		Providers: []config.ProviderConfig{
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
 			{Name: "openai", BaseURL: "http://localhost:1"},
 			{Name: "azure", BaseURL: "http://localhost:2"},
 		},
-		Rules: []config.RuleConfig{
+		Rules: []routing.RuleConfig{
 			{
 				Tenant: "default",
-				Routes: []config.RouteConfig{
+				Routes: []routing.RouteConfig{
 					{Model: "gpt-4", Providers: []string{"openai", "azure"}},
 				},
 			},
@@ -248,16 +247,16 @@ func TestGetProviderList(t *testing.T) {
 
 // @sk-test 70-routing-engine#T4.2: TestSelectWithFallbackChain (AC-007)
 func TestSelectWithFallbackChain(t *testing.T) {
-	cfg := &config.RoutingConfig{
-		Providers: []config.ProviderConfig{
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
 			{Name: "p1", BaseURL: "http://localhost:1"},
 			{Name: "p2", BaseURL: "http://localhost:2"},
 			{Name: "p3", BaseURL: "http://localhost:3"},
 		},
-		Rules: []config.RuleConfig{
+		Rules: []routing.RuleConfig{
 			{
 				Tenant: "default",
-				Routes: []config.RouteConfig{
+				Routes: []routing.RouteConfig{
 					{Model: "gpt-4", Providers: []string{"p1", "p2", "p3"}},
 				},
 			},
@@ -317,14 +316,14 @@ func customTenant() *entity.Tenant {
 }
 
 func TestRoutingHandlerTenantContext(t *testing.T) {
-	cfg := &config.RoutingConfig{
-		Providers: []config.ProviderConfig{
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
 			{Name: "test-provider", BaseURL: "http://localhost:1"},
 		},
-		Rules: []config.RuleConfig{
+		Rules: []routing.RuleConfig{
 			{
 				Tenant: "custom-tenant",
-				Routes: []config.RouteConfig{
+				Routes: []routing.RouteConfig{
 					{Model: "gpt-4", Providers: []string{"test-provider"}},
 				},
 			},
@@ -365,7 +364,7 @@ func TestRoutingHandlerTenantContext(t *testing.T) {
 	}
 }
 
-func newTestRouting(cfg *config.RoutingConfig) (*routingSvc.ProviderRegistry, *routingSvc.RouteSelector, *routingSvc.FallbackHandler) {
+func newTestRouting(cfg *routing.RoutingConfig) (*routingSvc.ProviderRegistry, *routingSvc.RouteSelector, *routingSvc.FallbackHandler) {
 	reg, _ := routingSvc.NewProviderRegistry(cfg)
 	sel := routingSvc.NewRouteSelector(reg)
 	clients := make(map[string]ports.ProviderClient)
@@ -393,14 +392,14 @@ func newFlushRecorder() *flushRecorder {
 
 // @sk-test 112-proxy-streaming-wiring#T4.1: TestStreamingSSE forwards chunks (AC-003)
 func TestStreamingSSE(t *testing.T) {
-	cfg := &config.RoutingConfig{
-		Providers: []config.ProviderConfig{
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
 			{Name: "p1", BaseURL: "http://localhost:1"},
 		},
-		Rules: []config.RuleConfig{
+		Rules: []routing.RuleConfig{
 			{
 				Tenant: "default",
-				Routes: []config.RouteConfig{
+				Routes: []routing.RouteConfig{
 					{Model: "gpt-4", Providers: []string{"p1"}},
 				},
 			},
@@ -446,14 +445,14 @@ func TestStreamingSSE(t *testing.T) {
 
 // @sk-test 112-proxy-streaming-wiring#T4.1: TestStreamingSSEError writes error to stream (AC-005)
 func TestStreamingSSEError(t *testing.T) {
-	cfg := &config.RoutingConfig{
-		Providers: []config.ProviderConfig{
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
 			{Name: "p1", BaseURL: "http://localhost:1"},
 		},
-		Rules: []config.RuleConfig{
+		Rules: []routing.RuleConfig{
 			{
 				Tenant: "default",
-				Routes: []config.RouteConfig{
+				Routes: []routing.RouteConfig{
 					{Model: "gpt-4", Providers: []string{"p1"}},
 				},
 			},
@@ -490,14 +489,14 @@ func TestStreamingSSEError(t *testing.T) {
 
 // @sk-test 112-proxy-streaming-wiring#T4.1: TestStreamingNonStreamingUnchanged (AC-001, SC-002)
 func TestStreamingNonStreamingUnchanged(t *testing.T) {
-	cfg := &config.RoutingConfig{
-		Providers: []config.ProviderConfig{
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
 			{Name: "p1", BaseURL: "http://localhost:1"},
 		},
-		Rules: []config.RuleConfig{
+		Rules: []routing.RuleConfig{
 			{
 				Tenant: "default",
-				Routes: []config.RouteConfig{
+				Routes: []routing.RouteConfig{
 					{Model: "gpt-4", Providers: []string{"p1"}},
 				},
 			},

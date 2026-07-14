@@ -13,7 +13,7 @@ import (
 )
 
 // @sk-task 71-egress-streaming#T4.1: Implement SSE stream parser with graceful shutdown (AC-003)
-func (c *Client) streamSSE(ctx context.Context, req *ports.ProviderRequest) (<-chan ports.ProviderChunk, error) {
+func (c *Client) streamSSE(ctx context.Context, req *ports.ProviderRequest, cancel context.CancelFunc) (<-chan ports.ProviderChunk, error) {
 	var body io.Reader
 	if len(req.Body) > 0 {
 		body = bytes.NewReader(req.Body)
@@ -49,6 +49,7 @@ func (c *Client) streamSSE(ctx context.Context, req *ports.ProviderRequest) (<-c
 	ch := make(chan ports.ProviderChunk, 10)
 
 	go func() {
+		defer cancel()
 		defer func() { _ = resp.Body.Close() }()
 		defer close(ch)
 

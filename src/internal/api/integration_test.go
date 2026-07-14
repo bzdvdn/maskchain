@@ -12,6 +12,7 @@ import (
 
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
+	routing2 "github.com/bzdvdn/maskchain/src/internal/domain/routing"
 	routingSvc "github.com/bzdvdn/maskchain/src/internal/domain/routing/service"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
@@ -70,21 +71,21 @@ func TestIntegration_FullCycle(t *testing.T) {
 	}
 	engine.Use(middleware.ShieldMiddleware(scanner, &config.ShieldConfig{}, log))
 
-	cfg := &config.RoutingConfig{
-		Providers: []config.ProviderConfig{
+	domainCfg := &routing2.RoutingConfig{
+		Providers: []routing2.ProviderConfig{
 			{Name: "primary", BaseURL: "http://localhost:1"},
 		},
-		Rules: []config.RuleConfig{
+		Rules: []routing2.RuleConfig{
 			{
 				Tenant: "test-tenant",
-				Routes: []config.RouteConfig{
+				Routes: []routing2.RouteConfig{
 					{Model: "gpt-4", Providers: []string{"primary"}},
 				},
 			},
 		},
 	}
 
-	reg, _ := routingSvc.NewProviderRegistry(cfg)
+	reg, _ := routingSvc.NewProviderRegistry(domainCfg)
 	sel := routingSvc.NewRouteSelector(reg)
 	clients := map[string]ports.ProviderClient{
 		"primary": &integrationMockClient{statusCode: http.StatusOK},

@@ -43,11 +43,15 @@ func (c *HealthChecker) checkAll() {
 			continue
 		}
 		resp, err := c.client.Get(p.BaseURL + p.HealthEndpoint)
-		if err != nil || resp.StatusCode != http.StatusOK {
+		if err != nil {
 			p.SetHealthStatus(routing.HealthUnhealthy)
 			continue
 		}
-		_ = resp.Body.Close()
-		p.SetHealthStatus(routing.HealthHealthy)
+		status := routing.HealthHealthy
+		if resp.StatusCode != http.StatusOK {
+			status = routing.HealthUnhealthy
+		}
+		resp.Body.Close()
+		p.SetHealthStatus(status)
 	}
 }

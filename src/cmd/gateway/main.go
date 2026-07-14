@@ -3,17 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
-	"log/slog"
-	"net/url"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/valkey-io/valkey-go"
 	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/adapters/provider"
@@ -30,10 +26,11 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/resolver"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
-	routingDomain "github.com/bzdvdn/maskchain/src/internal/domain/routing/service"
+	routingDomain "github.com/bzdvdn/maskchain/src/internal/domain/routing"
+	routingSvc "github.com/bzdvdn/maskchain/src/internal/domain/routing/service"
+	"github.com/bzdvdn/maskchain/src/cmd/internal/bootstrap"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 	"github.com/bzdvdn/maskchain/src/internal/ports"
-	"github.com/bzdvdn/maskchain/src/internal/infra/logging"
 	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
 	"github.com/bzdvdn/maskchain/src/internal/infra/telemetry"
 )
@@ -47,16 +44,20 @@ import (
 // @sk-task 100-admin-control-plane#T3.2: Final cleanup — no ui references in gateway (AC-001)
 // @sk-task tenant-profile-sync#T3.1: Remove profileRepo from ShieldMiddleware call (AC-006, AC-007)
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "health" {
+		os.Exit(bootstrap.HealthCheck(config.MustLoadConfig().Server))
+	}
+
 	cfg := config.MustLoadConfig()
 
-	logger, err := buildLogger(cfg.Log.Level)
+	logger, err := bootstrap.BuildLogger(cfg.Log.Level)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 	defer logger.Sync()
 
-	logger.Debug("config loaded", zap.Any("config", cfg))
+	logger.Debug("config loaded", zap.Object("config", cfg))
 
 	if cfg.DB != nil {
 		logger.Info("database pool config",
@@ -74,11 +75,11 @@ func main() {
 		)
 	}
 
-	registry, err := routingDomain.NewProviderRegistry(cfg.Routing)
+	registry, err := routingSvc.NewProviderRegistry(toDomainRoutingConfig(cfg.Routing))
 	if err != nil {
 		logger.Fatal("failed to create provider registry", zap.Error(err))
 	}
-	selector := routingDomain.NewRouteSelector(registry)
+	selector := routingSvc.NewRouteSelector(registry)
 	clients := make(map[string]ports.ProviderClient)
 	if cfg.Egress != nil && cfg.Routing != nil {
 		for i := range cfg.Routing.Providers {
@@ -95,25 +96,23 @@ func main() {
 			)
 		}
 	}
-	fallbackHandler := routingDomain.NewFallbackHandler(clients)
+	fallbackHandler := routingSvc.NewFallbackHandler(clients)
 	routingHandler := api.NewRoutingProxyHandler(selector, fallbackHandler)
 
 	healthCtx, healthCancel := context.WithCancel(context.Background())
 	defer healthCancel()
 	if cfg.Routing != nil {
-		healthChecker := routingDomain.NewHealthChecker(registry, nil)
+		healthChecker := routingSvc.NewHealthChecker(registry, nil)
 		go healthChecker.Start(healthCtx, 30*time.Second)
 		logger.Info("provider health checker started")
 	}
-
-	slogLogger := logging.NewLogger(io.Discard, slog.LevelInfo)
 
 	serviceName := "maskchain-gateway"
 	if cfg.OTel != nil && cfg.OTel.ServiceName != "" {
 		serviceName = cfg.OTel.ServiceName
 	}
 
-	otelShutdown := noopShutdown
+	otelShutdown := bootstrap.NoopShutdown
 	if cfg.OTel != nil {
 		shutdown, err := telemetry.InitProvider(
 			context.Background(),
@@ -121,10 +120,10 @@ func main() {
 			serviceName,
 			cfg.OTel.Environment,
 			cfg.OTel.SamplingRatio,
-			slogLogger,
+			logger,
 		)
 		if err != nil {
-			slogLogger.Warn("telemetry init", "error", err)
+			logger.Warn("telemetry init", zap.Error(err))
 		}
 		otelShutdown = shutdown
 	}
@@ -136,7 +135,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	pgPool, err := initPG(ctx, cfg.DB, logger)
+	pgPool, err := bootstrap.InitPG(ctx, cfg.DB, logger)
 	if err != nil {
 		logger.Fatal("failed to init postgres", zap.Error(err))
 	}
@@ -150,7 +149,7 @@ func main() {
 		logger.Info("PG pool metrics collector registered")
 	}
 
-	vkClient, err := initValkey(cfg.Valkey, logger)
+	vkClient, err := bootstrap.InitValkey(cfg.Valkey, logger)
 	if err != nil {
 		logger.Fatal("failed to init valkey", zap.Error(err))
 	}
@@ -193,7 +192,7 @@ func main() {
 		var targets []string
 		for _, p := range cfg.Routing.Providers {
 			if p.BaseURL != "" {
-				targets = append(targets, extractHostPort(p.BaseURL))
+				targets = append(targets, bootstrap.ExtractHostPort(p.BaseURL))
 			}
 		}
 		healthSvc.Register(health.NewEgressProbe(targets))
@@ -270,17 +269,24 @@ func main() {
 	srv.RegisterProxyRoute(middleware.ShieldMiddleware(shieldEngine, cfg.Shield, logger), routingHandler)
 	logger.Info("proxy routes registered")
 
+	errCh := make(chan error, 1)
 	go func() {
-		if err := srv.Start(); err != nil {
-			logger.Error("server error", zap.Error(err))
-			os.Exit(1)
+		if err := srv.Start(); err != nil && err != http.ErrServerClosed {
+			errCh <- err
 		}
 	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	sig := <-quit
-	logger.Info("shutting down", zap.String("signal", sig.String()))
+
+	var sig os.Signal
+	select {
+	case sig = <-quit:
+		logger.Info("shutting down", zap.String("signal", sig.String()))
+	case err := <-errCh:
+		logger.Error("server error", zap.Error(err))
+		os.Exit(1)
+	}
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), time.Duration(cfg.Server.ShutdownTimeout)*time.Second)
 	defer shutdownCancel()
@@ -289,42 +295,18 @@ func main() {
 		logger.Error("otel shutdown error", zap.Error(err))
 	}
 
+	if pgPool != nil {
+		pgPool.Close()
+	}
+	if vkClient != nil {
+		vkClient.Close()
+	}
+
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("shutdown error", zap.Error(err))
 		os.Exit(1)
 	}
 	logger.Info("server stopped")
-}
-
-func noopShutdown(_ context.Context) error { return nil }
-
-// @sk-task 22-shield-mask-storage#T5.2: Init PG with nil-safe DSN (AC-012)
-// @sk-task 30-shield-persistence#T2.4: Use NewPool from postgres package (AC-005)
-func initPG(ctx context.Context, dbCfg *config.DatabaseConfig, log *zap.Logger) (*pgxpool.Pool, error) {
-	pool, err := postgres.NewPool(ctx, dbCfg)
-	if err != nil {
-		return nil, fmt.Errorf("init pool: %w", err)
-	}
-	if pool == nil {
-		log.Warn("no database configured, persistence disabled")
-	}
-	return pool, nil
-}
-
-// @sk-task 22-shield-mask-storage#T5.2: Init Valkey with nil-safe addr (AC-012)
-func initValkey(vkCfg *config.ValkeyConfig, log *zap.Logger) (valkey.Client, error) {
-	if vkCfg == nil || vkCfg.Addr == "" {
-		log.Warn("no valkey configured, mask cache disabled")
-		return nil, nil
-	}
-	client, err := valkey.NewClient(valkey.ClientOption{
-		InitAddress: []string{vkCfg.Addr},
-		Password:    vkCfg.Password,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("valkey client: %w", err)
-	}
-	return client, nil
 }
 
 // @sk-task 22-shield-mask-storage#T5.2: Init detectors with CompositeDetector (AC-011)
@@ -358,27 +340,35 @@ func initDetectors(log *zap.Logger) *detector.DetectorRegistry {
 	return registry
 }
 
-func buildLogger(level string) (*zap.Logger, error) {
-	zapCfg := zap.NewProductionConfig()
-	switch level {
-	case "debug":
-		zapCfg.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
-	case "info":
-		zapCfg.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
-	case "warn":
-		zapCfg.Level = zap.NewAtomicLevelAt(zap.WarnLevel)
-	case "error":
-		zapCfg.Level = zap.NewAtomicLevelAt(zap.ErrorLevel)
-	default:
-		zapCfg.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+func toDomainRoutingConfig(cfg *config.RoutingConfig) *routingDomain.RoutingConfig {
+	if cfg == nil {
+		return nil
 	}
-	return zapCfg.Build()
-}
-
-func extractHostPort(rawURL string) string {
-	u, err := url.Parse(rawURL)
-	if err != nil || u.Host == "" {
-		return rawURL
+	domainCfg := &routingDomain.RoutingConfig{
+		Providers: make([]routingDomain.ProviderConfig, len(cfg.Providers)),
+		Rules:     make([]routingDomain.RuleConfig, 0, len(cfg.Rules)),
 	}
-	return u.Host
+	for i, p := range cfg.Providers {
+		domainCfg.Providers[i] = routingDomain.ProviderConfig{
+			Name:           p.Name,
+			BaseURL:        p.BaseURL,
+			HealthEndpoint: p.HealthEndpoint,
+			Timeout:        p.Timeout,
+			Priority:       p.Priority,
+		}
+	}
+	for _, r := range cfg.Rules {
+		routes := make([]routingDomain.RouteConfig, len(r.Routes))
+		for j, rt := range r.Routes {
+			routes[j] = routingDomain.RouteConfig{
+				Model:     rt.Model,
+				Providers: rt.Providers,
+			}
+		}
+		domainCfg.Rules = append(domainCfg.Rules, routingDomain.RuleConfig{
+			Tenant: r.Tenant,
+			Routes: routes,
+		})
+	}
+	return domainCfg
 }

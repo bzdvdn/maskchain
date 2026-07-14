@@ -166,10 +166,15 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger)
 		tenantSlug := tenant.Slug().String()
 		piiCfg := tenant.PIIConfig()
 
+		dictDetectors := make([]*detector.DictionaryDetector, 0, len(tenant.Dictionaries()))
+		for _, dict := range tenant.Dictionaries() {
+			dictDetectors = append(dictDetectors, detector.NewDictionaryDetector(dict))
+		}
+
 		var incidents []entity.Incident
 
-		for _, dict := range tenant.Dictionaries() {
-			dd := detector.NewDictionaryDetector(dict)
+		for _, dd := range dictDetectors {
+			dict := dd.Dict()
 			results, err := dd.Scan(c.Request.Context(), promptText)
 			if err != nil || len(results) == 0 {
 				continue
@@ -195,8 +200,7 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger)
 				if msg.Content == "" {
 					continue
 				}
-				for _, dict := range tenant.Dictionaries() {
-					dd := detector.NewDictionaryDetector(dict)
+				for _, dd := range dictDetectors {
 					results, _ := dd.Scan(c.Request.Context(), msg.Content)
 					if len(results) == 0 {
 						continue

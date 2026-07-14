@@ -20,6 +20,10 @@ func NewDictionaryDetector(dict *dictionary.Dictionary) *DictionaryDetector {
 	return &DictionaryDetector{dict: dict}
 }
 
+func (d *DictionaryDetector) Dict() *dictionary.Dictionary {
+	return d.dict
+}
+
 func (d *DictionaryDetector) Scan(ctx context.Context, text string) ([]DetectorResult, error) {
 	if d.dict == nil || len(d.dict.AllValues()) == 0 {
 		return nil, nil

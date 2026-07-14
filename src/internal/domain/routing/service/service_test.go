@@ -9,14 +9,13 @@ import (
 	"time"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/routing"
-	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 	"github.com/bzdvdn/maskchain/src/internal/ports"
 )
 
 // @sk-test 70-routing-engine#T4.1: TestProviderRegistry (AC-001)
 func TestProviderRegistry(t *testing.T) {
-	cfg := &config.RoutingConfig{
-		Providers: []config.ProviderConfig{
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
 			{Name: "openai", BaseURL: "https://api.openai.com", Timeout: "30s"},
 			{Name: "azure", BaseURL: "https://azure.openai.com", Timeout: "30s"},
 		},
@@ -60,15 +59,15 @@ func TestProviderRegistryNilConfig(t *testing.T) {
 
 // @sk-test 70-routing-engine#T4.1: TestRouteSelector (AC-001, AC-004)
 func TestRouteSelector(t *testing.T) {
-	cfg := &config.RoutingConfig{
-		Providers: []config.ProviderConfig{
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
 			{Name: "openai", BaseURL: "https://api.openai.com"},
 			{Name: "azure", BaseURL: "https://azure.openai.com"},
 		},
-		Rules: []config.RuleConfig{
+		Rules: []routing.RuleConfig{
 			{
 				Tenant: "default",
-				Routes: []config.RouteConfig{
+				Routes: []routing.RouteConfig{
 					{Model: "gpt-4", Providers: []string{"openai"}},
 				},
 			},
@@ -98,15 +97,15 @@ func TestRouteSelector(t *testing.T) {
 
 // @sk-test 70-routing-engine#T4.1: TestRouteSelectorSkipsUnhealthy (AC-003)
 func TestRouteSelectorSkipsUnhealthy(t *testing.T) {
-	cfg := &config.RoutingConfig{
-		Providers: []config.ProviderConfig{
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
 			{Name: "openai", BaseURL: "https://api.openai.com"},
 			{Name: "azure", BaseURL: "https://azure.openai.com"},
 		},
-		Rules: []config.RuleConfig{
+		Rules: []routing.RuleConfig{
 			{
 				Tenant: "default",
-				Routes: []config.RouteConfig{
+				Routes: []routing.RouteConfig{
 					{Model: "gpt-4", Providers: []string{"openai", "azure"}},
 				},
 			},
@@ -136,21 +135,21 @@ func TestRouteSelectorSkipsUnhealthy(t *testing.T) {
 
 // @sk-test 70-routing-engine#T4.1: TestRouteSelectorTenantScoped (AC-005)
 func TestRouteSelectorTenantScoped(t *testing.T) {
-	cfg := &config.RoutingConfig{
-		Providers: []config.ProviderConfig{
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
 			{Name: "openai", BaseURL: "https://api.openai.com"},
 			{Name: "azure", BaseURL: "https://azure.openai.com"},
 		},
-		Rules: []config.RuleConfig{
+		Rules: []routing.RuleConfig{
 			{
 				Tenant: "alpha",
-				Routes: []config.RouteConfig{
+				Routes: []routing.RouteConfig{
 					{Model: "gpt-4", Providers: []string{"openai"}},
 				},
 			},
 			{
 				Tenant: "beta",
-				Routes: []config.RouteConfig{
+				Routes: []routing.RouteConfig{
 					{Model: "gpt-4", Providers: []string{"azure"}},
 				},
 			},
@@ -289,8 +288,8 @@ func TestHealthChecker(t *testing.T) {
 	}))
 	defer healthySrv.Close()
 
-	cfg := &config.RoutingConfig{
-		Providers: []config.ProviderConfig{
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
 			{Name: "p1", BaseURL: healthySrv.URL, HealthEndpoint: "/health"},
 		},
 	}
@@ -313,8 +312,8 @@ func TestHealthCheckerUnhealthyEndpoint(t *testing.T) {
 	}))
 	defer unhealthySrv.Close()
 
-	cfg := &config.RoutingConfig{
-		Providers: []config.ProviderConfig{
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
 			{Name: "p1", BaseURL: unhealthySrv.URL, HealthEndpoint: "/health"},
 		},
 	}
@@ -398,8 +397,8 @@ func TestFallbackHandlerStream_AllFailed(t *testing.T) {
 
 // @sk-test 70-routing-engine#T4.1: TestHealthCheckerNoEndpoint (AC-006)
 func TestHealthCheckerNoEndpoint(t *testing.T) {
-	cfg := &config.RoutingConfig{
-		Providers: []config.ProviderConfig{
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
 			{Name: "p1", BaseURL: "http://localhost:1", Timeout: "10ms"},
 		},
 	}

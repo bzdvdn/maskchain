@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"crypto/subtle"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -16,7 +17,7 @@ func AdminAuth(cfg *config.DebugConfig) gin.HandlerFunc {
 			return
 		}
 		token := c.GetHeader("X-Admin-Token")
-		if token == "" || token != cfg.AdminToken {
+		if token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(cfg.AdminToken)) != 1 {
 			AbortWithError(c, http.StatusUnauthorized, ErrorCodeUnauthorized, "unauthorized")
 			return
 		}

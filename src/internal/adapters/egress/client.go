@@ -106,11 +106,14 @@ func (c *Client) Stream(ctx context.Context, req *ports.ProviderRequest) (<-chan
 		return nil, ErrCircuitBreakerOpen
 	}
 
-	var cancel context.CancelFunc
-	ctx, cancel = c.withTimeout(ctx)
-	defer cancel()
+	streamCtx, cancel := c.withTimeout(ctx)
+	ch, err := c.streamSSE(streamCtx, req, cancel)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
 
-	return c.streamSSE(ctx, req)
+	return ch, nil
 }
 
 // @sk-task 116-connection-pool-fixes#T2.2: Apply per-provider timeout if ctx has no deadline (AC-002)
