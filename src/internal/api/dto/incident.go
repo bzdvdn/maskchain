@@ -22,6 +22,7 @@ type IncidentFilterParams struct {
 	ProfileSlug string `form:"profile_slug"`
 	Page        int    `form:"page"`
 	PageSize    int    `form:"page_size"`
+	PerPage     int    `form:"per_page"`
 }
 
 // @sk-task 60-audit-incidents#T2.1: ExportQuery parameters (AC-003, AC-004, AC-008)

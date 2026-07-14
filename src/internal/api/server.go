@@ -43,8 +43,13 @@ func New(cfg *config.ServerConfig, log *zap.Logger, serviceName string, healthSv
 	engine.Use(middleware.Logger(log))
 	engine.Use(middleware.Recovery(log))
 	engine.Use(middleware.CORS(cfg.CORSOrigins))
+	engine.Use(middleware.ResponseEnvelope())
 	engine.Use(middleware.ErrorHandler())
 	engine.Use(metrics.Middleware())
+
+	engine.NoRoute(func(c *gin.Context) {
+		middleware.AbortWithError(c, http.StatusNotFound, middleware.ErrorCodeNotFound, "route not found")
+	})
 
 	h := health.NewHandler(healthSvc)
 	engine.GET("/health", h.LivenessHandler())
@@ -102,14 +107,26 @@ func (s *Server) RegisterProfileHandler(h *profile.ProfileHandler) {
 
 // @sk-task 70-routing-engine#T3.2: Register proxy routes with routing handler (AC-003, AC-004)
 // @sk-task 112-proxy-streaming-wiring#T2.2: Register WrapSSE middleware on streaming route (AC-002)
+// @sk-task 118-api-consistency#T2.2: Add /api/v1/ prefix and 301 redirect from /v1/ (AC-001, AC-002)
 func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHandler *RoutingProxyHandler) {
-	group := s.engine.Group("/v1")
+	primary := s.engine.Group("/api/v1")
 	if routingHandler != nil {
-		group.POST("/chat/completions", middleware.WrapSSE(), shieldMiddleware, routingHandler.HandleChatCompletion)
+		primary.POST("/chat/completions", middleware.WrapSSE(), shieldMiddleware, routingHandler.HandleChatCompletion)
 	} else {
-		group.POST("/chat/completions", shieldMiddleware, ProxyChatCompletionHandler)
+		primary.POST("/chat/completions", shieldMiddleware, ProxyChatCompletionHandler)
 	}
-	group.POST("/completions", shieldMiddleware, ProxyCompletionHandler)
+	primary.POST("/completions", shieldMiddleware, ProxyCompletionHandler)
+
+	// @sk-task 118-api-consistency#T2.2: Deprecated /v1/ paths with 301 redirect (AC-002)
+	redirect := s.engine.Group("/v1")
+	redirect.Any("/chat/completions", redirectPermanent("/api/v1/chat/completions"))
+	redirect.Any("/completions", redirectPermanent("/api/v1/completions"))
+}
+
+func redirectPermanent(target string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Redirect(http.StatusMovedPermanently, target)
+	}
 }
 
 // @sk-task 101-gateway-diet#T1.1: Remove RegisterStaticFiles from Server (AC-001, AC-005)

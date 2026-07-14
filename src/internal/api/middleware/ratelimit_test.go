@@ -118,12 +118,18 @@ func TestRateLimitBlocksWhenExceeded(t *testing.T) {
 		t.Errorf("expected 429, got %d", w.Code)
 	}
 
-	var body map[string]string
+	var body struct {
+		Data  any `json:"data"`
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body["error"] != "rate_limit_exceeded" {
-		t.Errorf("expected error 'rate_limit_exceeded', got %q", body["error"])
+	if body.Error.Code != "RATE_LIMIT_EXCEEDED" {
+		t.Errorf("expected error.code 'RATE_LIMIT_EXCEEDED', got %q", body.Error.Code)
 	}
 }
 
@@ -410,12 +416,18 @@ func TestTokenBudgetBlocksWhenExceeded(t *testing.T) {
 		t.Errorf("expected 429 (token budget exceeded), got %d", w.Code)
 	}
 
-	var body map[string]string
+	var body struct {
+		Data  any `json:"data"`
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body["error"] != "token_budget_exceeded" {
-		t.Errorf("expected error 'token_budget_exceeded', got %q", body["error"])
+	if body.Error.Code != "TOKEN_BUDGET_EXCEEDED" {
+		t.Errorf("expected error.code 'TOKEN_BUDGET_EXCEEDED', got %q", body.Error.Code)
 	}
 }
 

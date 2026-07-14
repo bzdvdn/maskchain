@@ -23,27 +23,22 @@ const (
 )
 
 // @sk-task 40-profiles-api#T1.1: Implement error middleware and helpers (AC-011)
+// @sk-task 118-api-consistency#T3.2: Updated to ApiResponse envelope format (AC-004)
 func AbortWithError(c *gin.Context, status int, code ErrorCode, message string, details ...dto.ValidationDetail) {
-	resp := dto.ErrorResponse{
-		Error: message,
-		Code:  string(code),
-	}
-	if len(details) > 0 {
-		resp.Details = details
-	}
+	c.Set(EnvelopedKey, true)
+	resp := dto.NewErrorResponse(string(code), message, details...)
 	c.AbortWithStatusJSON(status, resp)
 }
 
+// @sk-task 118-api-consistency#T3.2: ErrorHandler now uses ApiResponse envelope (AC-004)
 func ErrorHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
 
 		if len(c.Errors) > 0 {
 			err := c.Errors.Last()
-			c.AbortWithStatusJSON(http.StatusInternalServerError, dto.ErrorResponse{
-				Error: err.Error(),
-				Code:  string(ErrorCodeInternal),
-			})
+			resp := dto.NewErrorResponse(string(ErrorCodeInternal), err.Error())
+			c.AbortWithStatusJSON(http.StatusInternalServerError, resp)
 		}
 	}
 }

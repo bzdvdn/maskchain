@@ -12,6 +12,8 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.uber.org/zap"
 
+	"github.com/bzdvdn/maskchain/docs"
+	"github.com/bzdvdn/maskchain/src/internal/api/dto"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/admin"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/incident"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/profile"
@@ -44,6 +46,7 @@ func NewAdminServer(cfg *config.ServerConfig, log *zap.Logger, serviceName strin
 	engine.Use(middleware.Logger(log))
 	engine.Use(middleware.Recovery(log))
 	engine.Use(middleware.CORS(cfg.CORSOrigins))
+	engine.Use(middleware.ResponseEnvelope())
 	engine.Use(middleware.ErrorHandler())
 	engine.Use(metrics.Middleware())
 
@@ -97,6 +100,25 @@ func (s *AdminServer) RegisterTenantHandler(h *admin.TenantHandler) {
 	group.PUT("/:slug/dictionaries", h.UpdateDictionaries)
 }
 
+// @sk-task 118-api-consistency#T3.4: Register Swagger UI at /api/v1/docs (AC-008, RQ-010)
+func (s *AdminServer) RegisterSwaggerUI() {
+	yamlData, err := docs.DocsFiles.ReadFile("openapi.yaml")
+	if err != nil {
+		s.log.Fatal("failed to read embedded openapi.yaml", zap.Error(err))
+	}
+	s.engine.GET("/api/v1/openapi.yaml", func(c *gin.Context) {
+		c.Data(http.StatusOK, "application/x-yaml", yamlData)
+	})
+
+	swaggerFS := http.FS(docs.DocsFiles)
+	s.engine.GET("/api/v1/docs", func(c *gin.Context) {
+		c.Request.URL.Path = "/swagger-ui/index.html"
+		http.FileServer(swaggerFS).ServeHTTP(c.Writer, c.Request)
+	})
+}
+
+// @sk-task 118-api-consistency#T3.5: NoRoute checks Accept:text/html for SPA fallback (AC-009)
+// @sk-task 118-api-consistency#T3.5: NoRoute checks Accept:text/html for SPA fallback (AC-009)
 func (s *AdminServer) RegisterStaticFiles(fsys fs.FS) {
 	sub, err := fs.Sub(fsys, "dist")
 	if err != nil {
@@ -105,14 +127,20 @@ func (s *AdminServer) RegisterStaticFiles(fsys fs.FS) {
 	root := http.FS(sub)
 	fileServer := http.FileServer(root)
 	s.engine.NoRoute(func(c *gin.Context) {
-		path := strings.TrimPrefix(c.Request.URL.Path, "/")
-		f, err := root.Open(path)
-		if err != nil {
-			c.Request.URL.Path = "/"
-		} else {
-			f.Close()
+		accept := c.GetHeader("Accept")
+		apiPath := strings.HasPrefix(c.Request.URL.Path, "/api/")
+		if !apiPath && (strings.Contains(accept, "text/html") || accept == "") {
+			spaPath := strings.TrimPrefix(c.Request.URL.Path, "/")
+			f, err := root.Open(spaPath)
+			if err != nil {
+				c.Request.URL.Path = "/"
+			} else {
+				f.Close()
+			}
+			fileServer.ServeHTTP(c.Writer, c.Request)
+			return
 		}
-		fileServer.ServeHTTP(c.Writer, c.Request)
+		c.JSON(http.StatusNotFound, dto.NewErrorResponse("NOT_FOUND", "route not found"))
 	})
 }
 

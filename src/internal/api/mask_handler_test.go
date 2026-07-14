@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -182,8 +183,16 @@ func TestHandleUnmask(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 		}
-		if w.Body.String() != origText {
-			t.Errorf("expected %q, got %q", origText, w.Body.String())
+		var envelope struct {
+			Data *struct {
+				RestoredText string `json:"restored_text"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
+			t.Fatalf("failed to unmarshal envelope: %s", err)
+		}
+		if envelope.Data == nil || envelope.Data.RestoredText != origText {
+			t.Errorf("expected %q, got %+v", origText, envelope.Data)
 		}
 	})
 
@@ -263,11 +272,20 @@ func TestMaskUnmaskCycle(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodPost, "/api/v1/shield/mask", body)
 	engine.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("mask expected 200, got %d: %s", w.Code, w.Body.String())
+	var maskResp struct {
+		Data *struct {
+			MaskedText      string `json:"masked_text"`
+			MaskID          string `json:"mask_id"`
+			DocumentMaskID  string `json:"document_mask_id"`
+		} `json:"data"`
 	}
-
-	maskedText := w.Body.String()
+	if err := json.Unmarshal(w.Body.Bytes(), &maskResp); err != nil {
+		t.Fatalf("failed to unmarshal mask response: %s", err)
+	}
+	if maskResp.Data == nil {
+		t.Fatal("expected mask response data")
+	}
+	maskedText := maskResp.Data.MaskedText
 	if maskedText == origBody {
 		t.Fatal("masked text should differ from original")
 	}
@@ -275,12 +293,12 @@ func TestMaskUnmaskCycle(t *testing.T) {
 		t.Fatal("masked text should contain placeholders")
 	}
 
-	maskID := w.Header().Get("X-Mask-ID")
+	maskID := maskResp.Data.MaskID
 	if maskID == "" {
-		maskID = w.Header().Get("X-Document-Mask-ID")
+		maskID = maskResp.Data.DocumentMaskID
 	}
 	if maskID == "" {
-		t.Fatal("expected X-Mask-ID or X-Document-Mask-ID header")
+		t.Fatal("expected mask_id or document_mask_id in response")
 	}
 
 	w2 := httptest.NewRecorder()
@@ -292,9 +310,19 @@ func TestMaskUnmaskCycle(t *testing.T) {
 		t.Fatalf("unmask expected 200, got %d: %s", w2.Code, w2.Body.String())
 	}
 
-	unmasked := w2.Body.String()
-	if unmasked != origBody {
-		t.Errorf("unmasked text should match original\n  got:  %q\n  want: %q", unmasked, origBody)
+	var unmaskResp struct {
+		Data *struct {
+			RestoredText string `json:"restored_text"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w2.Body.Bytes(), &unmaskResp); err != nil {
+		t.Fatalf("failed to unmarshal unmask response: %s", err)
+	}
+	if unmaskResp.Data == nil {
+		t.Fatal("expected unmask response data")
+	}
+	if unmaskResp.Data.RestoredText != origBody {
+		t.Errorf("unmasked text should match original\n  got:  %q\n  want: %q", unmaskResp.Data.RestoredText, origBody)
 	}
 }
 

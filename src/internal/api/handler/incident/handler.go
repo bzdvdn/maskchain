@@ -22,6 +22,7 @@ func New(repo shield.IncidentRepository) *Handler {
 }
 
 // @sk-task 60-audit-incidents#T2.2: List incidents with filtering and pagination (AC-001, AC-006)
+// @sk-task 118-api-consistency#T3.1: Updated to per_page pagination via ApiResponse (AC-005)
 func (h *Handler) ListIncidents(c *gin.Context) {
 	var params dto.IncidentFilterParams
 	if err := c.ShouldBindQuery(&params); err != nil {
@@ -29,9 +30,14 @@ func (h *Handler) ListIncidents(c *gin.Context) {
 		return
 	}
 
+	pageSize := params.PageSize
+	if params.PerPage > 0 {
+		pageSize = params.PerPage
+	}
+
 	filter := shield.IncidentFilter{
 		Page:     params.Page,
-		PageSize: params.PageSize,
+		PageSize: pageSize,
 	}
 	if params.Severity != "" {
 		s := params.Severity
@@ -57,12 +63,8 @@ func (h *Handler) ListIncidents(c *gin.Context) {
 		items = append(items, toResponse(inc))
 	}
 
-	c.JSON(http.StatusOK, dto.PaginatedResponse{
-		Data:     items,
-		Total:    total,
-		Page:     filter.Page,
-		PageSize: filter.PageSize,
-	})
+	c.Set("pagination", dto.Pagination{Page: filter.Page, PerPage: filter.PageSize, Total: total})
+	c.JSON(http.StatusOK, items)
 }
 
 // @sk-task 60-audit-incidents#T2.2: Get single incident by ID (AC-002, AC-007)

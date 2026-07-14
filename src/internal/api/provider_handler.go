@@ -25,6 +25,7 @@ type chatRequest struct {
 }
 
 // @sk-task 70-routing-engine#T3.1: Implement routing proxy handler (AC-003, AC-004)
+// @sk-task 118-api-consistency#T2.2: Set skipEnvelope on proxy raw body responses (AC-001, AC-002)
 type RoutingProxyHandler struct {
 	selector *routingSvc.RouteSelector
 	fallback *routingSvc.FallbackHandler
@@ -89,6 +90,7 @@ func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
 			for k, v := range resp.Headers {
 				c.Header(k, v)
 			}
+			c.Set(middleware.SkipEnvelopeKey, true)
 			c.Data(resp.StatusCode, "application/json", resp.Body)
 			return
 		}
@@ -121,6 +123,7 @@ func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
 	for k, v := range resp.Headers {
 		c.Header(k, v)
 	}
+	c.Set(middleware.SkipEnvelopeKey, true)
 	c.Data(resp.StatusCode, "application/json", resp.Body)
 }
 
@@ -133,6 +136,7 @@ func (h *RoutingProxyHandler) streamFromProvider(c *gin.Context, providerReq *po
 	}
 
 	c.Header("X-Provider", providerName)
+	c.Set(middleware.SkipEnvelopeKey, true)
 
 	c.Stream(func(w io.Writer) bool {
 		select {

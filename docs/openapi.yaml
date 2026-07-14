@@ -1,0 +1,411 @@
+openapi: 3.1.0
+info:
+  title: MaskChain API
+  version: 1.0.0
+  description: API Gateway с Content Shield (AI DLP) и управлением профилями политик безопасности
+  license:
+    name: Proprietary
+    identifier: Proprietary
+
+servers:
+  - url: /api/v1
+    description: API v1
+
+security: []
+
+paths:
+  /chat/completions:
+    post:
+      operationId: createChatCompletion
+      summary: Прокси к LLM провайдеру (chat completion)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                model:
+                  type: string
+                  example: gpt-4
+                stream:
+                  type: boolean
+                  default: false
+                messages:
+                  type: array
+      responses:
+        '200':
+          description: Ответ от провайдера (прозрачный proxy)
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /completions:
+    post:
+      operationId: createCompletion
+      summary: Прокси к LLM провайдеру (completion, legacy)
+      responses:
+        '200':
+          description: Ответ от провайдера
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /shield/mask:
+    post:
+      operationId: maskText
+      summary: Маскировать PII в тексте
+      parameters:
+        - name: mask_id
+          in: query
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+          description: Текст с замаскированными данными
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /shield/unmask:
+    post:
+      operationId: unmaskText
+      summary: Восстановить замаскированный текст
+      parameters:
+        - name: mask_ids
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /profiles:
+    get:
+      operationId: listProfiles
+      summary: Список профилей
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            deprecated: true
+      responses:
+        '200':
+          $ref: '#/components/responses/PaginatedResponse'
+    post:
+      operationId: createProfile
+      summary: Создать профиль
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProfileRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /profiles/{slug}:
+    get:
+      operationId: getProfile
+      summary: Получить профиль
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+    put:
+      operationId: updateProfile
+      summary: Обновить профиль
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+    delete:
+      operationId: deleteProfile
+      summary: Удалить профиль
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Успешное удаление (без тела)
+
+  /profiles/{slug}/dictionary:
+    patch:
+      operationId: patchDictionary
+      summary: Добавить/удалить записи словаря
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /incidents:
+    get:
+      operationId: listIncidents
+      summary: Список инцидентов
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: severity
+          in: query
+          schema: { type: string }
+        - name: tenant
+          in: query
+          schema: { type: string }
+        - name: profile_slug
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/PaginatedResponse'
+
+  /incidents/{id}:
+    get:
+      operationId: getIncident
+      summary: Получить инцидент
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /incidents/export:
+    get:
+      operationId: exportIncidents
+      summary: Экспорт инцидентов
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [csv, json]
+      responses:
+        '200':
+          description: CSV или JSON файл
+
+  /tenants:
+    get:
+      operationId: listTenants
+      summary: Список тенантов
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+    post:
+      operationId: createTenant
+      summary: Создать тенант
+      responses:
+        '201':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /tenants/{slug}:
+    get:
+      operationId: getTenant
+      summary: Получить тенант
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+    put:
+      operationId: updateTenant
+      summary: Обновить тенант
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+    delete:
+      operationId: deleteTenant
+      summary: Удалить тенант
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Успешное удаление (без тела)
+
+  /tenants/{slug}/dictionaries:
+    get:
+      operationId: getDictionaries
+      summary: Получить словари тенанта
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+    put:
+      operationId: updateDictionaries
+      summary: Обновить словари тенанта
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+
+components:
+  schemas:
+    ErrorInfo:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        per_page:
+          type: integer
+        total:
+          type: integer
+
+    ApiResponse:
+      type: object
+      properties:
+        data:
+          oneOf:
+            - type: object
+            - type: array
+            - type: 'null'
+        error:
+          oneOf:
+            - $ref: '#/components/schemas/ErrorInfo'
+            - type: 'null'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    PaginatedApiResponse:
+      type: object
+      properties:
+        data:
+          type: array
+        error:
+          type: 'null'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    CreateProfileRequest:
+      type: object
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+
+  responses:
+    SuccessResponse:
+      description: Успешный ответ в едином envelope
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponse'
+    PaginatedResponse:
+      description: Пагинированный ответ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PaginatedApiResponse'
+    ErrorResponse:
+      description: Ошибка в едином envelope
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponse'

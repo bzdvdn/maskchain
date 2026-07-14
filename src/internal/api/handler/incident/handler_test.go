@@ -113,15 +113,12 @@ func TestListIncidents(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", w.Code)
 		}
-		var resp dto.PaginatedResponse
+		var resp []any
 		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 			t.Fatalf("unmarshal: %v", err)
 		}
-		if resp.Total != 0 {
-			t.Errorf("expected total 0, got %d", resp.Total)
-		}
-		if len(resp.Data.([]interface{})) != 0 {
-			t.Errorf("expected empty data, got %d items", len(resp.Data.([]interface{})))
+		if len(resp) != 0 {
+			t.Errorf("expected empty data, got %d items", len(resp))
 		}
 	})
 
@@ -135,15 +132,12 @@ func TestListIncidents(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", w.Code)
 		}
-		var resp dto.PaginatedResponse
+		var resp []any
 		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 			t.Fatalf("unmarshal: %v", err)
 		}
-		if resp.Total != 1 {
-			t.Errorf("expected total 1, got %d", resp.Total)
-		}
-		if resp.Page != 1 || resp.PageSize != 2 {
-			t.Errorf("unexpected pagination: page=%d, page_size=%d", resp.Page, resp.PageSize)
+		if len(resp) != 1 {
+			t.Errorf("expected 1 incident, got %d", len(resp))
 		}
 	})
 }
@@ -197,13 +191,20 @@ func TestGetIncident(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Fatalf("expected 404, got %d", w.Code)
 		}
-		var errResp dto.ErrorResponse
-		if err := json.Unmarshal(w.Body.Bytes(), &errResp); err != nil {
+		var envelope struct {
+			Error *struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
 			t.Fatalf("unmarshal: %v", err)
 		}
-		if errResp.Code != "NOT_FOUND" {
-			t.Errorf("expected NOT_FOUND code, got %s", errResp.Code)
+		if envelope.Error == nil {
+			t.Fatal("expected error in envelope")
 		}
+	if envelope.Error.Code != "NOT_FOUND" {
+		t.Errorf("expected NOT_FOUND code, got %s", envelope.Error.Code)
+	}
 	})
 }
 

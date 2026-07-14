@@ -112,16 +112,23 @@ func (h *ProfileHandler) CreateProfile(c *gin.Context) {
 
 // @sk-task 40-profiles-api#T2.2: Implement ListProfiles and GetProfile handlers (AC-004, AC-005, AC-006)
 // @sk-task 41-profiles-ui#T2.1: Add pagination to ListProfiles (AC-002)
+// @sk-task 118-api-consistency#T3.1: Updated to per_page pagination via ApiResponse (AC-005)
 func (h *ProfileHandler) ListProfiles(c *gin.Context) {
 	tenantID := tenantIDFromContext(c)
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	perPageStr := c.DefaultQuery("per_page", "")
+	perPage := 0
+	if perPageStr == "" {
+		perPage, _ = strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	} else {
+		perPage, _ = strconv.Atoi(perPageStr)
+	}
 	if page < 1 {
 		page = 1
 	}
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
+	if perPage < 1 || perPage > 100 {
+		perPage = 20
 	}
 
 	profiles, err := h.repo.ListByTenant(c.Request.Context(), tenantID)
@@ -131,11 +138,11 @@ func (h *ProfileHandler) ListProfiles(c *gin.Context) {
 	}
 
 	total := len(profiles)
-	start := (page - 1) * pageSize
+	start := (page - 1) * perPage
 	if start > total {
 		start = total
 	}
-	end := start + pageSize
+	end := start + perPage
 	if end > total {
 		end = total
 	}
@@ -145,12 +152,8 @@ func (h *ProfileHandler) ListProfiles(c *gin.Context) {
 		items = append(items, toProfileListItem(p))
 	}
 
-	c.JSON(http.StatusOK, dto.PaginatedResponse{
-		Data:     items[start:end],
-		Total:    total,
-		Page:     page,
-		PageSize: pageSize,
-	})
+	c.Set("pagination", dto.Pagination{Page: page, PerPage: perPage, Total: total})
+	c.JSON(http.StatusOK, items[start:end])
 }
 
 // @sk-task 40-profiles-api#T2.2: Implement ListProfiles and GetProfile handlers (AC-004, AC-005, AC-006)

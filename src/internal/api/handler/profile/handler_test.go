@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/bzdvdn/maskchain/src/internal/api/dto"
+	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
@@ -112,9 +113,7 @@ func TestCreateProfile(t *testing.T) {
 	}
 
 	var resp dto.ProfileResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to unmarshal response: %s", err)
-	}
+	unmarshalEnvelopeData(t, w.Body.Bytes(), &resp)
 
 	if resp.Slug != "test-profile" {
 		t.Errorf("expected slug test-profile, got %s", resp.Slug)
@@ -163,12 +162,19 @@ func TestCreateProfileDuplicateSlug(t *testing.T) {
 		t.Fatalf("expected 409, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var errResp dto.ErrorResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &errResp); err != nil {
-		t.Fatalf("failed to unmarshal error: %s", err)
+	var envelope struct {
+		Error *struct {
+			Code string `json:"code"`
+		} `json:"error"`
 	}
-	if errResp.Code != "SLUG_CONFLICT" {
-		t.Errorf("expected SLUG_CONFLICT, got %s", errResp.Code)
+	if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to unmarshal envelope: %s", err)
+	}
+	if envelope.Error == nil {
+		t.Fatal("expected error in envelope")
+	}
+	if envelope.Error.Code != "SLUG_CONFLICT" {
+		t.Errorf("expected SLUG_CONFLICT, got %s", envelope.Error.Code)
 	}
 }
 
@@ -187,14 +193,20 @@ func TestCreateProfileValidationError(t *testing.T) {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var errResp dto.ErrorResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &errResp); err != nil {
+	var envelope struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+			Details []any  `json:"details"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
 		t.Fatalf("failed to unmarshal error: %s", err)
 	}
-	if errResp.Code != "VALIDATION_ERROR" {
-		t.Errorf("expected VALIDATION_ERROR, got %s", errResp.Code)
+	if envelope.Error.Code != "VALIDATION_ERROR" {
+		t.Errorf("expected VALIDATION_ERROR, got %s", envelope.Error.Code)
 	}
-	if len(errResp.Details) == 0 {
+	if len(envelope.Error.Details) == 0 {
 		t.Error("expected validation details")
 	}
 }
@@ -222,21 +234,28 @@ func TestListProfiles(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var resp dto.PaginatedResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+	var envelope struct {
+		Data       json.RawMessage `json:"data"`
+		Pagination struct {
+			Page    int `json:"page"`
+			PerPage int `json:"per_page"`
+			Total   int `json:"total"`
+		} `json:"pagination"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
 		t.Fatalf("failed to unmarshal: %s", err)
 	}
-	if resp.Total != 3 {
-		t.Fatalf("expected total 3, got %d", resp.Total)
+	if envelope.Pagination.Total != 3 {
+		t.Fatalf("expected total 3, got %d", envelope.Pagination.Total)
 	}
-	if resp.Page != 1 {
-		t.Errorf("expected page 1, got %d", resp.Page)
+	if envelope.Pagination.Page != 1 {
+		t.Errorf("expected page 1, got %d", envelope.Pagination.Page)
 	}
-	if resp.PageSize != 20 {
-		t.Errorf("expected page_size 20, got %d", resp.PageSize)
+	if envelope.Pagination.PerPage != 20 {
+		t.Errorf("expected per_page 20, got %d", envelope.Pagination.PerPage)
 	}
-	items, ok := resp.Data.([]interface{})
-	if !ok {
+	var items []any
+	if err := json.Unmarshal(envelope.Data, &items); err != nil {
 		t.Fatal("expected data to be an array")
 	}
 	if len(items) != 3 {
@@ -280,9 +299,7 @@ func TestGetProfileBySlug(t *testing.T) {
 	}
 
 	var resp dto.ProfileResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to unmarshal: %s", err)
-	}
+	unmarshalEnvelopeData(t, w.Body.Bytes(), &resp)
 	if resp.Slug != "my-profile" {
 		t.Errorf("expected slug my-profile, got %s", resp.Slug)
 	}
@@ -304,12 +321,19 @@ func TestGetProfileNotFound(t *testing.T) {
 		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var errResp dto.ErrorResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &errResp); err != nil {
-		t.Fatalf("failed to unmarshal error: %s", err)
+	var envelope struct {
+		Error *struct {
+			Code string `json:"code"`
+		} `json:"error"`
 	}
-	if errResp.Code != "NOT_FOUND" {
-		t.Errorf("expected NOT_FOUND, got %s", errResp.Code)
+	if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to unmarshal envelope: %s", err)
+	}
+	if envelope.Error == nil {
+		t.Fatal("expected error in envelope")
+	}
+	if envelope.Error.Code != "NOT_FOUND" {
+		t.Errorf("expected NOT_FOUND, got %s", envelope.Error.Code)
 	}
 }
 
@@ -355,9 +379,7 @@ func TestUpdateProfile(t *testing.T) {
 	}
 
 	var resp dto.ProfileResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to unmarshal: %s", err)
-	}
+	unmarshalEnvelopeData(t, w.Body.Bytes(), &resp)
 	if resp.Name != "Updated" {
 		t.Errorf("expected name Updated, got %s", resp.Name)
 	}
@@ -427,9 +449,7 @@ func TestPatchDictionaryAdd(t *testing.T) {
 	}
 
 	var resp dto.ProfileResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to unmarshal: %s", err)
-	}
+	unmarshalEnvelopeData(t, w.Body.Bytes(), &resp)
 	if len(resp.Dictionaries) != 1 {
 		t.Fatalf("expected 1 dictionary, got %d", len(resp.Dictionaries))
 	}
@@ -472,15 +492,26 @@ func TestPatchDictionaryRemove(t *testing.T) {
 	}
 
 	var resp dto.ProfileResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to unmarshal: %s", err)
-	}
+	unmarshalEnvelopeData(t, w.Body.Bytes(), &resp)
 	if len(resp.Dictionaries) != 1 {
 		t.Fatalf("expected 1 dictionary, got %d", len(resp.Dictionaries))
 	}
 	entries := resp.Dictionaries[0].Entries
 	if len(entries) != 1 || entries[0] != "foo" {
 		t.Errorf("expected [foo], got %v", entries)
+	}
+}
+
+func unmarshalEnvelopeData(t *testing.T, body []byte, target interface{}) {
+	t.Helper()
+	var env struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(body, &env); err != nil {
+		t.Fatalf("failed to unmarshal envelope: %s", err)
+	}
+	if err := json.Unmarshal(env.Data, target); err != nil {
+		t.Fatalf("failed to unmarshal data: %s", err)
 	}
 }
 
@@ -530,6 +561,8 @@ func performRequest(t *testing.T, h *ProfileHandler, method, path string, body i
 
 	w := httptest.NewRecorder()
 	r := gin.New()
+	// @sk-test 118-api-consistency#T3.1: Apply envelope middleware in tests
+	r.Use(middleware.ResponseEnvelope())
 	// @sk-test 80-tenant-isolation#T2.3: Set tenant in context for tests (AC-005)
 	r.Use(func(c *gin.Context) {
 		slug, _ := value.NewTenantSlug("default")

@@ -180,7 +180,7 @@ func TestNilRoutingHandler(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	body := `{"model":"gpt-4","messages":[{"role":"user","content":"hello"}]}`
-	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	req, _ := http.NewRequest(http.MethodPost, "/api/v1/chat/completions", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	srv.engine.ServeHTTP(w, req)
 
