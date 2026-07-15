@@ -28,50 +28,9 @@ type ScanPipelineFactory struct {
 	registry *detector.DetectorRegistry
 }
 
+// @sk-task cleanup-profile-repository#T3.5: Remove Build(ctx, profile), keep BuildFromRules (AC-006)
 func NewScanPipelineFactory(registry *detector.DetectorRegistry) *ScanPipelineFactory {
 	return &ScanPipelineFactory{registry: registry}
-}
-
-func (f *ScanPipelineFactory) Build(ctx context.Context, profile *entity.Profile) (*Pipeline, error) {
-	preprocessors := make([]preprocessor.Processor, 0, len(profile.Preprocessors()))
-	for _, def := range profile.Preprocessors() {
-		p, err := preprocessor.NewPreprocessor(def)
-		if err != nil {
-			return nil, fmt.Errorf("build preprocessor %q: %w", def.Name, err)
-		}
-		preprocessors = append(preprocessors, p)
-	}
-
-	var detectors []DetectorBinding
-
-	for _, dict := range profile.Dictionaries() {
-		dd := detector.NewDictionaryDetector(dict)
-		detectors = append(detectors, DetectorBinding{
-			Interface: dd,
-			Label:     "dictionary:" + dict.Name(),
-			Severity:  value.SeverityMedium,
-		})
-	}
-
-	for _, det := range profile.Detectors() {
-		if !det.Enabled() {
-			continue
-		}
-		concrete := f.registry.Get(det.Type())
-		if concrete == nil {
-			return nil, fmt.Errorf("no registered detector for type %q", det.Type())
-		}
-		detectors = append(detectors, DetectorBinding{
-			Interface: concrete,
-			Label:     det.ID(),
-			Severity:  det.Severity(),
-		})
-	}
-
-	return &Pipeline{
-		Preprocessors: preprocessors,
-		Detectors:     detectors,
-	}, nil
 }
 
 // @sk-task 13-shield-middleware-wiring#T1.3: BuildFromRules creates detectors from tenant rules (AC-001)

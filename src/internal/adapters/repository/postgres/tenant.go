@@ -275,11 +275,7 @@ func unmarshalTenantDictionaries(data []byte) ([]*dictionary.Dictionary, error) 
 	}
 	dicts := make([]*dictionary.Dictionary, len(items))
 	for i, item := range items {
-		slug, err := value.NewProfileSlug("tmp-" + item.Name)
-		if err != nil {
-			return nil, fmt.Errorf("invalid dictionary profile slug %q: %w", item.Name, err)
-		}
-		dicts[i] = dictionary.NewDictionary(slug, item.Name, item.Entries, dictionary.MatchMode(item.MatchMode))
+		dicts[i] = dictionary.NewDictionary(item.Name, item.Entries, dictionary.MatchMode(item.MatchMode))
 	}
 	return dicts, nil
 }

@@ -11,7 +11,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/incident"
-	"github.com/bzdvdn/maskchain/src/internal/api/handler/profile"
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
@@ -92,17 +91,6 @@ func (s *Server) RegisterIncidentHandler(h *incident.Handler) {
 	group.GET("/export", h.ExportIncidents)
 	group.GET("", h.ListIncidents)
 	group.GET("/:id", h.GetIncident)
-}
-
-// @sk-task 40-profiles-api#T4.1: Register profile routes (AC-001..AC-011)
-func (s *Server) RegisterProfileHandler(h *profile.ProfileHandler) {
-	group := s.engine.Group("/api/v1/profiles")
-	group.POST("", h.CreateProfile)
-	group.GET("", h.ListProfiles)
-	group.GET("/:slug", h.GetProfile)
-	group.PUT("/:slug", h.UpdateProfile)
-	group.DELETE("/:slug", h.DeleteProfile)
-	group.PATCH("/:slug/dictionary", h.PatchDictionary)
 }
 
 // @sk-task 70-routing-engine#T3.2: Register proxy routes with routing handler (AC-003, AC-004)

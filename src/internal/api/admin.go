@@ -16,7 +16,6 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/api/dto"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/admin"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/incident"
-	"github.com/bzdvdn/maskchain/src/internal/api/handler/profile"
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
@@ -77,16 +76,6 @@ func (s *AdminServer) RegisterIncidentHandler(h *incident.Handler) {
 	group.GET("/export", h.ExportIncidents)
 	group.GET("", h.ListIncidents)
 	group.GET("/:id", h.GetIncident)
-}
-
-func (s *AdminServer) RegisterProfileHandler(h *profile.ProfileHandler) {
-	group := s.engine.Group("/api/v1/profiles")
-	group.POST("", h.CreateProfile)
-	group.GET("", h.ListProfiles)
-	group.GET("/:slug", h.GetProfile)
-	group.PUT("/:slug", h.UpdateProfile)
-	group.DELETE("/:slug", h.DeleteProfile)
-	group.PATCH("/:slug/dictionary", h.PatchDictionary)
 }
 
 func (s *AdminServer) RegisterTenantHandler(h *admin.TenantHandler) {

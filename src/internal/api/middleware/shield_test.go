@@ -1,5 +1,6 @@
 package middleware
 
+// @sk-task cleanup-profile-repository#T3.6: Remove NewProfileSlug/fix NewDictionary in dict-unmask tests (AC-012)
 import (
 	"context"
 	"encoding/json"
@@ -500,8 +501,7 @@ func TestDictUnmask(t *testing.T) {
 		ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
 	}
 
-	dictSlug, _ := value.NewProfileSlug("test-dict")
-	dict := dictionary.NewDictionary(dictSlug, "names", []interface{}{"original-name"}, dictionary.MatchModeExact)
+	dict := dictionary.NewDictionary("names", []interface{}{"original-name"}, dictionary.MatchModeExact)
 	tenantSlug, _ := value.NewTenantSlug("test-tenant")
 	tenant := entity.NewTenant(tenantSlug, "test-tenant", "Authorization", nil,
 		entity.WithTenantDictionaries([]*dictionary.Dictionary{dict}),
@@ -555,8 +555,7 @@ func TestStreamingDictUnmask(t *testing.T) {
 		ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
 	}
 
-	dictSlug, _ := value.NewProfileSlug("test-stream-dict")
-	dict := dictionary.NewDictionary(dictSlug, "names", []interface{}{"original-name"}, dictionary.MatchModeExact)
+	dict := dictionary.NewDictionary("names", []interface{}{"original-name"}, dictionary.MatchModeExact)
 	tenantSlug, _ := value.NewTenantSlug("test-tenant")
 	tenant := entity.NewTenant(tenantSlug, "test-tenant", "Authorization", nil,
 		entity.WithTenantDictionaries([]*dictionary.Dictionary{dict}),
@@ -634,8 +633,7 @@ func TestShieldEdge_UnmaskNoopNoPlaceholders(t *testing.T) {
 		ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
 	}
 
-	dictSlug, _ := value.NewProfileSlug("test-dict")
-	dict := dictionary.NewDictionary(dictSlug, "names", []interface{}{"original-name"}, dictionary.MatchModeExact)
+	dict := dictionary.NewDictionary("names", []interface{}{"original-name"}, dictionary.MatchModeExact)
 	tenantSlug, _ := value.NewTenantSlug("test-tenant")
 	tenant := entity.NewTenant(tenantSlug, "test-tenant", "Authorization", nil,
 		entity.WithTenantDictionaries([]*dictionary.Dictionary{dict}),
@@ -681,8 +679,7 @@ func TestShieldEdge_InvalidPlaceholderNotReplaced(t *testing.T) {
 		ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
 	}
 
-	dictSlug, _ := value.NewProfileSlug("test-dict")
-	dict := dictionary.NewDictionary(dictSlug, "names", []interface{}{"original-name"}, dictionary.MatchModeExact)
+	dict := dictionary.NewDictionary("names", []interface{}{"original-name"}, dictionary.MatchModeExact)
 	tenantSlug, _ := value.NewTenantSlug("test-tenant")
 	tenant := entity.NewTenant(tenantSlug, "test-tenant", "Authorization", nil,
 		entity.WithTenantDictionaries([]*dictionary.Dictionary{dict}),

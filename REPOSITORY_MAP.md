@@ -1,8 +1,8 @@
 # Repository Map
 
 ## Entry Points
-- `src/cmd/gateway/main.go` — gateway binary entrypoint (binary: `bin/gateway`, data plane: proxy, shield, admin API for automation)
-- `src/cmd/admin/main.go` — admin binary entrypoint (binary: `bin/admin`, control plane: UI, profile/incident management)
+- `src/cmd/gateway/main.go` — gateway binary entrypoint (binary: `bin/gateway`, data plane: proxy, shield, incident/tenant API for automation)
+- `src/cmd/admin/main.go` — admin binary entrypoint (binary: `bin/admin`, control plane: UI, incident/tenant management)
 
 ## Top-Level Code
 - `src/cmd/` — application entrypoints
@@ -24,9 +24,9 @@
 - `deployments/` — Docker, migrations, docker-compose configs
 
 ## Key Paths
-- `src/cmd/gateway/main.go` — gateway binary entrypoint (DI wiring: proxy, shield, profile/incident API for automation)
-- `src/cmd/admin/main.go` — admin binary entrypoint (DI wiring: UI, profile/incident handlers, metrics)
-- `src/internal/domain/` — core business logic: Content Shield, profiles, policies, routing
+- `src/cmd/gateway/main.go` — gateway binary entrypoint (DI wiring: proxy, shield, incident/tenant API for automation)
+- `src/cmd/admin/main.go` — admin binary entrypoint (DI wiring: UI, incident/tenant handlers, metrics)
+- `src/internal/domain/` — core business logic: Content Shield, tenants, policies, routing
   - `src/internal/domain/shield/mask/` — mask entry entity, storage interface, use case, UUIDv7
   - `src/internal/domain/shield/detector/` — detector interface, registry, composite detector
   - `src/internal/domain/routing/` — routing domain entities (Provider, Route, RoutingRule, HealthStatus)
@@ -37,7 +37,6 @@
   - `src/internal/ports/provider.go` — ProviderClient port interface (outbound, LLM provider abstraction), ProviderChunk type, Stream() method
 - `src/internal/adapters/` — repository impl (PostgreSQL), provider clients (OpenAI, Anthropic, etc.)
   - `src/internal/adapters/repository/mask/` — Postgres, Valkey, Cached mask repos
-  - `src/internal/adapters/repository/profile/` — ProfileCache (Valkey + LRU), PubSub invalidation, warming, InvalidationTracker
   - `src/internal/adapters/provider/` — provider adapter stubs (OpenAI, Anthropic, etc.)
   - `src/internal/adapters/egress/` — egress HTTP/HTTPS client with proxy dialer, SSE streaming, retry, connection pooling (implements ProviderClient with Call + Stream)
 - `src/internal/api/` — HTTP handlers, middleware, request/response types
@@ -45,21 +44,22 @@
   - `src/internal/api/provider_handler.go` — RoutingProxyHandler (proxy to LLM providers), legacy stubs
   - `src/internal/api/server.go` — gateway router setup, RegisterProxyRoute accepts RoutingProxyHandler
   - `src/internal/api/health/` — health check endpoints (liveness/readiness probes), service status aggregation
-- `src/internal/api/admin.go` — admin router setup (AdminServer), static files, profile/incident handlers
-  - `src/internal/api/handler/profile/` — Profile CRUD handlers (list, get, create, update, delete, patch dictionary)
+- `src/internal/api/admin.go` — admin router setup (AdminServer), static files, incident/tenant handlers
   - `src/internal/api/handler/incident/` — Incident read/export handlers (list, get, export CSV/JSON)
-  - `src/internal/api/dto/` — request/response DTOs (ProfileResponse, PaginatedResponse, DictionaryDTO, IncidentResponse)
+  - `src/internal/api/handler/admin/` — Tenant CRUD handlers
+  - `src/internal/api/dto/` — request/response DTOs (IncidentResponse, TenantResponse, PaginatedResponse)
 - `src/internal/infra/config/` — cobra/viper config loading, validation, defaults (RoutingConfig, ProviderConfig, RouteConfig, RuleConfig)
 - `src/internal/infra/telemetry/` — OTel SDK init, TracerProvider, MeterProvider, OTLP exporters
 - `src/internal/infra/metrics/` — Prometheus metric definitions (HTTP, shield), /metrics handler
 - `src/internal/infra/logging/` — slog adapter with OTel trace_id/span_id enrichment
-- `src/internal/infra/migrations/` — SQL migrations (001_mask_entries.sql, 002_incidents.sql)
+- `src/internal/adapters/repository/postgres/migrations/` — SQL migrations (profiles, dictionary_entries, incidents, tenants, mask_entries)
 - `specs/active/22-shield-mask-storage/` — mask storage phase: spec, plan, tasks
 - `specs/active/41-profiles-ui/` — profiles UI phase: spec, plan, tasks, inspect
 - `specs/active/50-shield-engine/` — shield engine orchestration: spec, plan, tasks, inspect
 - `specs/active/60-audit-incidents/` — audit incidents viewer: spec, plan, tasks, inspect, data-model
 - `specs/active/61-observability/` — observability phase: spec, plan, tasks, inspect, data-model
 - `specs/active/100-admin-control-plane/` — admin control plane phase: spec, plan, tasks, inspect, data-model
+- `specs/active/cleanup-profile-repository/` — cleanup deprecated ProfileRepository: spec, plan, tasks, data-model
 - `deployments/docker-compose/` — local dev environment (PostgreSQL, Valkey)
 - `Dockerfile` — symlink → `Dockerfile.admin` (обратная совместимость)
 - `Dockerfile.gateway` — gateway Dockerfile (Go build → distroless, без node)

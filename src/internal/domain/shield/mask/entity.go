@@ -3,10 +3,10 @@ package mask
 import "time"
 
 // @sk-task 22-shield-mask-storage#T1.1: Create MaskEntry entity (AC-001, AC-002)
+// @sk-task cleanup-profile-repository#T3.4: Remove ProfileID field (AC-010)
 type MaskEntry struct {
-	MaskID          string
-	DocumentMaskID  string
-	ProfileID       *string
-	Replacements    map[string]string
-	CreatedAt       time.Time
+	MaskID         string
+	DocumentMaskID string
+	Replacements   map[string]string
+	CreatedAt      time.Time
 }

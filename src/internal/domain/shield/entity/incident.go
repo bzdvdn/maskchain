@@ -17,12 +17,10 @@ type Incident struct {
 	position   int
 
 	slug         string
-	profileSlug  string
 	requestID    string
 	detectorType string
 	entryValue   *string
 	action       string
-	rawSnippet   *string
 	promptSnippetRedacted *string
 	responseSnippet       *string
 	tenant                string
@@ -39,22 +37,20 @@ func NewIncident(detectorID string, patternID value.PatternID, severity value.Se
 	}
 }
 
-// @sk-task 30-shield-persistence#T3.1: Add full constructor for persisted incidents (DM-003)
+// @sk-task cleanup-profile-repository#T3.1: Remove profileSlug from NewAuditIncident (AC-012)
 // @sk-task 60-audit-incidents#T1.2: Add tenant, responseSnippet, promptSnippetRedacted params (AC-001, AC-002)
-func NewAuditIncident(slug, profileSlug, requestID, detectorType string, entryValue *string, severity value.Severity, action string, promptSnippetRedacted, responseSnippet *string, tenant string, timestamp time.Time) *Incident {
+func NewAuditIncident(slug, requestID, detectorType string, entryValue *string, severity value.Severity, action string, promptSnippetRedacted, responseSnippet *string, tenant string, timestamp time.Time) *Incident {
 	return &Incident{
-		slug:         slug,
-		profileSlug:  profileSlug,
-		requestID:    requestID,
-		detectorType: detectorType,
-		entryValue:   entryValue,
-		severity:     severity,
-		action:       action,
-		rawSnippet:   promptSnippetRedacted,
+		slug:                  slug,
+		requestID:             requestID,
+		detectorType:          detectorType,
+		entryValue:            entryValue,
+		severity:              severity,
+		action:                action,
 		promptSnippetRedacted: promptSnippetRedacted,
 		responseSnippet:       responseSnippet,
 		tenant:                tenant,
-		timestamp:    timestamp,
+		timestamp:             timestamp,
 	}
 }
 
@@ -64,12 +60,11 @@ func (inc *Incident) Severity() value.Severity     { return inc.severity }
 func (inc *Incident) Fragment() string             { return inc.fragment }
 func (inc *Incident) Position() int                { return inc.position }
 func (inc *Incident) Slug() string                 { return inc.slug }
-func (inc *Incident) ProfileSlug() string          { return inc.profileSlug }
 func (inc *Incident) RequestID() string            { return inc.requestID }
 func (inc *Incident) DetectorType() string         { return inc.detectorType }
 func (inc *Incident) EntryValue() *string          { return inc.entryValue }
 func (inc *Incident) Action() string               { return inc.action }
-func (inc *Incident) RawSnippet() *string          { return inc.rawSnippet }
+func (inc *Incident) RawSnippet() *string          { return inc.promptSnippetRedacted }
 
 // @sk-task 60-audit-incidents#T1.2: Getter for renamed field (AC-001, AC-002)
 func (inc *Incident) PromptSnippetRedacted() *string { return inc.promptSnippetRedacted }

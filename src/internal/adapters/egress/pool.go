@@ -3,6 +3,7 @@ package egress
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -15,7 +16,7 @@ import (
 // @sk-task 116-connection-pool-fixes#T2.1: Fix MaxIdleConnsPerHost and wire DisableKeepAlives (AC-001)
 // @sk-task 116-connection-pool-fixes#T2.3: Export NewTransport for per-provider usage in factory (AC-008)
 // @sk-task 116-connection-pool-fixes#T3.2: Integrate buildTLSConfig into NewTransport (AC-003, AC-004, AC-005)
-func NewTransport(cfg *config.EgressConfig) *http.Transport {
+func NewTransport(cfg *config.EgressConfig) (*http.Transport, error) {
 	dialer := &net.Dialer{
 		Timeout:   defaultDialTimeout,
 		KeepAlive: 30 * time.Second,
@@ -32,14 +33,18 @@ func NewTransport(cfg *config.EgressConfig) *http.Transport {
 	}
 
 	if cfg.TLS != nil {
-		tp.TLSClientConfig = buildTLSConfig(cfg.TLS)
+		tlsCfg, err := buildTLSConfig(cfg.TLS)
+		if err != nil {
+			return nil, fmt.Errorf("egress: build TLS config: %w", err)
+		}
+		tp.TLSClientConfig = tlsCfg
 	}
 
-	return tp
+	return tp, nil
 }
 
 // @sk-task 116-connection-pool-fixes#T3.2: Implement buildTLSConfig for custom CA, insecure, mTLS (AC-003, AC-004, AC-005)
-func buildTLSConfig(cfg *config.EgressTLSConfig) *tls.Config {
+func buildTLSConfig(cfg *config.EgressTLSConfig) (*tls.Config, error) {
 	tlsCfg := &tls.Config{
 		InsecureSkipVerify: cfg.InsecureSkipVerify,
 	}
@@ -47,11 +52,11 @@ func buildTLSConfig(cfg *config.EgressTLSConfig) *tls.Config {
 	if cfg.CACert != "" {
 		caCert, err := os.ReadFile(cfg.CACert)
 		if err != nil {
-			panic("egress: failed to read CA cert: " + err.Error())
+			return nil, fmt.Errorf("failed to read CA cert: %w", err)
 		}
 		caPool := x509.NewCertPool()
 		if !caPool.AppendCertsFromPEM(caCert) {
-			panic("egress: failed to parse CA cert")
+			return nil, fmt.Errorf("failed to parse CA cert")
 		}
 		tlsCfg.RootCAs = caPool
 	}
@@ -59,10 +64,10 @@ func buildTLSConfig(cfg *config.EgressTLSConfig) *tls.Config {
 	if cfg.Cert != "" || cfg.Key != "" {
 		cert, err := tls.LoadX509KeyPair(cfg.Cert, cfg.Key)
 		if err != nil {
-			panic("egress: failed to load TLS cert/key: " + err.Error())
+			return nil, fmt.Errorf("failed to load TLS cert/key: %w", err)
 		}
 		tlsCfg.Certificates = []tls.Certificate{cert}
 	}
 
-	return tlsCfg
+	return tlsCfg, nil
 }

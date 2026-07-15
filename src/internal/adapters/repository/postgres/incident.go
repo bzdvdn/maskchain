@@ -23,14 +23,14 @@ func NewPostgresIncidentRepo(pool *pgxpool.Pool) *PostgresIncidentRepo {
 	return &PostgresIncidentRepo{pool: pool}
 }
 
+// @sk-task cleanup-profile-repository#T3.3: Remove profile_slug from Save (AC-012)
 // @sk-task 60-audit-incidents#T1.2: Update Save to use PromptSnippetRedacted and Tenant (AC-001)
 func (r *PostgresIncidentRepo) Save(ctx context.Context, incident *entity.Incident) error {
 	q := getQuerier(ctx, r.pool)
 
 	_, err := q.Exec(ctx, `
-		INSERT INTO incidents (profile_slug, request_id, detector_type, entry_value, severity, action, prompt_snippet_redacted, response_snippet, tenant, timestamp)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-		incident.ProfileSlug(),
+		INSERT INTO incidents (request_id, detector_type, entry_value, severity, action, prompt_snippet_redacted, response_snippet, tenant, timestamp)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 		incident.RequestID(),
 		incident.DetectorType(),
 		incident.EntryValue(),
@@ -47,20 +47,21 @@ func (r *PostgresIncidentRepo) Save(ctx context.Context, incident *entity.Incide
 	return nil
 }
 
+// @sk-task cleanup-profile-repository#T3.3: Remove profile_slug from FindByID (AC-012)
 // @sk-task 60-audit-incidents#T1.3: Update FindByID to return new fields (AC-002)
 func (r *PostgresIncidentRepo) FindByID(ctx context.Context, id string) (*entity.Incident, error) {
 	q := getQuerier(ctx, r.pool)
 
 	var (
-		profileSlug, requestID, detectorType, severityStr, action, tenant string
-		entryValue, promptSnippet, respSnippet                            *string
-		ts                                                                 time.Time
+		requestID, detectorType, severityStr, action, tenant string
+		entryValue, promptSnippet, respSnippet               *string
+		ts                                                   time.Time
 	)
 
 	err := q.QueryRow(ctx, `
-		SELECT profile_slug, request_id, detector_type, entry_value, severity, action, prompt_snippet_redacted, response_snippet, tenant, timestamp
+		SELECT request_id, detector_type, entry_value, severity, action, prompt_snippet_redacted, response_snippet, tenant, timestamp
 		FROM incidents WHERE id = $1`, id).Scan(
-		&profileSlug, &requestID, &detectorType, &entryValue, &severityStr, &action, &promptSnippet, &respSnippet, &tenant, &ts)
+		&requestID, &detectorType, &entryValue, &severityStr, &action, &promptSnippet, &respSnippet, &tenant, &ts)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -68,36 +69,18 @@ func (r *PostgresIncidentRepo) FindByID(ctx context.Context, id string) (*entity
 		return nil, fmt.Errorf("find incident by id: %w", err)
 	}
 
-	return scanIncident(id, profileSlug, requestID, detectorType, entryValue, severityStr, action, promptSnippet, respSnippet, tenant, ts)
+	return scanIncident(id, requestID, detectorType, entryValue, severityStr, action, promptSnippet, respSnippet, tenant, ts)
 }
 
-// @sk-task 60-audit-incidents#T1.3: Update ListByProfile to new field set (AC-001)
-func (r *PostgresIncidentRepo) ListByProfile(ctx context.Context, profileID value.ProfileID) ([]*entity.Incident, error) {
-	q := getQuerier(ctx, r.pool)
-
-	rows, err := q.Query(ctx, `
-		SELECT i.id, i.profile_slug, i.request_id, i.detector_type, i.entry_value, i.severity, i.action, i.prompt_snippet_redacted, i.response_snippet, i.tenant, i.timestamp
-		FROM incidents i
-		JOIN profiles p ON p.slug = i.profile_slug
-		WHERE p.id = $1
-		ORDER BY i.timestamp DESC`, profileID.String())
-	if err != nil {
-		return nil, fmt.Errorf("list incidents by profile: %w", err)
-	}
-	defer rows.Close()
-
-	return scanIncidents(rows)
-}
-
+// @sk-task cleanup-profile-repository#T3.3: Remove ListByProfile (AC-009)
 // @sk-task 60-audit-incidents#T1.3: Update ListByTenant to new field set (AC-001)
 func (r *PostgresIncidentRepo) ListByTenant(ctx context.Context, tenantID value.TenantID) ([]*entity.Incident, error) {
 	q := getQuerier(ctx, r.pool)
 
 	rows, err := q.Query(ctx, `
-		SELECT i.id, i.profile_slug, i.request_id, i.detector_type, i.entry_value, i.severity, i.action, i.prompt_snippet_redacted, i.response_snippet, i.tenant, i.timestamp
+		SELECT i.id, i.request_id, i.detector_type, i.entry_value, i.severity, i.action, i.prompt_snippet_redacted, i.response_snippet, i.tenant, i.timestamp
 		FROM incidents i
-		JOIN profiles p ON p.slug = i.profile_slug
-		WHERE p.tenant_id = $1
+		WHERE i.tenant = $1
 		ORDER BY i.timestamp DESC`, tenantID.String())
 	if err != nil {
 		return nil, fmt.Errorf("list incidents by tenant: %w", err)
@@ -107,6 +90,7 @@ func (r *PostgresIncidentRepo) ListByTenant(ctx context.Context, tenantID value.
 	return scanIncidents(rows)
 }
 
+// @sk-task cleanup-profile-repository#T3.3: Remove profile_slug and ProfileSlug filter from List (AC-009, AC-012)
 // @sk-task 60-audit-incidents#T1.3: List with dynamic filtering and pagination (AC-001, AC-006)
 func (r *PostgresIncidentRepo) List(ctx context.Context, filter shield.IncidentFilter) ([]*entity.Incident, int, error) {
 	q := getQuerier(ctx, r.pool)
@@ -123,11 +107,6 @@ func (r *PostgresIncidentRepo) List(ctx context.Context, filter shield.IncidentF
 	if filter.Tenant != nil {
 		where += fmt.Sprintf(" AND tenant = $%d", argIdx)
 		args = append(args, *filter.Tenant)
-		argIdx++
-	}
-	if filter.ProfileSlug != nil {
-		where += fmt.Sprintf(" AND profile_slug = $%d", argIdx)
-		args = append(args, *filter.ProfileSlug)
 		argIdx++
 	}
 
@@ -153,7 +132,7 @@ func (r *PostgresIncidentRepo) List(ctx context.Context, filter shield.IncidentF
 	limitQuery := fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
 	args = append(args, pageSize, offset)
 
-	rows, err := q.Query(ctx, "SELECT id, profile_slug, request_id, detector_type, entry_value, severity, action, prompt_snippet_redacted, response_snippet, tenant, timestamp" + baseQuery + orderQuery + limitQuery, args...)
+	rows, err := q.Query(ctx, "SELECT id, request_id, detector_type, entry_value, severity, action, prompt_snippet_redacted, response_snippet, tenant, timestamp" + baseQuery + orderQuery + limitQuery, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list incidents: %w", err)
 	}
@@ -172,16 +151,16 @@ func scanIncidents(rows pgx.Rows) ([]*entity.Incident, error) {
 
 	for rows.Next() {
 		var (
-			id, profileSlug, requestID, detectorType, severityStr, action, tenant string
-			entryValue, promptSnippet, respSnippet                                 *string
-			ts                                                                     time.Time
+			id, requestID, detectorType, severityStr, action, tenant string
+			entryValue, promptSnippet, respSnippet                   *string
+			ts                                                       time.Time
 		)
 
-		if err := rows.Scan(&id, &profileSlug, &requestID, &detectorType, &entryValue, &severityStr, &action, &promptSnippet, &respSnippet, &tenant, &ts); err != nil {
+		if err := rows.Scan(&id, &requestID, &detectorType, &entryValue, &severityStr, &action, &promptSnippet, &respSnippet, &tenant, &ts); err != nil {
 			return nil, fmt.Errorf("scan incident row: %w", err)
 		}
 
-		inc, err := scanIncident(id, profileSlug, requestID, detectorType, entryValue, severityStr, action, promptSnippet, respSnippet, tenant, ts)
+		inc, err := scanIncident(id, requestID, detectorType, entryValue, severityStr, action, promptSnippet, respSnippet, tenant, ts)
 		if err != nil {
 			return nil, err
 		}
@@ -198,11 +177,11 @@ func scanIncidents(rows pgx.Rows) ([]*entity.Incident, error) {
 	return incidents, nil
 }
 
-func scanIncident(id, profileSlug, requestID, detectorType string, entryValue *string, severityStr, action string, promptSnippet, responseSnippet *string, tenant string, ts time.Time) (*entity.Incident, error) {
+func scanIncident(id, requestID, detectorType string, entryValue *string, severityStr, action string, promptSnippet, responseSnippet *string, tenant string, ts time.Time) (*entity.Incident, error) {
 	sev := parseSeverity(severityStr)
 
 	inc := entity.NewAuditIncident(
-		id, profileSlug, requestID, detectorType, entryValue, sev, action, promptSnippet, responseSnippet, tenant, ts,
+		id, requestID, detectorType, entryValue, sev, action, promptSnippet, responseSnippet, tenant, ts,
 	)
 	return inc, nil
 }

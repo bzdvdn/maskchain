@@ -47,10 +47,6 @@ func (h *Handler) ListIncidents(c *gin.Context) {
 		t := params.Tenant
 		filter.Tenant = &t
 	}
-	if params.ProfileSlug != "" {
-		p := params.ProfileSlug
-		filter.ProfileSlug = &p
-	}
 
 	incidents, total, err := h.repo.List(c.Request.Context(), filter)
 	if err != nil {
@@ -84,13 +80,13 @@ func (h *Handler) GetIncident(c *gin.Context) {
 	c.JSON(http.StatusOK, toResponse(inc))
 }
 
+// @sk-task cleanup-profile-repository#T3.2: Remove ProfileSlug from toResponse (AC-012)
 func toResponse(inc *entity.Incident) dto.IncidentResponse {
 	resp := dto.IncidentResponse{
 		ID:                    inc.Slug(),
 		RequestID:             inc.RequestID(),
 		Timestamp:             inc.Timestamp().Format(time.RFC3339),
 		Tenant:                inc.Tenant(),
-		ProfileSlug:           inc.ProfileSlug(),
 		DetectorType:          inc.DetectorType(),
 		EntryValue:            inc.EntryValue(),
 		Severity:              inc.Severity().String(),

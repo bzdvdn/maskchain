@@ -8,7 +8,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/bzdvdn/maskchain/src/internal/api/dto"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/detector"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/mask"
@@ -33,18 +32,15 @@ func (h *MaskHandler) WithPreprocessors(pps []preprocessor.Processor) {
 	h.preprocessors = pps
 }
 
-// @sk-task 118-api-consistency#T2.1: Migrate HandleMask to JSON ApiResponse envelope (AC-006, RQ-005)
 func (h *MaskHandler) HandleMask(c *gin.Context) {
 	maskID := c.Query("mask_id")
-	ownID := false
 	var docMaskID string
 	if maskID == "" {
 		maskID = mask.NewShortID()
 		docMaskID = maskID
-		ownID = true
 	} else {
 		if !validMaskID(maskID) {
-			c.JSON(http.StatusBadRequest, dto.NewErrorResponse("VALIDATION_ERROR", "invalid mask_id: only [a-zA-Z0-9-] allowed, max 64 chars"))
+			c.String(http.StatusBadRequest, "invalid mask_id: only [a-zA-Z0-9-] allowed, max 64 chars")
 			return
 		}
 		if len(maskID) > 12 {
@@ -56,11 +52,10 @@ func (h *MaskHandler) HandleMask(c *gin.Context) {
 
 	body, err := c.GetRawData()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, dto.NewErrorResponse("VALIDATION_ERROR", "cannot read request body"))
+		c.String(http.StatusBadRequest, "cannot read request body")
 		return
 	}
 
-	// Run preprocessors before detectors (DEC-004: fail-open)
 	processText := string(body)
 	if len(h.preprocessors) > 0 {
 		for _, pp := range h.preprocessors {
@@ -77,7 +72,7 @@ func (h *MaskHandler) HandleMask(c *gin.Context) {
 		}
 		results, scanErr := d.Scan(c.Request.Context(), processText)
 		if scanErr != nil {
-			c.JSON(http.StatusInternalServerError, dto.NewErrorResponse("DETECTOR_ERROR", fmt.Sprintf("detector %s: %s", typ, scanErr)))
+			c.String(http.StatusInternalServerError, fmt.Sprintf("detector error: %s", scanErr))
 			return
 		}
 		allResults = append(allResults, results...)
@@ -97,22 +92,16 @@ func (h *MaskHandler) HandleMask(c *gin.Context) {
 	maskedText, _, err := h.useCase.MaskFromResults(c.Request.Context(), processText, maskID, docMaskID, allResults)
 	if err != nil {
 		if errors.Is(err, mask.ErrMaskIDConflict) {
-			c.JSON(http.StatusConflict, dto.NewErrorResponse("MASK_ID_CONFLICT", "mask_id already exists"))
+			c.String(http.StatusConflict, "mask_id already exists")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse("INTERNAL_ERROR", err.Error()))
+		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	if ownID {
-		c.Header("X-Mask-ID", maskID)
-	}
-	c.Header("X-Document-Mask-ID", docMaskID)
-	c.JSON(http.StatusOK, dto.NewSuccessResponse(gin.H{
-		"masked_text":      maskedText,
-		"mask_id":          maskID,
-		"document_mask_id": docMaskID,
-	}))
+	c.Header("data_mask_id", docMaskID)
+	c.Header("mask-id", maskID)
+	c.String(http.StatusOK, maskedText)
 }
 
 func validMaskID(id string) bool {
@@ -128,11 +117,10 @@ func validMaskID(id string) bool {
 	return true
 }
 
-// @sk-task 118-api-consistency#T2.1: Migrate HandleUnmask to JSON ApiResponse envelope (AC-006, RQ-005)
 func (h *MaskHandler) HandleUnmask(c *gin.Context) {
 	maskIDsParam := c.Query("mask_ids")
 	if maskIDsParam == "" {
-		c.JSON(http.StatusBadRequest, dto.NewErrorResponse("VALIDATION_ERROR", "mask_ids is required"))
+		c.String(http.StatusBadRequest, "mask_ids is required")
 		return
 	}
 
@@ -140,21 +128,19 @@ func (h *MaskHandler) HandleUnmask(c *gin.Context) {
 
 	body, err := c.GetRawData()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, dto.NewErrorResponse("VALIDATION_ERROR", "cannot read request body"))
+		c.String(http.StatusBadRequest, "cannot read request body")
 		return
 	}
 
 	restored, err := h.useCase.UnmaskText(c.Request.Context(), string(body), maskIDs)
 	if err != nil {
 		if errors.Is(err, mask.ErrMaskNotFound) {
-			c.JSON(http.StatusNotFound, dto.NewErrorResponse("NOT_FOUND", err.Error()))
+			c.String(http.StatusNotFound, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse("INTERNAL_ERROR", err.Error()))
+		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, dto.NewSuccessResponse(gin.H{
-		"restored_text": restored,
-	}))
+	c.String(http.StatusOK, restored)
 }

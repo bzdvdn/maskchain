@@ -17,6 +17,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
 
+// @sk-task cleanup-profile-repository#T3.6: Remove ProfileSlug from mock and NewAuditIncident calls (AC-009, AC-012)
 type mockIncidentRepo struct {
 	incidents []*entity.Incident
 }
@@ -34,10 +35,6 @@ func (r *mockIncidentRepo) FindByID(_ context.Context, id string) (*entity.Incid
 	return nil, nil
 }
 
-func (r *mockIncidentRepo) ListByProfile(_ context.Context, _ value.ProfileID) ([]*entity.Incident, error) {
-	return nil, nil
-}
-
 func (r *mockIncidentRepo) ListByTenant(_ context.Context, _ value.TenantID) ([]*entity.Incident, error) {
 	return nil, nil
 }
@@ -49,9 +46,6 @@ func (r *mockIncidentRepo) List(_ context.Context, filter shield.IncidentFilter)
 			continue
 		}
 		if filter.Tenant != nil && inc.Tenant() != *filter.Tenant {
-			continue
-		}
-		if filter.ProfileSlug != nil && inc.ProfileSlug() != *filter.ProfileSlug {
 			continue
 		}
 		result = append(result, inc)
@@ -89,9 +83,9 @@ func setupTestIncidents() []*entity.Incident {
 	resp := "response-data"
 
 	return []*entity.Incident{
-		entity.NewAuditIncident("inc-001", "prof-a", "req-1", "regex", &entry, sevCritical, "block", &prompt, &resp, "tenant-1", now),
-		entity.NewAuditIncident("inc-002", "prof-b", "req-2", "dictionary", nil, sevHigh, "redact", &prompt, nil, "tenant-1", now.Add(-time.Hour)),
-		entity.NewAuditIncident("inc-003", "prof-a", "req-3", "regex", nil, sevMedium, "alert", nil, nil, "tenant-2", now.Add(-2*time.Hour)),
+		entity.NewAuditIncident("inc-001", "req-1", "regex", &entry, sevCritical, "block", &prompt, &resp, "tenant-1", now),
+		entity.NewAuditIncident("inc-002", "req-2", "dictionary", nil, sevHigh, "redact", &prompt, nil, "tenant-1", now.Add(-time.Hour)),
+		entity.NewAuditIncident("inc-003", "req-3", "regex", nil, sevMedium, "alert", nil, nil, "tenant-2", now.Add(-2*time.Hour)),
 	}
 }
 

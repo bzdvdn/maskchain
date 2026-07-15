@@ -130,7 +130,10 @@ func TestMaxIdleConnsPerHost(t *testing.T) {
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 5,
 	}
-	tp := NewTransport(cfg)
+	tp, err := NewTransport(cfg)
+	if err != nil {
+		t.Fatalf("NewTransport: %s", err)
+	}
 	if tp.MaxIdleConnsPerHost != 5 {
 		t.Fatalf("expected MaxIdleConnsPerHost=5, got %d", tp.MaxIdleConnsPerHost)
 	}
@@ -147,9 +150,13 @@ func TestPerProviderTimeoutFromClient(t *testing.T) {
 	}))
 	defer slow.Close()
 
-	client := NewClientWithTransport(testConfig(), NewTransport(testConfig()), 100*time.Millisecond, nil)
+	tp, err := NewTransport(testConfig())
+	if err != nil {
+		t.Fatalf("NewTransport: %s", err)
+	}
+	client := NewClientWithTransport(testConfig(), tp, 100*time.Millisecond, nil)
 	start := time.Now()
-	_, err := client.Call(context.Background(), &ports.ProviderRequest{
+	_, err = client.Call(context.Background(), &ports.ProviderRequest{
 		Method: http.MethodGet,
 		URL:    slow.URL,
 	})
@@ -164,8 +171,14 @@ func TestPerProviderTimeoutFromClient(t *testing.T) {
 
 // @sk-test 116-connection-pool-fixes#T2.4: TestPerProviderTransportIsolation verifies per-provider transport (AC-008)
 func TestPerProviderTransportIsolation(t *testing.T) {
-	tp1 := NewTransport(&config.EgressConfig{MaxIdleConns: 10, MaxIdleConnsPerHost: 2})
-	tp2 := NewTransport(&config.EgressConfig{MaxIdleConns: 20, MaxIdleConnsPerHost: 5})
+	tp1, err := NewTransport(&config.EgressConfig{MaxIdleConns: 10, MaxIdleConnsPerHost: 2})
+	if err != nil {
+		t.Fatalf("NewTransport: %s", err)
+	}
+	tp2, err := NewTransport(&config.EgressConfig{MaxIdleConns: 20, MaxIdleConnsPerHost: 5})
+	if err != nil {
+		t.Fatalf("NewTransport: %s", err)
+	}
 
 	if tp1 == tp2 {
 		t.Fatal("expected different transport pointers")
@@ -369,7 +382,10 @@ func TestSSEChunkDelivery(t *testing.T) {
 // @sk-test 116-connection-pool-fixes#T3.5: TestTLSInsecureSkipVerify (AC-004)
 func TestTLSInsecureSkipVerify(t *testing.T) {
 	cfg := &config.EgressTLSConfig{InsecureSkipVerify: true}
-	tlsCfg := buildTLSConfig(cfg)
+	tlsCfg, err := buildTLSConfig(cfg)
+	if err != nil {
+		t.Fatalf("buildTLSConfig: %s", err)
+	}
 	if tlsCfg == nil {
 		t.Fatal("expected non-nil tls.Config")
 	}
@@ -385,7 +401,10 @@ func TestTLSCustomCA(t *testing.T) {
 	_ = caKeyPEM
 
 	cfg := &config.EgressTLSConfig{CACert: caFile}
-	tlsCfg := buildTLSConfig(cfg)
+	tlsCfg, err := buildTLSConfig(cfg)
+	if err != nil {
+		t.Fatalf("buildTLSConfig: %s", err)
+	}
 	if tlsCfg == nil {
 		t.Fatal("expected non-nil tls.Config")
 	}
@@ -404,7 +423,10 @@ func TestTLSMutualTLS(t *testing.T) {
 	keyFile := tempFile(t, "client-key.pem", keyPEM)
 
 	cfg := &config.EgressTLSConfig{Cert: certFile, Key: keyFile}
-	tlsCfg := buildTLSConfig(cfg)
+	tlsCfg, err := buildTLSConfig(cfg)
+	if err != nil {
+		t.Fatalf("buildTLSConfig: %s", err)
+	}
 	if tlsCfg == nil {
 		t.Fatal("expected non-nil tls.Config")
 	}

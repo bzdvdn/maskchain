@@ -29,24 +29,35 @@ func (d *DictionaryDetector) Scan(ctx context.Context, text string) ([]DetectorR
 		return nil, nil
 	}
 
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	switch d.dict.MatchMode() {
 	case dictionary.MatchModeExact:
-		return d.scanExact(text), nil
+		return d.scanExact(ctx, text), nil
 	case dictionary.MatchModeContains:
-		return d.scanContains(text), nil
+		return d.scanContains(ctx, text), nil
 	case dictionary.MatchModeRegex:
-		return d.scanRegex(text)
+		return d.scanRegex(ctx, text)
 	case dictionary.MatchModeFuzzy:
-		return d.scanFuzzy(text), nil
+		return d.scanFuzzy(ctx, text), nil
 	default:
 		return nil, nil
 	}
 }
 
-func (d *DictionaryDetector) scanExact(text string) []DetectorResult {
+func (d *DictionaryDetector) scanExact(ctx context.Context, text string) []DetectorResult {
 	entries := d.dict.AllValues()
 	var results []DetectorResult
 	for _, entry := range entries {
+		select {
+		case <-ctx.Done():
+			return results
+		default:
+		}
 		if entry == "" {
 			continue
 		}
@@ -73,12 +84,17 @@ func (d *DictionaryDetector) scanExact(text string) []DetectorResult {
 	return results
 }
 
-func (d *DictionaryDetector) scanContains(text string) []DetectorResult {
+func (d *DictionaryDetector) scanContains(ctx context.Context, text string) []DetectorResult {
 	matcher := dictionary.BuildWordlistMatcher(d.dict.AllValues())
 	matches := matcher.Match(text)
 
 	results := make([]DetectorResult, 0, len(matches))
 	for _, m := range matches {
+		select {
+		case <-ctx.Done():
+			return results
+		default:
+		}
 		results = append(results, DetectorResult{
 			DetectorType: "dictionary",
 			Fragment:     m.Pattern,
@@ -91,10 +107,15 @@ func (d *DictionaryDetector) scanContains(text string) []DetectorResult {
 }
 
 // @sk-task 24-shield-dictionaries#T3.2: Implement regex mode (AC-005)
-func (d *DictionaryDetector) scanRegex(text string) ([]DetectorResult, error) {
+func (d *DictionaryDetector) scanRegex(ctx context.Context, text string) ([]DetectorResult, error) {
 	var results []DetectorResult
 
 	for _, entry := range d.dict.AllValues() {
+		select {
+		case <-ctx.Done():
+			return results, ctx.Err()
+		default:
+		}
 		re, err := regexp.Compile(entry)
 		if err != nil {
 			continue
@@ -114,7 +135,7 @@ func (d *DictionaryDetector) scanRegex(text string) ([]DetectorResult, error) {
 }
 
 // @sk-task 24-shield-dictionaries#T3.3: Implement fuzzy mode with Levenshtein (AC-005)
-func (d *DictionaryDetector) scanFuzzy(text string) []DetectorResult {
+func (d *DictionaryDetector) scanFuzzy(ctx context.Context, text string) []DetectorResult {
 	entries := d.dict.AllValues()
 	if len(entries) == 0 {
 		return nil
@@ -125,6 +146,11 @@ func (d *DictionaryDetector) scanFuzzy(text string) []DetectorResult {
 
 	pos := 0
 	for _, word := range words {
+		select {
+		case <-ctx.Done():
+			return results
+		default:
+		}
 		idx := strings.Index(text[pos:], word)
 		if idx == -1 {
 			pos += len(word) + 1

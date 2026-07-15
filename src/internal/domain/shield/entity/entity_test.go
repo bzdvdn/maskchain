@@ -1,62 +1,13 @@
 package entity
 
+// @sk-task cleanup-profile-repository#T3.6: Remove Profile entity tests (AC-012)
 import (
 	"errors"
 	"testing"
-	"time"
 
 	domErr "github.com/bzdvdn/maskchain/src/internal/domain/shield/errors"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
-
-// @sk-test 20-shield-domain#T5.2: TestNewProfile creates with valid fields (AC-001)
-func TestNewProfile_Valid(t *testing.T) {
-	id, _ := value.NewProfileID("p1")
-	slug, _ := value.NewProfileSlug("test-profile")
-	tenant, _ := value.NewTenantID("t1")
-
-	p := NewProfile(id, slug, tenant, "Test Profile")
-	if p.ID() != id {
-		t.Errorf("expected ID %v, got %v", id, p.ID())
-	}
-	if p.Slug() != slug {
-		t.Errorf("expected Slug %v, got %v", slug, p.Slug())
-	}
-	if p.TenantID() != tenant {
-		t.Errorf("expected TenantID %v, got %v", tenant, p.TenantID())
-	}
-	if p.Name() != "Test Profile" {
-		t.Errorf("expected Name 'Test Profile', got %q", p.Name())
-	}
-	if !p.Enabled() {
-		t.Error("expected Enabled=true by default")
-	}
-	if p.CreatedAt().IsZero() {
-		t.Error("expected CreatedAt non-zero")
-	}
-	if p.UpdatedAt().IsZero() {
-		t.Error("expected UpdatedAt non-zero")
-	}
-}
-
-// @sk-test 20-shield-domain#T5.2: TestNewProfile with options (AC-001)
-func TestNewProfile_WithOptions(t *testing.T) {
-	id, _ := value.NewProfileID("p2")
-	slug, _ := value.NewProfileSlug("with-opts")
-	tenant, _ := value.NewTenantID("t1")
-
-	desc := "my description"
-	p := NewProfile(id, slug, tenant, "With Options",
-		WithDescription(desc),
-		WithEnabled(false),
-	)
-	if p.Description() == nil || *p.Description() != desc {
-		t.Errorf("expected description %q, got %v", desc, p.Description())
-	}
-	if p.Enabled() {
-		t.Error("expected Enabled=false")
-	}
-}
 
 // @sk-test 20-shield-domain#T5.2: TestNewDetector valid (AC-008)
 func TestNewDetector_Valid(t *testing.T) {
@@ -163,17 +114,4 @@ func TestReaction_Constants(t *testing.T) {
 	}
 }
 
-// @sk-test 20-shield-domain#T5.2: TestProfile timestamps are set on creation (AC-001)
-func TestProfile_Timestamps(t *testing.T) {
-	id, _ := value.NewProfileID("p3")
-	slug, _ := value.NewProfileSlug("timestamps")
-	tenant, _ := value.NewTenantID("t1")
 
-	before := time.Now()
-	p := NewProfile(id, slug, tenant, "Timestamps")
-	after := time.Now()
-
-	if p.CreatedAt().Before(before) || p.CreatedAt().After(after) {
-		t.Error("CreatedAt should be between before and after")
-	}
-}

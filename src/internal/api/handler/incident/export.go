@@ -12,13 +12,13 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 )
 
+// @sk-task cleanup-profile-repository#T3.2: Remove ProfileSlug from export (AC-012, AC-013)
 // @sk-task 60-audit-incidents#T2.2: Export incidents as CSV or JSON (AC-003, AC-004, AC-008)
 func (h *Handler) ExportIncidents(c *gin.Context) {
 	var params struct {
-		Format      string `form:"format"`
-		Severity    string `form:"severity"`
-		Tenant      string `form:"tenant"`
-		ProfileSlug string `form:"profile_slug"`
+		Format   string `form:"format"`
+		Severity string `form:"severity"`
+		Tenant   string `form:"tenant"`
 	}
 	if err := c.ShouldBindQuery(&params); err != nil {
 		middleware.AbortWithError(c, http.StatusBadRequest, middleware.ErrorCodeValidationError, "invalid query parameters")
@@ -43,10 +43,6 @@ func (h *Handler) ExportIncidents(c *gin.Context) {
 		t := params.Tenant
 		filter.Tenant = &t
 	}
-	if params.ProfileSlug != "" {
-		p := params.ProfileSlug
-		filter.ProfileSlug = &p
-	}
 
 	incidents, _, err := h.repo.List(c.Request.Context(), filter)
 	if err != nil {
@@ -68,7 +64,7 @@ func exportCSV(c *gin.Context, incidents []*entity.Incident) {
 	writer := csv.NewWriter(c.Writer)
 	defer writer.Flush()
 
-	header := []string{"id", "request_id", "timestamp", "tenant", "profile_slug", "detector_type", "entry_value", "severity", "action", "prompt_snippet_redacted", "response_snippet"}
+	header := []string{"id", "request_id", "timestamp", "tenant", "detector_type", "entry_value", "severity", "action", "prompt_snippet_redacted", "response_snippet"}
 	if err := writer.Write(header); err != nil {
 		return
 	}
@@ -79,7 +75,6 @@ func exportCSV(c *gin.Context, incidents []*entity.Incident) {
 			inc.RequestID(),
 			inc.Timestamp().Format(time.RFC3339),
 			inc.Tenant(),
-			inc.ProfileSlug(),
 			inc.DetectorType(),
 			valueOrEmpty(inc.EntryValue()),
 			inc.Severity().String(),
@@ -104,7 +99,6 @@ func exportJSON(c *gin.Context, incidents []*entity.Incident) {
 			RequestID:             inc.RequestID(),
 			Timestamp:             inc.Timestamp().Format(time.RFC3339),
 			Tenant:                inc.Tenant(),
-			ProfileSlug:           inc.ProfileSlug(),
 			DetectorType:          inc.DetectorType(),
 			EntryValue:            inc.EntryValue(),
 			Severity:              inc.Severity().String(),
@@ -122,7 +116,6 @@ type dtoIncidentExport struct {
 	RequestID             string  `json:"request_id"`
 	Timestamp             string  `json:"timestamp"`
 	Tenant                string  `json:"tenant"`
-	ProfileSlug           string  `json:"profile_slug"`
 	DetectorType          string  `json:"detector_type"`
 	EntryValue            *string `json:"entry_value,omitempty"`
 	Severity              string  `json:"severity"`

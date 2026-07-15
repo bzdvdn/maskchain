@@ -18,7 +18,10 @@ func NewProviderClient(pcfg *config.ProviderConfig, egressCfg *config.EgressConf
 		return nil, fmt.Errorf("provider %q: api_type is required", pcfg.Name)
 	}
 
-	tp := egress.NewTransport(egressCfg)
+	tp, err := egress.NewTransport(egressCfg)
+	if err != nil {
+		return nil, fmt.Errorf("provider %q: failed to create transport: %w", pcfg.Name, err)
+	}
 	timeout := parseTimeout(pcfg.Timeout, egressCfg.IdleTimeout)
 	var cb *egress.CircuitBreaker
 	if egressCfg.CircuitBreaker != nil {

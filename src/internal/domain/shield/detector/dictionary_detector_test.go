@@ -5,13 +5,11 @@ import (
 	"testing"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/dictionary"
-	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
 
 func testDict(t *testing.T, entries []interface{}, mode dictionary.MatchMode) *dictionary.Dictionary {
 	t.Helper()
-	slug, _ := value.NewProfileSlug("test-profile")
-	return dictionary.NewDictionary(slug, "test", entries, mode)
+	return dictionary.NewDictionary("test", entries, mode)
 }
 
 // @sk-test 24-shield-dictionaries#T6.1: TestDictionaryDetectorExact (AC-003)

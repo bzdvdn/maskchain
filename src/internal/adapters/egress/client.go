@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -24,9 +25,14 @@ type Client struct {
 }
 
 func NewClient(cfg *config.EgressConfig) *Client {
+	tp, err := NewTransport(cfg)
+	if err != nil {
+		slog.Warn("egress: failed to create transport, using default", "error", err)
+		tp = &http.Transport{Proxy: proxyFunc()}
+	}
 	return &Client{
 		cfg: cfg,
-		tp:  NewTransport(cfg),
+		tp:  tp,
 	}
 }
 

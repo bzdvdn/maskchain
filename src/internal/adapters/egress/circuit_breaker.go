@@ -2,7 +2,6 @@ package egress
 
 import (
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
@@ -12,8 +11,8 @@ import (
 type CircuitBreaker struct {
 	cfg      *config.CircuitBreakerConfig
 	mu       sync.Mutex
-	failures atomic.Int64
-	deadline atomic.Int64
+	failures int64
+	deadline int64
 }
 
 func NewCircuitBreaker(cfg *config.CircuitBreakerConfig) *CircuitBreaker {
@@ -21,23 +20,22 @@ func NewCircuitBreaker(cfg *config.CircuitBreakerConfig) *CircuitBreaker {
 }
 
 func (cb *CircuitBreaker) Allow() bool {
-	deadline := cb.deadline.Load()
-	if deadline == 0 {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
+	if cb.deadline == 0 {
 		return true
 	}
-	if time.Now().UnixNano() < deadline {
-		return false
-	}
-	return true
+	return time.Now().UnixNano() >= cb.deadline
 }
 
 func (cb *CircuitBreaker) Fail() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
-	n := cb.failures.Add(1)
-	if n >= int64(cb.cfg.MaxFailures) {
-		cb.deadline.Store(time.Now().Add(cb.cfg.Cooldown).UnixNano())
+	cb.failures++
+	if cb.failures >= int64(cb.cfg.MaxFailures) {
+		cb.deadline = time.Now().Add(cb.cfg.Cooldown).UnixNano()
 	}
 }
 
@@ -45,6 +43,6 @@ func (cb *CircuitBreaker) Reset() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
-	cb.failures.Store(0)
-	cb.deadline.Store(0)
+	cb.failures = 0
+	cb.deadline = 0
 }

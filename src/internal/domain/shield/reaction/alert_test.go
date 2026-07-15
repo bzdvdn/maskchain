@@ -11,6 +11,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
 
+// @sk-task cleanup-profile-repository#T3.6: Remove ListByProfile from mock (AC-009)
 type mockIncidentRepo struct {
 	mu      sync.Mutex
 	saved   []entity.Incident
@@ -28,10 +29,6 @@ func (r *mockIncidentRepo) Save(_ context.Context, incident *entity.Incident) er
 }
 
 func (r *mockIncidentRepo) FindByID(_ context.Context, _ string) (*entity.Incident, error) {
-	return nil, errors.New("not implemented")
-}
-
-func (r *mockIncidentRepo) ListByProfile(_ context.Context, _ value.ProfileID) ([]*entity.Incident, error) {
 	return nil, errors.New("not implemented")
 }
 
