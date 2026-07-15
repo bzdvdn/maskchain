@@ -1,3 +1,4 @@
+// @sk-task remove-audit-incidents#T2.1: Remove Incident from ReactionResult (AC-007)
 // Package reaction provides reaction strategies for Content Shield.
 package reaction
 

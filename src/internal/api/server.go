@@ -10,7 +10,6 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.uber.org/zap"
 
-	"github.com/bzdvdn/maskchain/src/internal/api/handler/incident"
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
@@ -85,14 +84,7 @@ func (s *Server) RegisterRateLimit(mw gin.HandlerFunc) {
 	s.engine.Use(mw)
 }
 
-// @sk-task 60-audit-incidents#T2.3: Register incident routes with /export before /:id (AC-001, AC-002, AC-003)
-func (s *Server) RegisterIncidentHandler(h *incident.Handler) {
-	group := s.engine.Group("/api/v1/incidents")
-	group.GET("/export", h.ExportIncidents)
-	group.GET("", h.ListIncidents)
-	group.GET("/:id", h.GetIncident)
-}
-
+// @sk-task remove-audit-incidents#T3.3: RegisterIncidentHandler removed (AC-009)
 // @sk-task 70-routing-engine#T3.2: Register proxy routes with routing handler (AC-003, AC-004)
 // @sk-task 112-proxy-streaming-wiring#T2.2: Register WrapSSE middleware on streaming route (AC-002)
 // @sk-task 118-api-consistency#T2.2: Add /api/v1/ prefix and 301 redirect from /v1/ (AC-001, AC-002)

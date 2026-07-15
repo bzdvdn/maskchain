@@ -15,17 +15,12 @@ func NewBlockReaction() *BlockReaction {
 	return &BlockReaction{}
 }
 
+// @sk-task remove-audit-incidents#T2.1: Remove incidents reference, use status (AC-007)
 func (r *BlockReaction) Execute(_ context.Context, result *entity.ScanResult, text string) (string, error) {
 	if result == nil {
 		return text, fmt.Errorf("%w: nil scan result", shielderrors.ErrBlockedByPolicy)
 	}
 
-	incidents := result.Incidents()
-	if len(incidents) == 0 {
-		return text, fmt.Errorf("%w: no incidents found", shielderrors.ErrBlockedByPolicy)
-	}
-
-	inc := incidents[0]
-	return text, fmt.Errorf("%w: blocked by detector %q with severity %v",
-		shielderrors.ErrBlockedByPolicy, inc.DetectorID(), inc.Severity())
+	return text, fmt.Errorf("%w: blocked with status %v",
+		shielderrors.ErrBlockedByPolicy, result.Status())
 }

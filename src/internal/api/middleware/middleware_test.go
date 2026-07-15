@@ -292,7 +292,7 @@ func TestShieldIntegration(t *testing.T) {
 
 	t.Run("blocked", func(t *testing.T) {
 		mockEng.resp = &appshield.ScanResponse{
-			ScanResult: entity.NewScanResult(value.ScanStatusBlocked, nil),
+			ScanResult: entity.NewScanResult(value.ScanStatusBlocked),
 		}
 
 		w := httptest.NewRecorder()
@@ -311,7 +311,7 @@ func TestShieldIntegration(t *testing.T) {
 
 	t.Run("clean", func(t *testing.T) {
 		mockEng.resp = &appshield.ScanResponse{
-			ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
+			ScanResult: entity.NewScanResult(value.ScanStatusClean),
 		}
 
 		w := httptest.NewRecorder()
@@ -398,7 +398,7 @@ func TestShieldMiddleware_Metrics(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	mockEng := &mockEngine{
 		resp: &appshield.ScanResponse{
-			ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
+			ScanResult: entity.NewScanResult(value.ScanStatusClean),
 		},
 	}
 	log := zap.NewNop()

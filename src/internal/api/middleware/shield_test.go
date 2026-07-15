@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
@@ -39,7 +38,7 @@ func newPIITenant(slug string, opts ...entity.TenantOption) *entity.Tenant {
 func TestShieldBlocked(t *testing.T) {
 	engine, mockEng, log := setupTest(t)
 	mockEng.resp = &appshield.ScanResponse{
-		ScanResult: entity.NewScanResult(value.ScanStatusBlocked, nil),
+		ScanResult: entity.NewScanResult(value.ScanStatusBlocked),
 	}
 
 	engine.Use(func(c *gin.Context) {
@@ -69,16 +68,13 @@ func TestShieldBlocked(t *testing.T) {
 	if resp.ShieldStatus != "blocked" {
 		t.Errorf("expected shield_status blocked, got %s", resp.ShieldStatus)
 	}
-	if resp.IncidentID == "" {
-		t.Error("expected non-empty incident_id")
-	}
 }
 
 // @sk-test 51-shield-gateway-integration#T2.2: TestShieldClean passes request to handler (AC-002)
 func TestShieldClean(t *testing.T) {
 	engine, mockEng, log := setupTest(t)
 	mockEng.resp = &appshield.ScanResponse{
-		ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
+		ScanResult: entity.NewScanResult(value.ScanStatusClean),
 	}
 
 	var handlerCalled bool
@@ -113,7 +109,7 @@ func TestShieldEngineError(t *testing.T) {
 	engine, mockEng, log := setupTest(t)
 	mockEng.err = nil
 	mockEng.resp = &appshield.ScanResponse{
-		ScanResult: entity.NewScanResult(value.ScanStatusError, nil),
+		ScanResult: entity.NewScanResult(value.ScanStatusError),
 	}
 
 	engine.Use(func(c *gin.Context) {
@@ -142,7 +138,7 @@ func TestShieldEngineError(t *testing.T) {
 func TestShieldHeaders(t *testing.T) {
 	engine, mockEng, log := setupTest(t)
 	mockEng.resp = &appshield.ScanResponse{
-		ScanResult: entity.NewScanResult(value.ScanStatusBlocked, nil),
+		ScanResult: entity.NewScanResult(value.ScanStatusBlocked),
 	}
 
 	engine.Use(func(c *gin.Context) {
@@ -161,12 +157,6 @@ func TestShieldHeaders(t *testing.T) {
 
 	if w.Header().Get("X-Shield-Status") == "" {
 		t.Error("expected X-Shield-Status header")
-	}
-	if w.Header().Get("X-Shield-Incident-ID") == "" {
-		t.Error("expected X-Shield-Incident-ID header")
-	}
-	if _, err := uuid.Parse(w.Header().Get("X-Shield-Incident-ID")); err != nil {
-		t.Errorf("expected valid UUID in X-Shield-Incident-ID, got %q", w.Header().Get("X-Shield-Incident-ID"))
 	}
 }
 
@@ -256,7 +246,7 @@ func TestShieldLogging(t *testing.T) {
 	engine := gin.New()
 	mockEng := &mockEngine{
 		resp: &appshield.ScanResponse{
-			ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
+			ScanResult: entity.NewScanResult(value.ScanStatusClean),
 		},
 	}
 
@@ -282,7 +272,7 @@ func TestShieldLogging(t *testing.T) {
 		t.Fatal("expected log entry")
 	}
 
-	var hasStatus, hasSlug, hasPIIEnabled, hasRulesCount, hasModel, hasLatency, hasIncidentID, hasUnmasked bool
+	var hasStatus, hasSlug, hasPIIEnabled, hasRulesCount, hasModel, hasLatency, hasUnmasked bool
 	for _, entry := range recorded.All() {
 		for _, f := range entry.Context {
 			switch f.Key {
@@ -298,8 +288,6 @@ func TestShieldLogging(t *testing.T) {
 				hasModel = true
 			case "latency":
 				hasLatency = true
-			case "incident_id":
-				hasIncidentID = true
 			case "unmasked":
 				hasUnmasked = true
 			}
@@ -324,9 +312,6 @@ func TestShieldLogging(t *testing.T) {
 	if !hasLatency {
 		t.Error("expected latency in log")
 	}
-	if !hasIncidentID {
-		t.Error("expected incident_id in log")
-	}
 	if !hasUnmasked {
 		t.Error("expected unmasked in log")
 	}
@@ -336,7 +321,7 @@ func TestShieldLogging(t *testing.T) {
 func TestPIIConfig_BlocksEmail(t *testing.T) {
 	engine, mockEng, log := setupTest(t)
 	mockEng.resp = &appshield.ScanResponse{
-		ScanResult: entity.NewScanResult(value.ScanStatusBlocked, nil),
+		ScanResult: entity.NewScanResult(value.ScanStatusBlocked),
 	}
 
 	engine.Use(func(c *gin.Context) {
@@ -498,7 +483,7 @@ func TestShieldGracefulDegradation(t *testing.T) {
 func TestDictUnmask(t *testing.T) {
 	engine, mockEng, log := setupTest(t)
 	mockEng.resp = &appshield.ScanResponse{
-		ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
+		ScanResult: entity.NewScanResult(value.ScanStatusClean),
 	}
 
 	dict := dictionary.NewDictionary("names", []interface{}{"original-name"}, dictionary.MatchModeExact)
@@ -552,7 +537,7 @@ func TestDictUnmask(t *testing.T) {
 func TestStreamingDictUnmask(t *testing.T) {
 	engine, mockEng, log := setupTest(t)
 	mockEng.resp = &appshield.ScanResponse{
-		ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
+		ScanResult: entity.NewScanResult(value.ScanStatusClean),
 	}
 
 	dict := dictionary.NewDictionary("names", []interface{}{"original-name"}, dictionary.MatchModeExact)
@@ -630,7 +615,7 @@ func TestShieldEdge_NoPIIConfig(t *testing.T) {
 func TestShieldEdge_UnmaskNoopNoPlaceholders(t *testing.T) {
 	engine, mockEng, log := setupTest(t)
 	mockEng.resp = &appshield.ScanResponse{
-		ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
+		ScanResult: entity.NewScanResult(value.ScanStatusClean),
 	}
 
 	dict := dictionary.NewDictionary("names", []interface{}{"original-name"}, dictionary.MatchModeExact)
@@ -676,7 +661,7 @@ func TestShieldEdge_UnmaskNoopNoPlaceholders(t *testing.T) {
 func TestShieldEdge_InvalidPlaceholderNotReplaced(t *testing.T) {
 	engine, mockEng, log := setupTest(t)
 	mockEng.resp = &appshield.ScanResponse{
-		ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
+		ScanResult: entity.NewScanResult(value.ScanStatusClean),
 	}
 
 	dict := dictionary.NewDictionary("names", []interface{}{"original-name"}, dictionary.MatchModeExact)

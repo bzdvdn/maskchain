@@ -1,8 +1,16 @@
 # Roadmap MaskChain
 
-Фазы разработки в порядке выполнения. Каждая фаза = папка `specs/active/<slug>/`, проходящая полный speckeep flow: `/spk.spec <slug>` → plan → tasks → implement → verify → archive.
+**MaskChain — платформа для обратимого маскирования данных в AI.**
 
-**Легенда:** ✅ реализовано, 🔄 в работе, ⬜ запланировано
+```
+MaskChain Gateway    — AI-прокси с маскированием, роутингом, fallback
+MaskChain Mask API   — /mask и /unmask для обратимого преобразования
+MaskChain Tenants    — тенанты, словари и политики маскирования
+MaskChain Sessions   — карта замен на всю цепочку диалога (новое)
+MaskChain Analytics  — токены, стоимость, трафик использования (новое)
+```
+
+**Легенда:** ✅ реализовано, ⬜ запланировано
 
 ---
 
@@ -10,21 +18,17 @@
 
 ### 00-project-foundation ✅
 
-**Цель:** Инициализация Go-модуля, структуры директорий (DDD + Clean Architecture), базовый билд-системы, линтеров, Dockerfile.
+**Цель:** Go-модуль, DDD + Clean Architecture структура, билд-система, линтеры, Docker.
 
-**Ключевые артефакты:** `go.mod`, `go.sum`, Makefile, `.golangci.yml`, `.editorconfig`, структура директорий, пустой `main.go`, Dockerfile (multistage)
-
-**Зависимости:** нет
+**Ключевые артефакты:** `go.mod`, Makefile, `.golangci.yml`, `.editorconfig`, структура `src/cmd/`, `src/internal/`, Dockerfile.
 
 ---
 
 ### 01-config-bootstrap ✅
 
-**Цель:** cobra + viper конфигурация. Загрузка YAML/ENV/флагов, валидация, структура конфига.
+**Цель:** cobra + viper конфигурация, YAML/ENV/флаги, валидация.
 
-**Ключевые артефакты:** `src/internal/infra/config/` — Config struct, LoadConfig(), defaults. Поддержка `config.yaml`, `CONFIG_*` env vars, CLI флагов (`--config`, `--log-level`). Валидация required-полей.
-
-**Зависимости:** 00
+**Ключевые артефакты:** `src/internal/infra/config/` — Config, LoadConfig(), defaults, env-чтение, validation.
 
 ---
 
@@ -32,11 +36,9 @@
 
 ### 10-gateway-skeleton ✅
 
-**Цель:** Gin HTTP server с graceful shutdown, health endpoints, middleware chain.
+**Цель:** Gin HTTP server с graceful shutdown, middleware chain, health endpoints.
 
-**Ключевые артефакты:** `src/internal/api/server.go` — Server struct (Gin, Start/Shutdown). Middleware: RequestID, Logger, Recovery, CORS. Endpoints: `GET /health`, `GET /ready`, `GET /live`. Graceful shutdown.
-
-**Зависимости:** 01
+**Ключевые артефакты:** Server struct, RequestID/Logger/Recovery/CORS middleware, `/health`, `/ready`, `/live`.
 
 ---
 
@@ -44,31 +46,25 @@
 
 ### 20-shield-domain ✅
 
-**Цель:** Domain-слой Content Shield: сущности, value objects, domain services, ошибки.
+**Цель:** Domain-слой Content Shield: маскирование, детекция, реакции.
 
-**Ключевые артефакты:** `src/internal/domain/shield/entity/` — Profile, Detector, DetectorType, Reaction, Incident, ScanResult, Pattern. `src/internal/domain/shield/value/` — ProfileID, ProfileSlug, TenantID, Severity. Domain services и repository interfaces.
-
-**Зависимости:** 00
+**Ключевые артефакты:** `src/internal/domain/shield/entity/` — Detector, Reaction, ScanResult, Pattern, Session. `src/internal/domain/shield/value/` — TenantID, Severity. Domain services.
 
 ---
 
 ### 21-shield-detectors ✅
 
-**Цель:** Базовый набор детекторов: PII (email, phone, SSN, паспорт), secrets (API key, JWT, private key), financial (Luhn, IBAN, SWIFT).
+**Цель:** PII (email, phone, SSN, паспорт), secrets (API key, JWT), financial (Luhn, IBAN, SWIFT).
 
-**Ключевые артефакты:** `src/internal/domain/shield/detector/` — Detector interface + registry + PIIDetector, SecretsDetector, FinancialDetector + CompositeDetector.
-
-**Зависимости:** 20
+**Ключевые артефакты:** Detector interface + registry + PIIDetector, SecretsDetector, FinancialDetector, CompositeDetector.
 
 ---
 
 ### 22-shield-mask-storage ✅
 
-**Цель:** Обратимое template-based маскирование. Мask entries в PG + Valkey.
+**Цель:** Обратимое template-based маскирование. Mask entries в PG + Valkey.
 
-**Ключевые артефакты:** `mask_entries` таблица, Valkey-кэш, write-through/read-through. `POST /api/v1/shield/mask`, `POST /api/v1/shield/unmask`. MaskEntry entity, MaskStorage interface, MaskUseCase.
-
-**Зависимости:** 21, 01
+**Ключевые артефакты:** MaskEntry entity, MaskStorage interface, MaskUseCase. Write-through/read-through кэш. `POST /api/v1/shield/mask`, `POST /api/v1/shield/unmask`.
 
 ---
 
@@ -76,29 +72,23 @@
 
 **Цель:** Механизм реакций: block, redact, mask, alert.
 
-**Ключевые артефакты:** `src/internal/domain/shield/reaction/` — ReactionExecutor interface + BlockReaction (403), RedactReaction (`***`), MaskReaction (частичное скрытие), AlertReaction (логирование). Pipeline выбора реакции через PolicyEvaluator.
-
-**Зависимости:** 20, 21
+**Ключевые артефакты:** ReactionExecutor + BlockReaction (403), RedactReaction (`***`), MaskReaction (частичное скрытие), AlertReaction (лог). Pipeline через PolicyEvaluator.
 
 ---
 
 ### 24-shield-dictionaries ✅
 
-**Цель:** Словари — именованные списки значений, привязанные к профилю. Поддержка MatchMode: exact, contains (Aho-Corasick), regex, fuzzy.
+**Цель:** Словари — именованные списки значений. MatchMode: exact, contains, regex, fuzzy.
 
-**Ключевые артефакты:** Dictionary entity, DictionaryRepository interface, DictionaryDetector, WordlistMatcher. Exact — HashSet, Contains — Aho-Corasick, Regex — компиляция per entry. Хранение в `dictionary_entries` таблице.
-
-**Зависимости:** 20, 23
+**Ключевые артефакты:** Dictionary entity, DictionaryRepository, DictionaryDetector, WordlistMatcher. Exact — HashSet, Contains — Aho-Corasick, Regex — компиляция.
 
 ---
 
 ### 25-shield-preprocessors ✅
 
-**Цель:** Препроцессоры CSV/JSON для маскирования структурированных данных до детекторов.
+**Цель:** CSV/JSON препроцессоры для структурированных данных.
 
-**Ключевые артефакты:** Processor interface, CSVProcessor (обнаружение CSV-блоков, mask колонок), JSONProcessor (JSONPath, wildcard `[*]`, вложенные объекты). PreprocessorDef хранится в JSONB-поле профиля.
-
-**Зависимости:** 20
+**Ключевые артефакты:** Processor interface, CSVProcessor, JSONProcessor (JSONPath, wildcard). PreprocessorDef в JSONB.
 
 ---
 
@@ -106,33 +96,27 @@
 
 ### 30-shield-persistence ✅
 
-**Цель:** PostgreSQL repository для профилей, словарей, инцидентов. Миграции, CRUD, транзакции.
+**Цель:** PostgreSQL repository для словарей, mask entries, сессий.
 
-**Ключевые артефакты:** Миграции (001_profiles, 002_dictionary_entries, 003_incidents). Connection pool. ProfileRepo (с загрузкой словарей + препроцессоров), DictionaryRepo, IncidentRepo. PGXTransactionManager.
-
-**Зависимости:** 20, 24, 25, 01
+**Ключевые артефакты:** Миграции, connection pool, DictionaryRepo, MaskEntryRepo, SessionRepo, PGXTransactionManager.
 
 ---
 
-## Группа 4: Profiles API & UI ✅
+## Группа 4: Policies API & UI ✅
 
-### 40-profiles-api ✅
+### 40-policies-api ✅
 
-**Цель:** REST API CRUD профилей (словари и препроцессоры inline). Gin handlers, validation.
+**Цель:** REST API CRUD политик маскирования (словари + препроцессоры inline).
 
-**Ключевые артефакты:** `src/internal/api/handler/profile/` — CreateProfile, GetProfile, ListProfiles, UpdateProfile, DeleteProfile, PatchDictionary. DTO с inline-словарями и препроцессорами. Error handling middleware.
-
-**Зависимости:** 30, 10
+**Ключевые артефакты:** Gin handlers: CreatePolicy, GetPolicy, ListPolicies, UpdatePolicy, DeletePolicy, PatchDictionary. DTO с inline-словарями и препроцессорами.
 
 ---
 
-### 41-profiles-ui ✅
+### 41-policies-ui ✅
 
-**Цель:** React (Vite + TypeScript) для управления профилями.
+**Цель:** React (Vite + TypeScript) интерфейс управления политиками.
 
-**Ключевые артефакты:** `ui/` — Vite + React + TypeScript. ProfileList, ProfileDetail, ProfileForm. DictionaryEditor, PreprocessorEditor. Routing: `/profiles`, `/profiles/new`, `/profiles/:slug`.
-
-**Зависимости:** 40
+**Ключевые артефакты:** Vite + React + TypeScript. PolicyList, PolicyDetail, PolicyForm. DictionaryEditor, PreprocessorEditor. Routing: `/policies`, `/policies/new`, `/policies/:slug`.
 
 ---
 
@@ -140,43 +124,27 @@
 
 ### 50-shield-engine ✅
 
-**Цель:** Оркестратор сканирования: препроцессоры → детекторы (словари) → реакции → результат.
+**Цель:** Оркестратор сканирования: препроцессоры → детекторы → реакции → результат.
 
-**Ключевые артефакты:** `src/internal/app/usecase/shield/` — ScanUseCase, ApplyPolicyUseCase. ScanPipeline: 1) препроцессоры 2) словари 3) детекторы 4) PolicyEvaluator 5) ReactionExecutor. ShieldEngine: `Scan(ctx, req) ScanResult`. Placeholder-based masking.
-
-**Зависимости:** 20, 21, 22, 23, 24, 25, 30
+**Ключевые артефакты:** ScanUseCase, ApplyPolicyUseCase. ScanPipeline. ShieldEngine. Placeholder-based masking.
 
 ---
 
 ### 51-shield-gateway-integration ✅
 
-**Цель:** Интеграция Shield Engine в request lifecycle gateway.
+**Цель:** Shield Engine в request lifecycle gateway.
 
-**Ключевые артефакты:** ShieldMiddleware — перехват POST `/v1/chat/completions`. Profile resolution per-request. Pre-request scan. Headers: `X-Shield-Status`, `X-Shield-Incident-ID`.
-
-**Зависимости:** 50, 10
+**Ключевые артефакты:** ShieldMiddleware — перехват POST `/v1/chat/completions`. Policy resolution. Pre-request scan. Headers: `X-Shield-Status`.
 
 ---
 
-## Группа 6: Audit & Observability ✅
-
-### 60-audit-incidents ✅
-
-**Цель:** Хранение и просмотр инцидентов Content Shield. API + UI.
-
-**Ключевые артефакты:** `GET /api/v1/incidents` (list, filter), `GET /api/v1/incidents/:id`. Экспорт CSV/JSON. UI: Incidents page.
-
-**Зависимости:** 30, 40, 41
-
----
+## Группа 6: Observability ✅
 
 ### 61-observability ✅
 
 **Цель:** OpenTelemetry, Prometheus metrics, structured logging, distributed tracing.
 
-**Ключевые артефакты:** OTel SDK init (traces + metrics). Prometheus counters (requests, shield_blocks, shield_redacts, latency). slog adapter. Gin middleware: OTel trace propagation, request duration metric. docker-compose включает Prometheus + Grafana.
-
-**Зависимости:** 10, 50
+**Ключевые артефакты:** OTel SDK (traces + metrics). Prometheus counters (requests, shield_blocks, latency). slog handler с trace_id/span_id. Gin middleware (trace propagation, request duration). docker-compose: Prometheus + Grafana.
 
 ---
 
@@ -186,9 +154,7 @@
 
 **Цель:** Provider registry, model→provider mapping, fallback, health-aware routing.
 
-**Ключевые артефакты:** `src/internal/domain/routing/` — Provider, Route, RoutingRule entities. `src/internal/domain/routing/service/` — ProviderRegistry, RouteSelector, FallbackHandler, HealthChecker. Config-based routing rules YAML. Прокси-хендлер `POST /v1/chat/completions`. Response header `X-Provider`.
-
-**Зависимости:** 10
+**Ключевые артефакты:** Provider, Route, RoutingRule entities. ProviderRegistry, RouteSelector, FallbackHandler, HealthChecker. Config-based YAML routing. Прокси-хендлер `POST /v1/chat/completions`. Header `X-Provider`.
 
 ---
 
@@ -196,9 +162,7 @@
 
 **Цель:** HTTP/HTTPS egress с proxy dialer, SSE streaming, retries, cancellation.
 
-**Ключевые артефакты:** `src/internal/adapters/egress/` — HTTP client with proxy dialer (HTTP_PROXY/HTTPS_PROXY). SSE streaming (chunk forwarding). Retry с exponential backoff + full jitter. Request cancellation (context). Connection pooling. NO_PROXY support.
-
-**Зависимости:** 70
+**Ключевые артефакты:** Egress HTTP client. SSE chunk forwarding. Retry (exponential backoff + full jitter). Context cancellation. Connection pooling. NO_PROXY.
 
 ---
 
@@ -206,57 +170,37 @@
 
 ### 80-tenant-isolation ✅
 
-**Цель:** Multi-tenant: API key → tenant mapping, изоляция профилей, tenant-scoped routing.
+**Цель:** API key → tenant mapping, изоляция политик, tenant-scoped routing.
 
-**Ключевые артефакты:** Tenant entity, APIKey value object, auth middleware. Profile isolation. Tenant-scoped config overrides. `X-Tenant-ID` header propagation.
-
-**Зависимости:** 30, 40, 50
+**Ключевые артефакты:** Tenant entity, APIKey value object, auth middleware. Tenant-scoped config overrides. `X-Tenant-ID` propagation.
 
 ---
 
-## Группа 9: Production Hardening (реализовано частично, требуется доработка)
+## Группа 9: Production Hardening ✅
 
-### 81-rate-limiting-budgets ⬜
+### 81-rate-limiting-budgets ✅
 
-**Цель:** Rate limiting и token budgets. Valkey-based sliding window counters.
+**Цель:** Rate limiting + token budgets. Valkey sliding window counters.
 
-**Ключевые артефакты:** TokenBudget, RateLimit entities. Sliding window rate limiter (Valkey Sorted Set). Token budget tracking per-tenant, per-model. Valkey repository для counters.
-
-**Статус:** domain-сущности и конфиг готовы, middleware не подключена. Перенесено в фазу 113.
-
-**Зависимости:** 10, 80
+**Ключевые артефакты:** TokenBudget, RateLimit entities. Sliding window (Valkey Sorted Set). Per-tenant, per-model лимиты. 429 с Retry-After.
 
 ---
 
-### 82-profile-versioning ⬜
+### 90-production-hardening ✅
 
-**Цель:** Версионирование профилей. История изменений, diff, rollback (PostMVP).
+**Цель:** Performance tuning, load testing, security audit.
 
-**Статус:** отложено до PostMVP.
-
-**Зависимости:** 40, 30
+**Ключевые артефакты:** pprof endpoints, security-check (gitleaks), load-test (python), pool tuning.
 
 ---
 
-### 90-production-hardening ⬜
-
-**Цель:** Performance tuning, load testing, security audit, production runbook.
-
-**Статус:** частично (pprof endpoints, pool tuning). Требует расширения. Задачи декомпозированы в фазы 113, 114, 115, 116.
-
-**Зависимости:** все предыдущие
-
----
-
-## Group 10: Architecture Split ✅
+## Группа 10: Architecture Split ✅
 
 ### 100-admin-control-plane ✅
 
-**Цель:** Выделение admin control plane в отдельный binary со своим Dockerfile. Gateway — лёгкий data plane.
+**Цель:** Выделение admin binary со своим Dockerfile. Gateway — лёгкий data plane.
 
-**Ключевые артефакты:** `src/cmd/admin/main.go` — entrypoint admin. `src/internal/api/admin.go` — admin server. Gateway Dockerfile (`Dockerfile.gateway`) без node-стадии. Admin Dockerfile (`Dockerfile.admin`) с node build. Раздельные сигналы, graceful shutdown.
-
-**Зависимости:** 90, 40, 41
+**Ключевые артефакты:** `src/cmd/admin/main.go`, `src/internal/api/admin.go`, `Dockerfile.admin`, `Dockerfile.gateway`. Раздельные сигналы.
 
 ---
 
@@ -264,220 +208,253 @@
 
 **Цель:** Минимальный gateway binary (<100ms старт, ~15MB image).
 
-**Ключевые артефакты:** Build tag `gateway`/`admin`. UI embed только в admin. CGO_ENABLED=0. Makefile target: `build-gateway`, `build-admin`, `docker-build-gateway`, `docker-build-admin`.
-
-**Зависимости:** 100
+**Ключевые артефакты:** Build tag `gateway`/`admin`. UI embed только в admin. CGO_ENABLED=0.
 
 ---
 
-### 102-profile-cache ✅
+### 102-policy-cache ✅
 
-**Цель:** Read-through кэш профилей на Valkey + in-memory LRU для gateway.
+**Цель:** Read-through кэш политик на Valkey + in-memory LRU для gateway.
 
-**Ключевые артефакты:** ProfileCache (Valkey + LRU). Кэш-ключи `profile:<slug>:v<version>`. Write-through/read-through. PubSub-инвалидация. Graceful degradation. Метрики.
-
-**Зависимости:** 30, 80, 61
+**Ключевые артефакты:** PolicyCache (Valkey + LRU). Write-through/read-through. PubSub-инвалидация. Graceful degradation.
 
 ---
 
-## Группа 11: Provider Adapters (НОВОЕ — необходимо для 1.0.0)
+## Группа 11: Provider Adapters ✅
 
-### 110-provider-adapters ⬜
+### 110-provider-adapters ✅
 
-**Цель:** Реальные HTTP-клиенты для LLM-провайдеров: OpenAI, Anthropic (Claude), DeepSeek, Mistral. Каждый адаптер реализует `ports.ProviderClient`, преобразует запросы/ответы в формат провайдера и обратно в OpenAI-совместимый.
+**Цель:** Реальные HTTP-клиенты для LLM-провайдеров.
+
+**Ключевые артефакты:** `openai.go` — OpenAI-compatible, `anthropic.go` — Anthropic Messages API. Фабрика `NewProviderClient(cfg)`. Call + Stream. Per-provider transport.
+
+---
+
+### 111-provider-auth-config ✅
+
+**Цель:** API key management, secure storage, per-provider auth.
+
+**Ключевые артефакты:** `ProviderConfig.APIKeys`, `AuthScheme` (bearer/api-key/basic), `AuthHeader`. Чтение из env. Validation. Sensitive-логи.
+
+---
+
+### 112-proxy-streaming-wiring ✅
+
+**Цель:** SSE streaming через весь pipeline: клиент → shield → routing → provider.
+
+**Ключевые артефакты:** `stream: true` detection. `gin.Context.Stream()` форвард. Cancellation propagation. FallbackHandler.Stream().
+
+---
+
+## Группа 12: Production Readiness ✅
+
+### 113-shield-middleware-wiring ✅
+
+**Цель:** Полный cycle: tenant → policy → scan → reaction.
+
+**Ключевые артефакты:** Policy resolution per-request. Graceful degradation (default_action). Интеграционный тест.
+
+---
+
+### 114-real-health-probes ✅
+
+**Цель:** Dependency-aware health checks.
+
+**Ключевые артефакты:** PGProbe, ValkeyProbe, EgressProbe. Три состояния: ok/degraded/down. Configurable critical deps.
+
+---
+
+### 115-rate-limit-wiring ✅
+
+**Цель:** Rate limiting в gateway lifecycle.
+
+**Ключевые артефакты:** Valkey repos → RateLimit middleware → RegisterRateLimit(). Per-tenant overrides. Token budgets. Метрики.
+
+---
+
+### 116-connection-pool-fixes ✅
+
+**Цель:** Исправление багов egress-клиента, circuit breaker, TLS/mTLS.
+
+**Ключевые артефакты:** MaxIdleConnsPerHost. Per-provider timeout. TLS config (CA, mTLS, insecure). Circuit breaker. Per-provider transport.
+
+---
+
+### 117-critical-test-coverage ✅
+
+**Цель:** Тесты на critical path.
+
+**Ключевые артефакты:** routing handler tests, shield middleware tests, mask handler tests, server tests. Integration test (full cycle).
+
+---
+
+### 118-api-consistency ✅
+
+**Цель:** Единый API-стандарт `/api/v1/*`, OpenAPI, envelope.
+
+**Ключевые артефакты:** `POST /api/v1/chat/completions`. Envelope middleware. OpenAPI 3.1 spec. Swagger UI. SPA fallback. `/v1/*` → 301 redirect.
+
+---
+
+## Группа 13: Sessions ⬜ (MaskChain 2.0)
+
+**Контекст:** Сессия хранит карту замен `{placeholder: original}` на протяжении всей цепочки диалога. Клиент отправляет `X-Session-ID`, shield middleware пишет замены в сессию, `/unmask` по SessionID восстанавливает оригинал всего диалога.
+
+### 120-sessions-domain ⬜
+
+**Цель:** Domain-слой Sessions.
 
 **Ключевые артефакты:**
-- `src/internal/adapters/provider/openai.go` — OpenAI-compatible (DeepSeek, Mistral, Groq): Bearer auth, `/v1/chat/completions`, стандартный SSE
-- `src/internal/adapters/provider/anthropic.go` — Anthropic Messages API: `x-api-key` header, `/v1/messages`, свой формат стриминга
-- Фабрика `NewProviderClient(cfg)` в main.go, создающая адаптер по `api_type`
-- Каждый адаптер: Call + Stream, преобразование ошибок провайдера в стандартный формат
+- `Session` entity: `SessionID`, `TenantID`, `Model`, `ReplacementMap` (map[string]string), `TokenCount`, `MessageCount`, `Status` (active/expired/closed), `TTL`, `CreatedAt`, `ExpiresAt`
+- `SessionID` value object (UUIDv7)
+- `ReplacementMap` value object — упорядоченная карта замен с поддержкой diff
+- `SessionStore` port interface: `Save`, `Get`, `AppendReplacements`, `ExtendTTL`, `Close`, `DeleteExpired`
+- `SessionUseCase`: create session, append replacements, unmarshal by session, close/expire
 
-**Критично для:** фактической поддержки Anthropic, DeepSeek, Mistral. Без этой фазы gateway не может общаться ни с одним реальным провайдером (только stub).
-
-**Зависимости:** 70, 71, 80
+**Зависимости:** 20-shield-domain, 80-tenant-isolation, 01-config-bootstrap
 
 ---
 
-### 111-provider-auth-and-config ⬜
+### 121-sessions-storage ⬜
 
-**Цель:** API key management, secure storage, per-provider auth в конфиге. Добавить в `ProviderConfig` поля `api_key`, `auth_type`, `auth_header`. Поддержка чтения ключей из env/Vault (не только из YAML).
+**Цель:** Postgres + Valkey repository для Sessions.
 
 **Ключевые артефакты:**
-- `ProviderConfig.APIKey` — строковый ключ (чтение из `CONFIG_ROUTING_PROVIDERS_0_API_KEY` env)
-- `ProviderConfig.AuthHeader` — кастомный заголовок (по умолчанию `Authorization`)
-- `ProviderConfig.AuthType` — bearer | api-key | basic
-- Секция `routing.providers[].api_key` в YAML (опционально, можно env)
-- Валидация: если провайдер сконфигурирован, APIKey — required
-- Метки sensitive в логах: ключи не выводятся в debug-конфиге
+- Миграция: `CREATE TABLE sessions (id UUID, tenant_id TEXT, model TEXT, replacements JSONB, token_count BIGINT, message_count INT, status TEXT, ttl INTERVAL, created_at TIMESTAMPTZ, expires_at TIMESTAMPTZ)`
+- Индекс по `tenant_id`, `status`, `expires_at`
+- `PostgresSessionStore` — CRUD + `AppendReplacements` (JSONB merge)
+- `ValkeySessionCache` — TTL-based кэш с read-through/write-through
+- `CleanupWorker` — фоновый inverval removal expired sessions (optional)
+- Graceful degradation: если Valkey недоступен — работа через PG (fail-open)
 
-**Зависимости:** 110, 80, 01
+**Зависимости:** 120-sessions-domain, 30-shield-persistence
 
 ---
 
-### 112-proxy-streaming-wiring ⬜
+### 122-sessions-api ⬜
 
-**Цель:** Провести SSE streaming через весь pipeline от провайдера до клиента. `HandleChatCompletion` сейчас вызывает только `Call()`, игнорируя `Stream()`. Нужно: определение streaming-запроса (по `stream: true` в body), проксирование SSE-чанков до клиента, корректная обработка cancellation.
+**Цель:** REST API для управления сессиями.
 
 **Ключевые артефакты:**
-- Детекция streaming-запроса в `chatRequest` (поле `Stream bool`)
-- `Middleware.WrapSSE()` — установка `Content-Type: text/event-stream`, `Transfer-Encoding: chunked`, flush-per-chunk
-- RoutingProxyHandler.HandleChatCompletion: при `stream: true` вызывает `Stream()`, форвардит чанки через `gin.Context.Stream()`
-- Обработка cancellation от клиента → cancellation upstream provider
-- Обработка ошибок в середине стрима: запись ошибки в стрим + закрытие
-- FallbackHandler.Stream() для стримингового fallback между провайдерами
+- `POST /api/v1/sessions` — создать сессию, вернуть `session_id`
+- `GET /api/v1/sessions/:id` — получить метаданные сессии
+- `GET /api/v1/sessions/:id/replacements` — получить карту замен (только для admin/tenant owner)
+- `PATCH /api/v1/sessions/:id/extend` — продлить TTL
+- `DELETE /api/v1/sessions/:id` — закрыть сессию
+- `POST /api/v1/unmask/session/:id` — unmarshal всего диалога по SessionID
+- Пагинация для `GET /api/v1/sessions`
+- Tenant-scoped: тенант видит только свои сессии
+- OpenAPI spec + Swagger UI
 
-**Критично для:** UX — большинство LLM-запросов идут в streaming-режиме. Без этой фазы клиенты не получают токены по SSE.
-
-**Зависимости:** 110, 71, 70
+**Зависимости:** 121-sessions-storage, 118-api-consistency, 80-tenant-isolation
 
 ---
 
-## Группа 12: Production Readiness (критично для 1.0.0)
+### 123-sessions-gateway ⬜
 
-### 113-shield-middleware-wiring ⬜
-
-**Цель:** Подключить реальный ProfileRepository в ShieldMiddleware (сейчас — `nil`). Content Shield фактически не работает в production.
+**Цель:** Интеграция Sessions в request lifecycle gateway.
 
 **Ключевые артефакты:**
-- Wire ProfileRepository (из PG + кэш) в `ShieldMiddleware` вместо `nil`
-- В `main.go`: загрузка профилей из tenant routing config → ShieldEngine инициализация
-- Profile resolution per-request: tenant `X-Tenant-ID` → профиль по `tenant_model_mapping`
-- Если профиль не найден: fallback (block | allow) — настраивается в `ShieldConfig.default_action`
-- Интеграционный тест: отправка PII-содержащего промпта → shield блокирует → 403
-- Graceful degradation: если PG недоступен для загрузки профиля, действие определяется `default_action`
+- Middleware: читает `X-Session-ID` из запроса, создаёт сессию если нет, кладёт в контекст
+- Shield middleware: **пишет** `{placeholder → original}` в активную сессию вместо создания Incident
+- Session middleware: пробрасывает `X-Session-ID` в ответ
+- Headers: `X-Session-ID`, `X-Session-Expires-At`, `X-Session-Message-Count`
+- Config: `session.ttl` (default 30m), `session.max_messages` (default 100)
+- Metrics: `session_active_total`, `session_replacements_total`
+- Graceful degradation: если session store недоступен — маскирование работает без сохранения сессии (fail-open)
 
-**Критично для:** соответствия конституции (Content Shield — обязательная фича, не opt-in).
+**Критично для:** цепочки диалогов (multi-turn). Без сессий каждый запрос маскируется независимо, и unmarshal одного запроса не восстанавливает контекст предыдущих.
 
-**Зависимости:** 51, 102, 80
+**Зависимости:** 122-sessions-api, 51-shield-gateway-integration, 61-observability
 
 ---
 
-### 114-real-health-probes ⬜
+## Группа 14: Analytics ⬜ (MaskChain 2.0)
 
-**Цель:** Dependency-aware health/readiness probes. `/health`, `/ready`, `/live` сейчас возвращают статический `{"status":"ok"}`.
+**Контекст:** Аналитика использования: токены, стоимость, трафик по tenant-ам и моделям. Замена метрикам инцидентов — теперь считаем не «нарушения», а «использование».
+
+### 130-analytics-domain ⬜
+
+**Цель:** Domain-слой аналитики.
 
 **Ключевые артефакты:**
-- `GET /health` — liveness: всегда 200 (процесс жив)
-- `GET /ready` — readiness: проверка PG (SELECT 1), Valkey (PING), egress (TCP к провайдерам)
-- `GET /live` — startup probe: сервис принял конфиг, инициализировал зависимости
-- Формат ответа: `{"status":"ok|degraded|down","checks":{"database":{"status":"ok","latency_ms":2}}}`
-- `degraded` — не-критичная зависимость недоступна (Valkey для rate limiter)
-- `down` — критическая недоступна (PG для shield)
-- Config: `server.health_check.critical_deps: ["database"]`
-- Тесты с mock probes
+- `TokenUsage` entity: `TenantID`, `Model`, `InputTokens`, `OutputTokens`, `Cost`, `Timestamp`
+- `UsageRecord` value object: агрегированная запись за период
+- `CostRate` value object: стоимость токена по модели (config-driven)
+- `UsageStore` port interface: `Record`, `QueryByTenant`, `QueryByModel`, `AggregateByDay`
+- `Aggregation` entity: агрегаты по tenant/model/day: total_tokens, total_cost, request_count, avg_latency
 
-**Зависимости:** 10, 61
+**Зависимости:** 80-tenant-isolation, 01-config-bootstrap
 
 ---
 
-### 115-rate-limit-wiring ⬜
+### 131-analytics-pipeline ⬜
 
-**Цель:** Подключить rate limiting в gateway request lifecycle. Middleware и Valkey-репозиторий существуют, но не завязаны в main.
+**Цель:** Сбор и агрегация метрик использования.
 
 **Ключевые артефакты:**
-- Инициализация Valkey repos → RateLimit middleware → `srv.RegisterRateLimit()` в main.go
-- Per-tenant rate limits из `config.ratelimit.tenant_overrides`
-- Per-model token budgets из `config.ratelimit.default_token_budget`
-- 429 Too Many Requests с Retry-After header
-- Метрики: rate_limit_exceeded_total, budget_exceeded_total
-- Graceful degradation: при недоступности Valkey — fail-open с warning
+- `UsageMiddleware` — пост-обработка каждого запроса: читает токены из response, записывает UsageRecord
+- Token counting: из response body (usage поле в OpenAI-формате) или fallback через tiktoken
+- Async worker: буферизованная запись в UsageStore (batch insert каждые 5s)
+- Aggregation worker: материализованные агрегаты (per-hour, per-day), cleanup сырых данных
+- Prometheus: `maskchain_tokens_total{tenant,model,type=input|output}`, `maskchain_cost_total{tenant,model}`, `maskchain_request_total{tenant,model}`
 
-**Зависимости:** 81, 61
+**Критично для:** — операторы хотят видеть сколько тратят на каждый tenant и модель.
+
+**Зависимости:** 130-analytics-domain, 61-observability, 70-routing-engine
 
 ---
 
-### 116-connection-pool-fixes ⬜
+### 132-analytics-api ⬜
 
-**Цель:** Исправить найденные баги в egress-клиенте и добавить per-provider timeout.
+**Цель:** API и дашборды аналитики.
 
 **Ключевые артефакты:**
-- **Fix bug** `pool.go:23`: `MaxIdleConnsPerHost: cfg.MaxIdleConns` → `cfg.MaxIdleConnsPerHost`
-- **Per-provider timeout**: пробросить `ProviderConfig.Timeout` в контекст egress-клиента
-- **TLS config**: поддержка кастомных CA-сертификатов, отключение проверки (для инетрнала), mTLS через конфиг `egress.tls`
-- **Circuit breaker**: простая имплементация (после N последовательных ошибок — skip provider на T секунд)
-- **Per-provider connection pool**: выделенный `http.Transport` на провайдера (изоляция от "шумных соседей")
+- `GET /api/v1/analytics/tokens` — токены по tenant/model за период (day/week/month)
+- `GET /api/v1/analytics/cost` — стоимость по tenant/model
+- `GET /api/v1/analytics/traffic` — количество запросов, latency P50/P95/P99
+- `GET /api/v1/analytics/tenants/:slug/summary` — сводка по конкретному tenant
+- Grafana dashboard provisioning: `deployments/grafana/dashboards/analytics.json`
+- OpenAPI spec
+- Tenant-scoped: тенант видит только свою аналитику
+- CSV/JSON export для reporting
 
-**Зависимости:** 71, 70
-
----
-
-### 117-critical-test-coverage ⬜
-
-**Цель:** Закрыть пробелы в тестировании на critical path.
-
-**Ключевые артефакты:**
-- `routing_proxy_handler_test.go` — fallback, health-aware выбор, tenant-scoped routing
-- `shield_middleware_test.go` — блокировка PII, allow чистого промпта, graceful degradation
-- `mask_handler_test.go` — mask/unmask pipeline
-- `server_test.go` — health endpoints, graceful shutdown
-- Integration тест: полный цикл запрос → auth → shield → routing → egress → response
-
-**Зависимости:** 110, 112, 113, 114
+**Зависимости:** 131-analytics-pipeline, 118-api-consistency, 41-policies-ui
 
 ---
 
-### 118-api-consistency ⬜
-
-**Цель:** Единый API-стандарт `/api/v1/*`, OpenAPI/Swagger, единый envelope.
-
-**Ключевые артефакты:**
-- `POST /api/v1/chat/completions` (основной), `/v1/chat/completions` — deprecated с redirect 301
-- Единый envelope: `{"data": ..., "error": {"code": "...", "message": "..."}}`
-- Пагинация: `{"data": [...], "pagination": {"page": 1, "per_page": 20, "total": 100}}`
-- OpenAPI 3.1 spec: `docs/openapi.yaml`
-- Swagger UI: `GET /api/v1/docs` (admin binary)
-- SPA NoRoute handler с проверкой `Accept: text/html`
-
-**Зависимости:** 100, 40, 60, 22
-
----
-
-## Порядок разработки (1.0.0)
-
-```
-Текущее состояние (реализовано):
-00 → 01 → 10 → 20 → 21 → 22 → 23 → 24 → 25
-                                             ↓
-30 → 40 → 41 → 50 → 51 → 60 → 61
-                                    ↓
-70 → 71 → 80 → 100 → 101 → 102
-                                    ↓
-                          81(partial)
-
-Группа 11: Provider Adapters (критично)
-110 → 111 → 112
-  ↓
-112 (streaming wiring)
-
-Группа 12: Production Readiness (критично)
-113 → 114 → 115 → 116 → 117 → 118
-  ↓     ↓       ↓
-113   114     116
-(shield) (health) (pool fixes)
-
-Рекомендуемый порядок для 1.0.0:
-110 → 111 → 112 → 113 → 116 → 114 → 115 → 117 → 118
-```
-
-Каждая фаза — полный speckeep цикл:
-
-1. `/spk.spec <slug>` — создание ветки `feature/<slug>` + spec-файл
-2. `/spk.plan` — план реализации
-3. `/spk.tasks` — декомпозиция на задачи
-4. `/spk.implement` — реализация
-5. `/spk.verify` — верификация (тесты + AC)
-6. `speckeep archive <slug> .` — архив (после verify: pass)
-
----
-
-## PostMVP (после 1.0.0)
+## PostMVP (после 2.0)
 
 | Slug | Описание |
 |---|---|
-| `82-profile-versioning` | Версионирование профилей: история, diff, rollback, draft→active workflow |
+| `advanced-detectors` | ML-based классификаторы, context-aware PII, multi-language |
+| `policy-engine` | OPA/Rego policies, WASM filters, declarative policy model |
 | `envoy-data-plane` | Envoy ext_proc gRPC + xDS control plane. Build tag `envoy` |
 | `k8s-operator` | Kubernetes Operator: CRDs, reconciliation, Gateway API |
-| `advanced-detectors` | ML-based classifiers, context-aware PII, multi-language |
-| `policy-engine` | OPA/Rego policies, WASM filters, declarative policy model |
-| `shield-benchmark` | Performance benchmark suite для детекторов: throughput, latency, accuracy |
-| `audit-dashboard` | Admin dashboard с графиками инцидентов по tenant/severity/timeline |
+| `shield-benchmark` | Performance benchmark: throughput, latency, accuracy |
+| `mcp-integration` | Model Context Protocol — маскирование на уровне MCP-тулов |
+| `agent-support` | Маскирование в multi-agent цепочках (агент вызывает агента) |
+| `cache-prompt` | Кэширование общих prefix-ов промптов для экономии токенов |
+| `model-selector` | Автоматический выбор модели под задачу (cost/quality balance) |
+
+---
+
+## Порядок разработки (2.0.0)
+
+```
+Уже реализовано (1.0.0):
+00 → 01 → 10 → 20 → 21 → 22 → 23 → 24 → 25
+                                             ↓
+30 → 40 → 41 → 50 → 51 → 61
+                                    ↓
+70 → 71 → 80 → 81 → 90 → 100 → 101 → 102
+                                    ↓
+110 → 111 → 112 → 113 → 116 → 114 → 115 → 117 → 118
+
+Новые фазы 2.0.0:
+120 → 121 → 122 → 123
+  ↓
+130 → 131 → 132
+```
+
+Все фазы 1.0.0 выполнены. Фазы 120–132 — план MaskChain 2.0.

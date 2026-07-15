@@ -15,7 +15,6 @@ import (
 	"github.com/bzdvdn/maskchain/docs"
 	"github.com/bzdvdn/maskchain/src/internal/api/dto"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/admin"
-	"github.com/bzdvdn/maskchain/src/internal/api/handler/incident"
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
@@ -71,13 +70,7 @@ func (s *AdminServer) RegisterMetricsRoute(handler gin.HandlerFunc) {
 	s.engine.GET("/metrics", handler)
 }
 
-func (s *AdminServer) RegisterIncidentHandler(h *incident.Handler) {
-	group := s.engine.Group("/api/v1/incidents")
-	group.GET("/export", h.ExportIncidents)
-	group.GET("", h.ListIncidents)
-	group.GET("/:id", h.GetIncident)
-}
-
+// @sk-task remove-audit-incidents#T3.3: RegisterIncidentHandler removed from AdminServer (AC-009)
 func (s *AdminServer) RegisterTenantHandler(h *admin.TenantHandler) {
 	group := s.engine.Group("/api/v1/tenants")
 	group.POST("", h.CreateTenant)

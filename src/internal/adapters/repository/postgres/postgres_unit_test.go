@@ -7,29 +7,7 @@ import (
 	"testing"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/preprocessor"
-	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
-
-// @sk-test 30-shield-persistence#T3.3: TestParseSeverity (AC-006)
-func TestParseSeverity(t *testing.T) {
-	tests := []struct {
-		input string
-		want  value.Severity
-	}{
-		{"low", value.SeverityLow},
-		{"medium", value.SeverityMedium},
-		{"high", value.SeverityHigh},
-		{"critical", value.SeverityCritical},
-		{"unknown", value.SeverityLow},
-		{"", value.SeverityLow},
-	}
-	for _, tt := range tests {
-		got := parseSeverity(tt.input)
-		if got != tt.want {
-			t.Errorf("parseSeverity(%q) = %v, want %v", tt.input, got, tt.want)
-		}
-	}
-}
 
 // @sk-test 30-shield-persistence#T3.3: TestMarshalUnmarshalPreprocessors (AC-006)
 func TestMarshalUnmarshalPreprocessors(t *testing.T) {

@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MaskChain — Design System & Mockups</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-hover: #1c2129;
+    --surface-active: #21262d;
+    --border: #30363d;
+    --border-light: #21262d;
+    --text: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #6e7681;
+    --primary: #6366f1;
+    --primary-hover: #818cf8;
+    --primary-bg: rgba(99,102,241,0.12);
+    --success: #22c55e;
+    --success-bg: rgba(34,197,94,0.10);
+    --warning: #f59e0b;
+    --warning-bg: rgba(245,158,11,0.10);
+    --danger: #ef4444;
+    --danger-bg: rgba(239,68,68,0.10);
+    --info: #3b82f6;
+    --info-bg: rgba(59,130,246,0.10);
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 12px;
+    --radius-full: 9999px;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+  }
+
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding-bottom: 80px;
+  }
+
+  /* ===== LAYOUT ===== */
+  .page { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+  .page-wide { max-width: 100%; padding: 0; }
+
+  .flex { display: flex; }
+  .flex-col { flex-direction: column; }
+  .items-center { align-items: center; }
+  .justify-between { justify-content: space-between; }
+  .gap-2 { gap: 8px; }
+  .gap-3 { gap: 12px; }
+  .gap-4 { gap: 16px; }
+  .gap-6 { gap: 24px; }
+  .grid { display: grid; }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+
+  /* ===== TYPOGRAPHY ===== */
+  .h1 { font-size: 1.5rem; font-weight: 600; }
+  .h2 { font-size: 1.25rem; font-weight: 600; }
+  .h3 { font-size: 1.125rem; font-weight: 500; }
+  .body { font-size: 0.875rem; }
+  .small { font-size: 0.75rem; }
+  .xs { font-size: 0.6875rem; }
+  .text-secondary { color: var(--text-secondary); }
+  .text-muted { color: var(--text-muted); }
+  .text-center { text-align: center; }
+  .mono { font-family: var(--font-mono); }
+  .uppercase { text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* ===== SECTION ===== */
+  .section { margin-bottom: 48px; }
+  .section-title { margin-bottom: 24px; }
+  .section-title h2 { font-size: 1.25rem; font-weight: 600; margin-bottom: 4px; }
+  .section-title p { font-size: 0.875rem; color: var(--text-secondary); }
+
+  /* ===== CARDS ===== */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; background: var(--surface-hover);
+    border-bottom: 1px solid var(--border-light);
+  }
+  .card-header h3 { font-size: 0.8125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+  .card-body { padding: 16px; }
+  .card-shadow { box-shadow: var(--shadow-md); }
+  .card-hover:hover {
+    border-color: var(--border);
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+  }
+
+  /* ===== BADGES ===== */
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: var(--radius-full);
+    font-size: 0.6875rem; font-weight: 600;
+  }
+  .badge-sm { padding: 1px 6px; font-size: 0.625rem; }
+  .badge-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .badge-critical { background: var(--danger-bg); color: var(--danger); }
+  .badge-critical .badge-dot { background: var(--danger); }
+  .badge-high { background: var(--warning-bg); color: var(--warning); }
+  .badge-high .badge-dot { background: var(--warning); }
+  .badge-medium { background: var(--warning-bg); color: var(--warning); }
+  .badge-medium .badge-dot { background: var(--warning); }
+  .badge-low { background: var(--info-bg); color: var(--info); }
+  .badge-low .badge-dot { background: var(--info); }
+  .badge-active { background: var(--danger-bg); color: var(--danger); }
+  .badge-pending { background: var(--warning-bg); color: var(--warning); }
+  .badge-done { background: var(--success-bg); color: var(--success); }
+  .badge-review { background: var(--info-bg); color: var(--info); }
+
+  /* ===== BUTTONS ===== */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 8px 16px; border-radius: var(--radius-md);
+    font-size: 0.8125rem; font-weight: 500;
+    border: 1px solid transparent;
+    cursor: pointer; transition: all 0.15s;
+    text-decoration: none; white-space: nowrap;
+  }
+  .btn-sm { padding: 4px 10px; font-size: 0.75rem; }
+  .btn-icon { width: 36px; height: 36px; padding: 0; }
+  .btn-sm-icon { width: 28px; height: 28px; padding: 0; }
+  .btn-primary {
+    background: var(--primary); color: #fff; font-weight: 600;
+  }
+  .btn-primary:hover { background: var(--primary-hover); box-shadow: 0 0 12px rgba(99,102,241,0.4); }
+  .btn-secondary {
+    background: var(--surface-hover); color: var(--text); border-color: var(--border);
+  }
+  .btn-secondary:hover { background: var(--surface-active); }
+  .btn-ghost {
+    background: transparent; color: var(--text-secondary);
+  }
+  .btn-ghost:hover { background: var(--surface-hover); color: var(--text); }
+  .btn-danger {
+    background: transparent; color: var(--danger); border-color: var(--danger);
+  }
+  .btn-danger:hover { background: var(--danger-bg); }
+
+  /* ===== INPUTS ===== */
+  .input-group { display: flex; flex-direction: column; gap: 4px; }
+  .input-group label { font-size: 0.75rem; color: var(--text-secondary); }
+  .input {
+    width: 100%; padding: 8px 12px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md);
+    color: var(--text); font-size: 0.8125rem; font-family: inherit;
+    transition: border-color 0.15s;
+  }
+  .input:focus { outline: none; border-color: var(--primary); }
+  .input::placeholder { color: var(--text-muted); }
+  .input-error { border-color: var(--danger); }
+  .input-error:focus { border-color: var(--danger); box-shadow: 0 0 0 2px var(--danger-bg); }
+  .input-valid { border-color: var(--success); }
+  .input-valid:focus { border-color: var(--success); box-shadow: 0 0 0 2px var(--success-bg); }
+
+  .select {
+    position: relative;
+  }
+  .select::after {
+    content: '▾'; position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    font-size: 10px; color: var(--text-muted); pointer-events: none;
+  }
+  .select select {
+    width: 100%; padding: 8px 28px 8px 12px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md);
+    color: var(--text); font-size: 0.8125rem; font-family: inherit;
+    cursor: pointer; appearance: none;
+    -webkit-appearance: none; -moz-appearance: none;
+  }
+  .select select:focus { outline: none; border-color: var(--primary); }
+
+  /* ===== TABLE ===== */
+  .table-container { overflow-x: auto; }
+  .table { width: 100%; border-collapse: collapse; }
+  .table th {
+    padding: 10px 16px; font-size: 0.6875rem; font-weight: 600;
+    color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em;
+    text-align: left; background: var(--surface-hover);
+    border-bottom: 1px solid var(--border-light);
+  }
+  .table td {
+    padding: 12px 16px; font-size: 0.8125rem;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .table tr:hover td { background: rgba(255,255,255,0.015); }
+  .table tr:last-child td { border-bottom: none; }
+
+  /* ===== PAGINATION ===== */
+  .pagination { display: flex; align-items: center; gap: 4px; }
+  .page-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: var(--radius-sm);
+    font-size: 0.8125rem; color: var(--text-secondary);
+    background: transparent; border: none; cursor: pointer; transition: all 0.1s;
+  }
+  .page-btn:hover { background: var(--surface-hover); }
+  .page-btn.active { background: var(--primary); color: #fff; font-weight: 600; }
+  .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ===== STAT CARD ===== */
+  .stat-card {
+    padding: 16px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-xl);
+  }
+  .stat-card .label { font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; }
+  .stat-card .value { font-size: 1.75rem; font-weight: 700; line-height: 1.2; }
+  .stat-card .trend { font-size: 0.75rem; }
+
+  /* ===== SEVERITY BANNER ===== */
+  .banner {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    border-width: 1px; border-style: solid;
+  }
+  .banner-critical { background: var(--danger-bg); border-color: rgba(239,68,68,0.25); }
+  .banner-critical .banner-icon { color: var(--danger); }
+  .banner-high { background: var(--warning-bg); border-color: rgba(245,158,11,0.25); }
+  .banner-info { background: var(--info-bg); border-color: rgba(59,130,246,0.25); }
+
+  /* ===== DETAIL GRID ===== */
+  .detail-grid {
+    display: grid; grid-template-columns: 140px 1fr;
+    gap: 0;
+  }
+  .detail-grid .row { display: contents; }
+  .detail-grid .label {
+    padding: 10px 16px; font-size: 0.75rem; color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-light); background: rgba(255,255,255,0.008);
+  }
+  .detail-grid .value {
+    padding: 10px 16px; font-size: 0.8125rem;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .detail-grid .row:last-child .label,
+  .detail-grid .row:last-child .value { border-bottom: none; }
+
+  /* ===== TIMELINE ===== */
+  .timeline { position: relative; padding-left: 20px; }
+  .timeline::before {
+    content: ''; position: absolute; left: 6px; top: 6px; bottom: 6px;
+    width: 1px; background: var(--border-light);
+  }
+  .timeline-item { position: relative; padding: 0 0 16px 16px; }
+  .timeline-item:last-child { padding-bottom: 0; }
+  .timeline-item::before {
+    content: ''; position: absolute; left: -14px; top: 7px;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--primary);
+  }
+  .timeline-item .time { font-size: 0.75rem; color: var(--text-muted); }
+  .timeline-item .desc { font-size: 0.8125rem; }
+
+  /* ===== DETECTION ROW ===== */
+  .detection-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; margin-bottom: 4px;
+    background: var(--surface-hover); border-radius: var(--radius-sm);
+  }
+  .detection-row .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .detection-row .name { font-size: 0.75rem; flex: 1; }
+  .detection-row .status { font-size: 0.6875rem; font-weight: 600; }
+  .detection-row .value { font-size: 0.6875rem; color: var(--text-muted); font-family: var(--font-mono); }
+
+  /* ===== NAV ===== */
+  .topbar {
+    display: flex; align-items: center; height: 56px; padding: 0 24px;
+    background: var(--surface); border-bottom: 1px solid var(--border-light);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .topbar-logo { display: flex; align-items: center; gap: 10px; margin-right: 32px; }
+  .topbar-logo .mark {
+    width: 28px; height: 28px; border-radius: var(--radius-md);
+    background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 14px; font-weight: 700;
+  }
+  .topbar-logo span { font-size: 1rem; font-weight: 700; }
+  .topbar-nav { display: flex; gap: 4px; }
+  .topbar-nav a {
+    padding: 6px 14px; border-radius: var(--radius-sm);
+    font-size: 0.8125rem; font-weight: 500; color: var(--text-secondary);
+    text-decoration: none; transition: all 0.1s;
+  }
+  .topbar-nav a:hover { color: var(--text); background: var(--surface-hover); }
+  .topbar-nav a.active { color: var(--text); background: var(--surface-hover); }
+
+  .sidebar {
+    width: 220px; height: calc(100vh - 56px); position: sticky; top: 56px;
+    padding: 16px 12px; overflow-y: auto;
+    border-right: 1px solid var(--border-light); flex-shrink: 0;
+  }
+  .sidebar-group { margin-bottom: 20px; }
+  .sidebar-group-title {
+    padding: 4px 10px; margin-bottom: 4px;
+    font-size: 0.625rem; font-weight: 600; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .sidebar-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 10px; border-radius: var(--radius-md);
+    font-size: 0.8125rem; color: var(--text-secondary);
+    cursor: pointer; transition: all 0.1s; text-decoration: none;
+  }
+  .sidebar-item:hover { background: var(--surface-hover); color: var(--text); }
+  .sidebar-item.active { background: var(--primary-bg); color: var(--primary); font-weight: 500; }
+
+  .sidebar-status {
+    margin-top: auto; padding: 12px; border-radius: var(--radius-lg);
+    background: var(--surface); border: 1px solid var(--border-light);
+  }
+  .sidebar-status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--success); margin-right: 6px; }
+  .sidebar-status .stat-line { font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px; }
+
+  /* ===== TENANT SELECTOR ===== */
+  .tenant-selector {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; margin: 0 0 16px 0;
+    background: var(--surface-hover); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    cursor: pointer;
+  }
+  .tenant-selector .avatar {
+    width: 32px; height: 32px; border-radius: var(--radius-md);
+    background: var(--primary-bg); display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; color: var(--primary);
+  }
+  .tenant-selector .name { font-size: 0.8125rem; font-weight: 500; }
+  .tenant-selector .sub { font-size: 0.6875rem; color: var(--text-muted); }
+
+  /* ===== TABS ===== */
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border-light); }
+  .tab {
+    padding: 8px 16px; font-size: 0.8125rem; font-weight: 500;
+    color: var(--text-secondary); border-bottom: 2px solid transparent;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--text); border-bottom-color: var(--primary); }
+
+  /* ===== TOAST ===== */
+  .toast {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 16px; border-radius: var(--radius-lg);
+    font-size: 0.8125rem; box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border);
+  }
+  .toast-success { background: #0f2a1a; border-color: rgba(34,197,94,0.3); }
+  .toast-error { background: #2a0f0f; border-color: rgba(239,68,68,0.3); }
+  .toast-info { background: #0f1a2a; border-color: rgba(59,130,246,0.3); }
+
+  /* ===== HELPERS ===== */
+  .mt-4 { margin-top: 16px; }
+  .mt-6 { margin-top: 24px; }
+  .mt-8 { margin-top: 32px; }
+  .mb-2 { margin-bottom: 8px; }
+  .mb-4 { margin-bottom: 16px; }
+  .mb-6 { margin-bottom: 24px; }
+  .p-4 { padding: 16px; }
+  .p-6 { padding: 24px; }
+  .pt-4 { padding-top: 16px; }
+  .pb-0 { padding-bottom: 0; }
+  .w-full { width: 100%; }
+  .flex-shrink-0 { flex-shrink: 0; }
+  .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ===== CODE BLOCK ===== */
+  .code-block {
+    background: var(--bg); border: 1px solid var(--border-light); border-radius: var(--radius-md);
+    padding: 16px; font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.7;
+    overflow-x: auto;
+  }
+  .code-block .redacted { color: var(--warning); font-weight: 600; }
+  .code-block .comment { color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<!-- ===== TOPBAR ===== -->
+<header class="topbar">
+  <div class="topbar-logo">
+    <div class="mark">M</div>
+    <span>MaskChain</span>
+  </div>
+  <nav class="topbar-nav">
+    <a href="#incidents" class="active">Incidents</a>
+    <a href="#tenants">Tenants</a>
+    <a href="#providers">Providers</a>
+    <a href="#components">Components</a>
+  </nav>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:12px;">
+    <div style="position:relative;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6e7681" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" placeholder="Search incidents..." style="
+        padding: 6px 12px 6px 28px; background: var(--bg); border: 1px solid var(--border-light);
+        border-radius: var(--radius-md); color: var(--text); font-size: 0.75rem; width: 200px;
+        font-family: inherit;
+      " onfocus="this.placeholder=''" onblur="this.placeholder='Search incidents...'">
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div style="width:32px;height:32px;border-radius:50%;background:var(--surface-hover);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--text-secondary);">AD</div>
+      <div style="width:8px;height:8px;border-radius:50%;background:var(--success);"></div>
+    </div>
+  </div>
+</header>
+
+<div class="flex">
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="sidebar" style="display:flex;flex-direction:column;">
+    <div class="tenant-selector">
+      <div class="avatar">P</div>
+      <div><div class="name">Production</div><div class="sub">Tenant · 3 providers</div></div>
+      <span style="margin-left:auto;color:var(--text-muted);font-size:10px;">▾</span>
+    </div>
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Navigation</div>
+      <a href="#" class="sidebar-item active">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Incidents
+        <span style="margin-left:auto;background:var(--danger-bg);color:var(--danger);padding:1px 7px;border-radius:999px;font-size:10px;font-weight:600;">12</span>
+      </a>
+      <a href="#" class="sidebar-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Tenants
+      </a>
+      <a href="#" class="sidebar-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        Providers
+      </a>
+      <a href="#" class="sidebar-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </a>
+    </div>
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Monitoring</div>
+      <a href="#" class="sidebar-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+      <a href="#" class="sidebar-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="22" x2="4" y2="15"/><line x1="9" y1="22" x2="9" y2="11"/><line x1="14" y1="22" x2="14" y2="6"/><line x1="19" y1="22" x2="19" y2="2"/></svg>
+        Metrics
+      </a>
+      <a href="#" class="sidebar-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Audit Log
+      </a>
+    </div>
+
+    <div class="sidebar-status" style="margin-top:auto;">
+      <div><span class="dot"></span><span style="font-size:0.8125rem;font-weight:500;">All systems operational</span></div>
+      <div class="stat-line">Gateway: 122 req/s</div>
+      <div class="stat-line">P99 latency: 342ms</div>
+      <div class="stat-line">Shield blocks: 4 today</div>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <main style="flex:1;min-width:0;padding:24px 32px;">
+
+    <!-- ============================== -->
+    <!-- SECTION: INCIDENTS LIST PAGE   -->
+    <!-- ============================== -->
+    <section id="incidents" class="section">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <div class="small text-muted mb-2" style="margin-bottom:4px;">
+            <a href="#" style="color:var(--text-secondary);text-decoration:none;">Incidents</a>
+            <span style="color:var(--text-muted);margin:0 4px;">/</span>
+            <span style="color:var(--text-secondary);">All</span>
+          </div>
+          <h1 class="h1">Incidents</h1>
+          <p class="body text-secondary" style="margin-top:2px;">Monitor and review content shield violations across all tenants.</p>
+        </div>
+        <div class="flex gap-3">
+          <button class="btn btn-secondary btn-sm">Export CSV</button>
+          <button class="btn btn-secondary btn-sm">Export JSON</button>
+          <button class="btn btn-primary btn-sm">+ New</button>
+        </div>
+      </div>
+
+      <!-- Stats Cards -->
+      <div class="grid grid-4 gap-4 mb-6">
+        <div class="stat-card">
+          <div class="label">Total Incidents</div>
+          <div class="value">1,284</div>
+          <div class="trend" style="color:var(--success);">+12.5%</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Blocked</div>
+          <div class="value">342</div>
+          <div class="trend" style="color:var(--danger);">+3.2%</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Flagged</div>
+          <div class="value">891</div>
+          <div class="trend" style="color:var(--warning);">+8.1%</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Resolved</div>
+          <div class="value">51</div>
+          <div class="trend" style="color:var(--text-muted);">4.0%</div>
+        </div>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="card mb-4">
+        <div class="card-body" style="display:flex;gap:12px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:140px;">
+            <div class="input-group">
+              <label>Severity</label>
+              <div class="select">
+                <select><option>All severities</option><option>Critical</option><option>High</option><option>Medium</option><option>Low</option></select>
+              </div>
+            </div>
+          </div>
+          <div style="flex:1;min-width:140px;">
+            <div class="input-group">
+              <label>Tenant</label>
+              <div class="select">
+                <select><option>All tenants</option><option>prod-tenant</option><option>dev-tenant</option><option>staging</option></select>
+              </div>
+            </div>
+          </div>
+          <div style="flex:1;min-width:140px;">
+            <div class="input-group">
+              <label>Status</label>
+              <div class="select">
+                <select><option>All statuses</option><option>Active</option><option>Pending</option><option>Done</option><option>Review</option></select>
+              </div>
+            </div>
+          </div>
+          <div style="flex:1;min-width:140px;">
+            <div class="input-group">
+              <label>Date Range</label>
+              <input type="text" class="input" placeholder="Last 7 days">
+            </div>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:8px;">
+            <button class="btn btn-primary btn-sm">Apply</button>
+            <button class="btn btn-ghost btn-sm">Reset</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="card card-shadow">
+        <div class="table-container">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width:160px;">Timestamp</th>
+                <th style="width:80px;">Severity</th>
+                <th style="width:110px;">Tenant</th>
+                <th style="width:130px;">Detector</th>
+                <th style="width:80px;">Action</th>
+                <th style="width:80px;">Status</th>
+                <th style="width:60px;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono" style="font-size:0.75rem;">2026-07-15 14:23:11</td>
+                <td><span class="badge badge-critical"><span class="badge-dot"></span>CRITICAL</span></td>
+                <td>prod-tenant</td>
+                <td>PII :: email</td>
+                <td>Block</td>
+                <td><span class="badge badge-active">ACTIVE</span></td>
+                <td><a href="#" style="color:var(--text-muted);font-size:0.75rem;text-decoration:none;">View →</a></td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:0.75rem;">2026-07-15 12:05:43</td>
+                <td><span class="badge badge-high"><span class="badge-dot"></span>HIGH</span></td>
+                <td>dev-tenant</td>
+                <td>Secret :: API key</td>
+                <td>Redact</td>
+                <td><span class="badge badge-pending">PENDING</span></td>
+                <td><a href="#" style="color:var(--text-muted);font-size:0.75rem;text-decoration:none;">View →</a></td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:0.75rem;">2026-07-15 09:37:02</td>
+                <td><span class="badge badge-medium"><span class="badge-dot"></span>MEDIUM</span></td>
+                <td>prod-tenant</td>
+                <td>Dict :: SSN</td>
+                <td>Mask</td>
+                <td><span class="badge badge-done">DONE</span></td>
+                <td><a href="#" style="color:var(--text-muted);font-size:0.75rem;text-decoration:none;">View →</a></td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:0.75rem;">2026-07-14 22:15:30</td>
+                <td><span class="badge badge-low"><span class="badge-dot"></span>LOW</span></td>
+                <td>staging</td>
+                <td>PII :: phone</td>
+                <td>Alert</td>
+                <td><span class="badge badge-done">DONE</span></td>
+                <td><a href="#" style="color:var(--text-muted);font-size:0.75rem;text-decoration:none;">View →</a></td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:0.75rem;">2026-07-14 18:44:55</td>
+                <td><span class="badge badge-critical"><span class="badge-dot"></span>CRITICAL</span></td>
+                <td>prod-tenant</td>
+                <td>Financial :: CC</td>
+                <td>Block</td>
+                <td><span class="badge badge-active">ACTIVE</span></td>
+                <td><a href="#" style="color:var(--text-muted);font-size:0.75rem;text-decoration:none;">View →</a></td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:0.75rem;">2026-07-14 15:10:22</td>
+                <td><span class="badge badge-medium"><span class="badge-dot"></span>MEDIUM</span></td>
+                <td>dev-tenant</td>
+                <td>Dict :: customer</td>
+                <td>Mask</td>
+                <td><span class="badge badge-done">DONE</span></td>
+                <td><a href="#" style="color:var(--text-muted);font-size:0.75rem;text-decoration:none;">View →</a></td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:0.75rem;">2026-07-14 11:30:18</td>
+                <td><span class="badge badge-low"><span class="badge-dot"></span>LOW</span></td>
+                <td>staging</td>
+                <td>PII :: email</td>
+                <td>Alert</td>
+                <td><span class="badge badge-done">DONE</span></td>
+                <td><a href="#" style="color:var(--text-muted);font-size:0.75rem;text-decoration:none;">View →</a></td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:0.75rem;">2026-07-14 08:05:44</td>
+                <td><span class="badge badge-critical"><span class="badge-dot"></span>CRITICAL</span></td>
+                <td>prod-tenant</td>
+                <td>Secret :: JWT</td>
+                <td>Block</td>
+                <td><span class="badge badge-review">REVIEW</span></td>
+                <td><a href="#" style="color:var(--text-muted);font-size:0.75rem;text-decoration:none;">View →</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="flex items-center justify-between p-4" style="border-top:1px solid var(--border-light);">
+          <span class="small text-muted">Showing 1-8 of 1,284</span>
+          <div class="flex items-center gap-4">
+            <span class="small text-muted">20 per page</span>
+            <div class="pagination">
+              <button class="page-btn" disabled>‹</button>
+              <button class="page-btn active">1</button>
+              <button class="page-btn">2</button>
+              <button class="page-btn">3</button>
+              <button class="page-btn">⋯</button>
+              <button class="page-btn">›</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <hr style="border:none;border-top:1px solid var(--border-light);margin:48px 0;">
+
+    <!-- ============================== -->
+    <!-- SECTION: INCIDENT DETAIL PAGE  -->
+    <!-- ============================== -->
+    <section id="detail" class="section">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <div class="small text-muted mb-2" style="margin-bottom:4px;">
+            <a href="#" style="color:var(--text-secondary);text-decoration:none;">Incidents</a>
+            <span style="color:var(--text-muted);margin:0 4px;">→</span>
+            <span style="color:var(--text-secondary);">Detail</span>
+          </div>
+          <h1 class="h1">Incident</h1>
+          <p class="mono small text-muted" style="margin-top:2px;">inc_a1b2c3d4-e5f6-7890-abcd-ef1234567890</p>
+        </div>
+        <div class="flex gap-3">
+          <button class="btn btn-secondary btn-sm">← Back</button>
+          <button class="btn btn-primary btn-sm">Resolve</button>
+        </div>
+      </div>
+
+      <!-- Severity Banner -->
+      <div class="banner banner-critical mb-6">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span class="badge badge-critical" style="flex-shrink:0;"><span class="badge-dot"></span>CRITICAL</span>
+        <span style="font-size:0.875rem;font-weight:500;">PII violation detected — request was blocked by shield middleware</span>
+      </div>
+
+      <!-- Two columns -->
+      <div class="grid grid-2 gap-6">
+        <!-- Left: Overview -->
+        <div class="card card-shadow">
+          <div class="card-header"><h3>Overview</h3></div>
+          <div class="detail-grid">
+            <div class="row"><div class="label">Request ID</div><div class="value mono" style="font-size:0.75rem;">req_9f8e7d6c-5b4a-3210-fedc-ba9876543210</div></div>
+            <div class="row"><div class="label">Timestamp</div><div class="value">2026-07-15 14:23:11 UTC</div></div>
+            <div class="row">
+              <div class="label">Tenant</div>
+              <div class="value"><span class="badge" style="background:var(--primary-bg);color:var(--primary);font-size:0.6875rem;">prod-tenant</span></div>
+            </div>
+            <div class="row">
+              <div class="label">Detector</div>
+              <div class="value"><span class="badge" style="background:var(--primary-bg);color:var(--primary);font-size:0.6875rem;">PII :: email</span></div>
+            </div>
+            <div class="row">
+              <div class="label">Action Taken</div>
+              <div class="value">
+                <span class="badge badge-active" style="font-size:0.6875rem;">Blocked</span>
+                <span class="small text-muted" style="margin-left:6px;">403 Forbidden — request rejected</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="label">Matched Value</div>
+              <div class="value">
+                <span class="mono" style="color:var(--warning);font-size:0.75rem;background:var(--warning-bg);padding:2px 8px;border-radius:4px;">user@company.com</span>
+              </div>
+            </div>
+            <div class="row"><div class="label">Severity</div><div class="value"><span class="badge badge-critical">CRITICAL</span></div></div>
+            <div class="row"><div class="label">Status</div><div class="value"><span class="badge badge-active">ACTIVE</span></div></div>
+          </div>
+        </div>
+
+        <!-- Right top: Prompt Snippet -->
+        <div class="card card-shadow">
+          <div class="card-header"><h3>Prompt Snippet (Redacted)</h3></div>
+          <div class="card-body">
+            <p class="small text-secondary mb-4">The following prompt content was flagged by the content shield:</p>
+            <div class="code-block">
+              Hello! I need help with my account.<br>
+              My email is <span class="redacted">[REDACTED — PII::email]</span><br>
+              and my phone is <span class="redacted">[REDACTED — PII::phone]</span><br>
+              I need to reset my password.<br>
+              Can you help me with that?<br>
+              <span class="comment">--- 4 matches found, 2 redacted ---</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right bottom: Detection Details -->
+        <div class="card card-shadow">
+          <div class="card-header"><h3>Detection Details</h3></div>
+          <div class="card-body">
+            <div class="detection-row">
+              <div class="dot" style="background:var(--danger);"></div>
+              <span class="name">PII :: email</span>
+              <span class="status" style="color:var(--danger);">BLOCKED</span>
+              <span class="value">user@company.com</span>
+            </div>
+            <div class="detection-row">
+              <div class="dot" style="background:var(--warning);"></div>
+              <span class="name">PII :: phone</span>
+              <span class="status" style="color:var(--warning);">REDACTED</span>
+              <span class="value">+1 (555) 123-4567</span>
+            </div>
+            <div class="detection-row">
+              <div class="dot" style="background:var(--success);"></div>
+              <span class="name">Content policy</span>
+              <span class="status" style="color:var(--success);">ALLOWED</span>
+              <span class="value">N/A</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right bottom: Timeline -->
+        <div class="card card-shadow">
+          <div class="card-header"><h3>Timeline</h3></div>
+          <div class="card-body">
+            <div class="timeline">
+              <div class="timeline-item">
+                <div class="time">2026-07-15 14:23:11</div>
+                <div class="desc">Incident created via shield middleware</div>
+              </div>
+              <div class="timeline-item">
+                <div class="time">2026-07-15 14:23:11</div>
+                <div class="desc">Request blocked (403 Forbidden)</div>
+              </div>
+              <div class="timeline-item">
+                <div class="time">2026-07-15 14:23:12</div>
+                <div class="desc">Incident persisted to database</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <hr style="border:none;border-top:1px solid var(--border-light);margin:48px 0;">
+
+    <!-- ============================== -->
+    <!-- SECTION: COMPONENT SHOWCASE    -->
+    <!-- ============================== -->
+    <section id="components" class="section">
+      <div class="section-title">
+        <h2>Component Library</h2>
+        <p>All design system components available for production UI</p>
+      </div>
+
+      <!-- Buttons -->
+      <div class="card mb-6">
+        <div class="card-header"><h3>Buttons</h3></div>
+        <div class="card-body">
+          <div class="flex gap-3 items-center" style="flex-wrap:wrap;">
+            <button class="btn btn-primary">Primary</button>
+            <button class="btn btn-secondary">Secondary</button>
+            <button class="btn btn-ghost">Ghost</button>
+            <button class="btn btn-danger">Danger</button>
+            <button class="btn btn-secondary btn-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            <button class="btn btn-secondary btn-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+            </button>
+            <button class="btn btn-primary btn-sm">Small</button>
+            <button class="btn btn-secondary btn-sm">Small</button>
+            <button class="btn btn-ghost btn-sm">Small</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Badges -->
+      <div class="card mb-6">
+        <div class="card-header"><h3>Badges</h3></div>
+        <div class="card-body">
+          <div class="flex gap-3 items-center" style="flex-wrap:wrap;">
+            <span class="badge badge-critical"><span class="badge-dot"></span>CRITICAL</span>
+            <span class="badge badge-high"><span class="badge-dot"></span>HIGH</span>
+            <span class="badge badge-medium"><span class="badge-dot"></span>MEDIUM</span>
+            <span class="badge badge-low"><span class="badge-dot"></span>LOW</span>
+          </div>
+          <div class="flex gap-3 items-center mt-4" style="flex-wrap:wrap;">
+            <span class="badge badge-active">ACTIVE</span>
+            <span class="badge badge-pending">PENDING</span>
+            <span class="badge badge-done">DONE</span>
+            <span class="badge badge-review">REVIEW</span>
+          </div>
+          <div class="flex gap-3 items-center mt-4" style="flex-wrap:wrap;">
+            <span class="badge badge-sm badge-critical">Small</span>
+            <span class="badge badge-sm badge-done">Small</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Inputs -->
+      <div class="card mb-6">
+        <div class="card-header"><h3>Inputs &amp; Forms</h3></div>
+        <div class="card-body">
+          <div class="grid grid-3 gap-4">
+            <div class="input-group">
+              <label for="default-input">Default</label>
+              <input id="default-input" type="text" class="input" placeholder="Placeholder text...">
+            </div>
+            <div class="input-group">
+              <label for="valid-input">Valid</label>
+              <input id="valid-input" type="text" class="input input-valid" value="Valid value">
+            </div>
+            <div class="input-group">
+              <label for="error-input">Error</label>
+              <input id="error-input" type="text" class="input input-error" value="Invalid input">
+              <span style="font-size:0.6875rem;color:var(--danger);">This field is required</span>
+            </div>
+            <div class="input-group">
+              <label for="disabled-input">Disabled</label>
+              <input id="disabled-input" type="text" class="input" value="Disabled input" disabled style="opacity:0.5;cursor:not-allowed;">
+            </div>
+            <div class="input-group">
+              <label for="select-input">Select</label>
+              <div class="select">
+                <select id="select-input"><option>Option 1</option><option>Option 2</option><option>Option 3</option></select>
+              </div>
+            </div>
+            <div class="input-group">
+              <label for="textarea-input">Textarea</label>
+              <textarea id="textarea-input" class="input" rows="2" placeholder="Enter description..." style="resize:vertical;"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cards -->
+      <div class="card mb-6">
+        <div class="card-header"><h3>Cards &amp; Surfaces</h3></div>
+        <div class="card-body">
+          <div class="grid grid-4 gap-4">
+            <div style="background:var(--surface);border-radius:var(--radius-lg);padding:20px;">
+              <div style="font-size:0.8125rem;font-weight:500;margin-bottom:4px;">Flat</div>
+              <div style="font-size:0.75rem;color:var(--text-secondary);">No border, no shadow<br>Background: surface</div>
+            </div>
+            <div style="background:var(--surface);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow-md);">
+              <div style="font-size:0.8125rem;font-weight:500;margin-bottom:4px;">Raised</div>
+              <div style="font-size:0.75rem;color:var(--text-secondary);">With shadow<br>For modals, dropdowns</div>
+            </div>
+            <div style="background:var(--surface);border-radius:var(--radius-lg);padding:20px;border:1px solid var(--border-light);">
+              <div style="font-size:0.8125rem;font-weight:500;margin-bottom:4px;">Bordered</div>
+              <div style="font-size:0.75rem;color:var(--text-secondary);">Subtle border<br>For table rows, lists</div>
+            </div>
+            <div class="card-hover" style="background:var(--surface);border-radius:var(--radius-lg);padding:20px;border:1px solid var(--border-light);transition:all 0.15s;">
+              <div style="font-size:0.8125rem;font-weight:500;margin-bottom:4px;">Interactive</div>
+              <div style="font-size:0.75rem;color:var(--text-secondary);">Hover: primary border<br>Cursor: pointer</div>
+            </div>
+            <div class="stat-card" style="grid-column:span 1;">
+              <div class="label">Total Incidents</div>
+              <div class="value">1,284</div>
+              <div class="trend" style="color:var(--success);">+12.5%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toast -->
+      <div class="card mb-6">
+        <div class="card-header"><h3>Notifications (Toast)</h3></div>
+        <div class="card-body">
+          <div class="flex flex-col gap-3">
+            <div class="toast toast-success">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              Profile "production-shield" has been updated successfully.
+            </div>
+            <div class="toast toast-error">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              Failed to save profile. Please try again.
+            </div>
+            <div class="toast toast-info">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              Export started — your file will be ready shortly.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="card">
+        <div class="card-header"><h3>Tabs</h3></div>
+        <div class="card-body">
+          <div class="tabs mb-4">
+            <div class="tab active">Overview</div>
+            <div class="tab">Events</div>
+            <div class="tab">Raw Data</div>
+            <div class="tab">Metadata</div>
+          </div>
+          <p class="small text-secondary">Tab content area — clean separation with active indicator.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+</body>
+</html>

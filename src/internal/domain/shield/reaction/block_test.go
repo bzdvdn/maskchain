@@ -18,13 +18,10 @@ func mustPatternID(v string) value.PatternID {
 	return id
 }
 
-// @sk-test 23-shield-reactions#T2.2: Test BlockReaction returns ErrBlockedByPolicy (AC-001)
+// @sk-test remove-audit-incidents#T4.2: Test BlockReaction returns ErrBlockedByPolicy (AC-001)
 func TestBlockReaction_ReturnsBlockedError(t *testing.T) {
 	r := NewBlockReaction()
-	incidents := []entity.Incident{
-		*entity.NewIncident("email", mustPatternID("p1"), value.SeverityCritical, "user@example.com", 0),
-	}
-	result := entity.NewScanResult(value.ScanStatusBlocked, incidents)
+	result := entity.NewScanResult(value.ScanStatusBlocked)
 
 	_, err := r.Execute(context.Background(), result, "some content")
 	if err == nil {
@@ -44,12 +41,12 @@ func TestBlockReaction_NilResult(t *testing.T) {
 	}
 }
 
-// @sk-test 23-shield-reactions#T2.2: Test BlockReaction with empty incidents
-func TestBlockReaction_EmptyIncidents(t *testing.T) {
+// @sk-test remove-audit-incidents#T4.2: Test BlockReaction with clean status
+func TestBlockReaction_CleanStatus(t *testing.T) {
 	r := NewBlockReaction()
-	result := entity.NewScanResult(value.ScanStatusClean, nil)
+	result := entity.NewScanResult(value.ScanStatusClean)
 	_, err := r.Execute(context.Background(), result, "text")
 	if !errors.Is(err, shielderrors.ErrBlockedByPolicy) {
-		t.Errorf("expected ErrBlockedByPolicy for empty incidents, got %v", err)
+		t.Errorf("expected ErrBlockedByPolicy for clean result, got %v", err)
 	}
 }

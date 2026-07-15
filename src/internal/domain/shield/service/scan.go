@@ -12,42 +12,37 @@ func NewScanPipeline() *ScanPipeline {
 	return &ScanPipeline{}
 }
 
+// @sk-task remove-audit-incidents#T1.4: Remove incident creation from scan execution (AC-006)
 func (p *ScanPipeline) Execute(detectors []entity.Detector, content string) *entity.ScanResult {
 	if len(detectors) == 0 {
-		return entity.NewScanResult(value.ScanStatusClean, nil)
+		return entity.NewScanResult(value.ScanStatusClean)
 	}
 
-	var incidents []entity.Incident
 	blocked := false
+	suspicious := false
 
 	for _, det := range detectors {
 		if !det.Enabled() {
 			continue
 		}
-		// For each enabled detector, check each pattern
 		for _, pat := range det.Patterns() {
 			if matchContent(content, pat.Expression()) {
-				incidents = append(incidents, *entity.NewIncident(
-					det.ID(),
-					pat.ID(),
-					det.Severity(),
-					pat.Expression(),
-					0,
-				))
 				if det.Severity() == value.SeverityCritical {
 					blocked = true
+				} else {
+					suspicious = true
 				}
 			}
 		}
 	}
 
 	if blocked {
-		return entity.NewScanResult(value.ScanStatusBlocked, incidents)
+		return entity.NewScanResult(value.ScanStatusBlocked)
 	}
-	if len(incidents) > 0 {
-		return entity.NewScanResult(value.ScanStatusSuspicious, incidents)
+	if suspicious {
+		return entity.NewScanResult(value.ScanStatusSuspicious)
 	}
-	return entity.NewScanResult(value.ScanStatusClean, nil)
+	return entity.NewScanResult(value.ScanStatusClean)
 }
 
 func matchContent(content string, expr string) bool {

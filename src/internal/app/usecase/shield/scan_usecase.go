@@ -19,10 +19,11 @@ func NewScanUseCase(pipelineFactory *ScanPipelineFactory) *ScanUseCase {
 	return &ScanUseCase{pipelineFactory: pipelineFactory}
 }
 
+// @sk-task remove-audit-incidents#T2.2: Remove incident creation from scan use case (AC-006)
 func (uc *ScanUseCase) Scan(ctx context.Context, req ScanRequest) (*ScanResponse, error) {
 	if len(req.Rules) == 0 {
 		return &ScanResponse{
-			ScanResult:    entity.NewScanResult(value.ScanStatusClean, nil),
+			ScanResult:    entity.NewScanResult(value.ScanStatusClean),
 			ProcessedText: req.Text,
 		}, nil
 	}
@@ -32,44 +33,34 @@ func (uc *ScanUseCase) Scan(ctx context.Context, req ScanRequest) (*ScanResponse
 		return nil, fmt.Errorf("build pipeline: %w", err)
 	}
 
-	var incidents []entity.Incident
+	blocked := false
+	hasResults := false
 	for _, binding := range pipeline.Detectors {
 		results, err := binding.Interface.Scan(ctx, req.Text)
 		if err != nil {
 			continue
 		}
-		for _, r := range results {
-			inc := entity.NewIncident(
-				binding.Label,
-				value.PatternID{},
-				binding.Severity,
-				r.Fragment,
-				r.StartPos,
-			)
-			incidents = append(incidents, *inc)
+		if len(results) > 0 {
+			hasResults = true
+		}
+		if binding.Severity == value.SeverityCritical && len(results) > 0 {
+			blocked = true
 		}
 	}
 
-	scanResult := entity.NewScanResult(statusFromIncidents(incidents), incidents)
+	var scanStatus value.ScanStatus
+	switch {
+	case blocked:
+		scanStatus = value.ScanStatusBlocked
+	case hasResults:
+		scanStatus = value.ScanStatusSuspicious
+	default:
+		scanStatus = value.ScanStatusClean
+	}
+
+	scanResult := entity.NewScanResult(scanStatus)
 	return &ScanResponse{
 		ScanResult:    scanResult,
 		ProcessedText: req.Text,
 	}, nil
-}
-
-func statusFromIncidents(incidents []entity.Incident) value.ScanStatus {
-	if len(incidents) == 0 {
-		return value.ScanStatusClean
-	}
-	blocked := false
-	for _, inc := range incidents {
-		if inc.Severity() == value.SeverityCritical {
-			blocked = true
-			break
-		}
-	}
-	if blocked {
-		return value.ScanStatusBlocked
-	}
-	return value.ScanStatusSuspicious
 }

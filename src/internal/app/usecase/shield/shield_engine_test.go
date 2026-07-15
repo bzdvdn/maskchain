@@ -24,9 +24,6 @@ func TestScanUseCase_EmptyRules(t *testing.T) {
 	if resp.Status() != value.ScanStatusClean {
 		t.Errorf("expected clean, got %v", resp.Status())
 	}
-	if len(resp.Incidents()) != 0 {
-		t.Errorf("expected 0 incidents, got %d", len(resp.Incidents()))
-	}
 }
 
 // @sk-test 50-shield-engine#T2.2: TestFullPipeline (AC-001)
@@ -50,9 +47,6 @@ func TestScanUseCase_PIIDetection(t *testing.T) {
 
 	if resp.Status() != value.ScanStatusSuspicious && resp.Status() != value.ScanStatusBlocked {
 		t.Errorf("expected suspicious or blocked, got %v", resp.Status())
-	}
-	if len(resp.Incidents()) < 1 {
-		t.Errorf("expected at least 1 incident (PII), got %d", len(resp.Incidents()))
 	}
 }
 
@@ -89,9 +83,6 @@ func TestScanUseCase_EmptyRulesSlice(t *testing.T) {
 	}
 	if resp.Status() != value.ScanStatusClean {
 		t.Errorf("expected clean status for empty rules, got %v", resp.Status())
-	}
-	if len(resp.Incidents()) != 0 {
-		t.Errorf("expected 0 incidents for empty rules, got %d", len(resp.Incidents()))
 	}
 }
 

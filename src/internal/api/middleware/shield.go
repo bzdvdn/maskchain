@@ -12,14 +12,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/detector"
-	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/mask"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
@@ -94,7 +92,6 @@ func wrapStreamUnmaskWriter(c *gin.Context, mapping map[string]string) {
 
 type shieldResponse struct {
 	ShieldStatus string `json:"shield_status"`
-	IncidentID   string `json:"incident_id,omitempty"`
 	Error        string `json:"error,omitempty"`
 }
 
@@ -116,6 +113,7 @@ type Scanner interface {
 // @sk-task 51-shield-gateway-integration#T2.1: Implement ShieldMiddleware (AC-001, AC-002, AC-003, AC-004, AC-005, AC-006)
 // @sk-task 61-observability#T3.1: Instrument shield middleware with span attributes and metrics (AC-004)
 // @sk-task tenant-profile-sync#T3.1: ShieldMiddleware reads dictionaries from tenant (AC-006, AC-007)
+// @sk-task remove-audit-incidents#T2.3: Remove incident creation, X-Shield-Incident-ID, and ShieldIncidentsBySeverity (AC-008, AC-011)
 func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -158,7 +156,7 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger)
 
 		promptText := extractPromptText(chatReq.Messages)
 		if promptText == "" {
-			setShieldCleanHeaders(c, "")
+			setShieldCleanHeaders(c)
 			c.Next()
 			return
 		}
@@ -171,29 +169,18 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger)
 			dictDetectors = append(dictDetectors, detector.NewDictionaryDetector(dict))
 		}
 
-		var incidents []entity.Incident
-
+		hasDictHits := false
 		for _, dd := range dictDetectors {
-			dict := dd.Dict()
 			results, err := dd.Scan(c.Request.Context(), promptText)
 			if err != nil || len(results) == 0 {
 				continue
 			}
-			for _, r := range results {
-				inc := entity.NewIncident(
-					"dictionary:"+dict.Name(),
-					value.PatternID{},
-					value.SeverityMedium,
-					r.Fragment,
-					r.StartPos,
-				)
-				incidents = append(incidents, *inc)
-			}
+			hasDictHits = true
 		}
 
 		// @sk-task 13-shield-middleware-wiring#T2.2: Store dict mask mapping per-request for later unmask (AC-006)
 		dictMaskMapping := make(map[string]string)
-		if len(incidents) > 0 {
+		if hasDictHits {
 			dictMaskID := mask.NewShortID()
 			phCounter := 0
 			for mi, msg := range chatReq.Messages {
@@ -222,8 +209,6 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger)
 				c.Header("X-Shield-Dict-Mask-ID", dictMaskID)
 			}
 		}
-
-		incidentID := uuid.New().String()
 
 		// @sk-task 13-shield-middleware-wiring#T2.1: Read PIIConfig from tenant, scan with Rules (AC-001, AC-003, AC-007)
 		var resp *appshield.ScanResponse
@@ -271,11 +256,10 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger)
 		span := trace.SpanFromContext(c.Request.Context())
 		span.SetAttributes(
 			attribute.String("shield.tenant", tenantSlug),
-			attribute.String("shield.status", string(respStatus(resp, incidents))),
-			attribute.String("shield.incident_id", incidentID),
+			attribute.String("shield.status", string(respStatus(resp))),
 		)
 
-		scanStatus := string(respStatus(resp, incidents))
+		scanStatus := string(respStatus(resp))
 		metrics.ShieldScanDuration.WithLabelValues(tenantSlug, scanStatus).Observe(float64(duration.Milliseconds()))
 		metrics.ShieldProfilesEvaluated.WithLabelValues(tenantSlug).Inc()
 
@@ -288,39 +272,30 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger)
 			zap.Int("rules_count", len(piiCfg.Rules)),
 			zap.String("model", chatReq.Model),
 			zap.Duration("latency", duration),
-			zap.String("incident_id", incidentID),
-			zap.Int("dictionary_incidents", len(incidents)),
 			zap.Bool("unmasked", unmasked),
 		)
 
-		status := respStatus(resp, incidents)
+		status := respStatus(resp)
 		switch status {
 		case value.ScanStatusBlocked:
-			metrics.ShieldIncidentsBySeverity.WithLabelValues("blocked").Inc()
 			c.Header("X-Shield-Status", "blocked")
-			c.Header("X-Shield-Incident-ID", incidentID)
 			c.AbortWithStatusJSON(http.StatusForbidden, shieldResponse{
 				ShieldStatus: "blocked",
-				IncidentID:   incidentID,
 				Error:        "request blocked by content shield",
 			})
 
 		case value.ScanStatusError:
-			metrics.ShieldIncidentsBySeverity.WithLabelValues("error").Inc()
 			abortWithShieldError(c, http.StatusBadGateway, "shield scan error", tenantSlug)
 
 		case value.ScanStatusSuspicious:
-			metrics.ShieldIncidentsBySeverity.WithLabelValues("suspicious").Inc()
 			if cfg != nil && cfg.ActionOnSuspicious == "block" {
 				c.Header("X-Shield-Status", "blocked")
-				c.Header("X-Shield-Incident-ID", incidentID)
 				c.AbortWithStatusJSON(http.StatusForbidden, shieldResponse{
 					ShieldStatus: "blocked",
-					IncidentID:   incidentID,
 					Error:        "request blocked by content shield",
 				})
 			} else {
-				setShieldCleanHeaders(c, incidentID)
+				setShieldCleanHeaders(c)
 				if chatReq.Stream {
 					wrapStreamUnmaskWriter(c, dictMaskMapping)
 				} else if w := wrapUnmaskWriter(c, dictMaskMapping); w != nil {
@@ -330,8 +305,7 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger)
 			}
 
 		default:
-			metrics.ShieldIncidentsBySeverity.WithLabelValues("clean").Inc()
-			setShieldCleanHeaders(c, incidentID)
+			setShieldCleanHeaders(c)
 			if chatReq.Stream {
 				wrapStreamUnmaskWriter(c, dictMaskMapping)
 			} else if w := wrapUnmaskWriter(c, dictMaskMapping); w != nil {
@@ -342,24 +316,11 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger)
 	}
 }
 
-func respStatus(resp *appshield.ScanResponse, incidents []entity.Incident) value.ScanStatus {
+func respStatus(resp *appshield.ScanResponse) value.ScanStatus {
 	if resp != nil {
 		return resp.Status()
 	}
-	if len(incidents) == 0 {
-		return value.ScanStatusClean
-	}
-	blocked := false
-	for _, inc := range incidents {
-		if inc.Severity() == value.SeverityCritical {
-			blocked = true
-			break
-		}
-	}
-	if blocked {
-		return value.ScanStatusBlocked
-	}
-	return value.ScanStatusSuspicious
+	return value.ScanStatusClean
 }
 
 func extractPromptText(messages []chatMessage) string {
@@ -372,20 +333,14 @@ func extractPromptText(messages []chatMessage) string {
 	return strings.Join(texts, "\n")
 }
 
-func setShieldCleanHeaders(c *gin.Context, incidentID string) {
+func setShieldCleanHeaders(c *gin.Context) {
 	c.Header("X-Shield-Status", "clean")
-	if incidentID != "" {
-		c.Header("X-Shield-Incident-ID", incidentID)
-	}
 }
 
-func abortWithShieldError(c *gin.Context, status int, message string, profileSlug string) {
-	incidentID := uuid.New().String()
+func abortWithShieldError(c *gin.Context, status int, message string, _ string) {
 	c.Header("X-Shield-Status", "error")
-	c.Header("X-Shield-Incident-ID", incidentID)
 	c.AbortWithStatusJSON(status, shieldResponse{
 		ShieldStatus: "error",
-		IncidentID:   incidentID,
 		Error:        message,
 	})
 }

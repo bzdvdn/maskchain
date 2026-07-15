@@ -5,19 +5,19 @@ import (
 	"errors"
 	"testing"
 
+	"go.uber.org/zap"
+
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	shielderrors "github.com/bzdvdn/maskchain/src/internal/domain/shield/errors"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
 
-// @sk-test 23-shield-reactions#T2.5: Test ReactionPipeline routes ReactionBlock to BlockReaction (AC-005)
+// @sk-test remove-audit-incidents#T4.2: Test ReactionPipeline routes ReactionBlock to BlockReaction (AC-005)
 func TestReactionPipeline_RoutesBlock(t *testing.T) {
-	p := NewDefaultReactionPipeline(NewBlockReaction(), NewRedactReaction(), NewAlertReaction(&mockIncidentRepo{}))
+	log := zap.NewNop()
+	p := NewDefaultReactionPipeline(NewBlockReaction(), NewRedactReaction(log), NewAlertReaction(log))
 
-	incidents := []entity.Incident{
-		*entity.NewIncident("email", mustPatternID("p1"), value.SeverityCritical, "secret", 0),
-	}
-	result := entity.NewScanResult(value.ScanStatusBlocked, incidents)
+	result := entity.NewScanResult(value.ScanStatusBlocked)
 
 	_, err := p.Execute(context.Background(), entity.ReactionBlock, result, "content")
 	if err == nil {
@@ -28,34 +28,28 @@ func TestReactionPipeline_RoutesBlock(t *testing.T) {
 	}
 }
 
-// @sk-test 23-shield-reactions#T2.5: Test ReactionPipeline routes ReactionLog to RedactReaction (AC-005)
+// @sk-test remove-audit-incidents#T4.2: Test ReactionPipeline routes ReactionLog to RedactReaction (AC-005)
 func TestReactionPipeline_RoutesLog(t *testing.T) {
-	p := NewDefaultReactionPipeline(NewBlockReaction(), NewRedactReaction(), NewAlertReaction(&mockIncidentRepo{}))
+	log := zap.NewNop()
+	p := NewDefaultReactionPipeline(NewBlockReaction(), NewRedactReaction(log), NewAlertReaction(log))
 
-	incidents := []entity.Incident{
-		*entity.NewIncident("email", mustPatternID("p1"), value.SeverityLow, "user@site.com", 0),
-	}
-	result := entity.NewScanResult(value.ScanStatusSuspicious, incidents)
+	result := entity.NewScanResult(value.ScanStatusSuspicious)
 
 	out, err := p.Execute(context.Background(), entity.ReactionLog, result, "email: user@site.com")
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := "email: *************"
-	if out != expected {
-		t.Errorf("expected %q, got %q", expected, out)
+	if out != "email: user@site.com" {
+		t.Errorf("expected unchanged text, got %q", out)
 	}
 }
 
-// @sk-test 23-shield-reactions#T2.5: Test ReactionPipeline routes ReactionReview to AlertReaction (AC-005)
+// @sk-test remove-audit-incidents#T4.2: Test ReactionPipeline routes ReactionReview to AlertReaction (AC-005)
 func TestReactionPipeline_RoutesReview(t *testing.T) {
-	repo := &mockIncidentRepo{}
-	p := NewDefaultReactionPipeline(NewBlockReaction(), NewRedactReaction(), NewAlertReaction(repo))
+	log := zap.NewNop()
+	p := NewDefaultReactionPipeline(NewBlockReaction(), NewRedactReaction(log), NewAlertReaction(log))
 
-	incidents := []entity.Incident{
-		*entity.NewIncident("det", mustPatternID("p1"), value.SeverityHigh, "sensitive", 0),
-	}
-	result := entity.NewScanResult(value.ScanStatusSuspicious, incidents)
+	result := entity.NewScanResult(value.ScanStatusSuspicious)
 
 	out, err := p.Execute(context.Background(), entity.ReactionReview, result, "original content")
 	if err != nil {
@@ -64,14 +58,12 @@ func TestReactionPipeline_RoutesReview(t *testing.T) {
 	if out != "original content" {
 		t.Errorf("expected original text, got %q", out)
 	}
-	if len(repo.saved) != 1 {
-		t.Errorf("expected 1 saved incident from AlertReaction, got %d", len(repo.saved))
-	}
 }
 
 // @sk-test 23-shield-reactions#T2.5: Test ReactionPipeline returns text unchanged for ReactionAllow (AC-005)
 func TestReactionPipeline_RoutesAllow(t *testing.T) {
-	p := NewDefaultReactionPipeline(NewBlockReaction(), NewRedactReaction(), NewAlertReaction(&mockIncidentRepo{}))
+	log := zap.NewNop()
+	p := NewDefaultReactionPipeline(NewBlockReaction(), NewRedactReaction(log), NewAlertReaction(log))
 
 	out, err := p.Execute(context.Background(), entity.ReactionAllow, nil, "content")
 	if err != nil {

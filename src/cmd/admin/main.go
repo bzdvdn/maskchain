@@ -16,7 +16,6 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/api"
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/admin"
-	"github.com/bzdvdn/maskchain/src/internal/api/handler/incident"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
@@ -160,9 +159,7 @@ func main() {
 		tenantHandler := admin.NewTenantHandler(pgTenantRepo)
 		srv.RegisterTenantHandler(tenantHandler)
 
-		incidentRepo := postgres.NewPostgresIncidentRepo(pgPool)
-		incidentHandler := incident.New(incidentRepo)
-		srv.RegisterIncidentHandler(incidentHandler)
+		// @sk-task remove-audit-incidents#T3.4: Incident handler wiring removed from admin (AC-009)
 	}
 
 	errCh := make(chan error, 1)

@@ -23,7 +23,6 @@ func TestMetricsPrefix(t *testing.T) {
 	HttpRequestsTotal.WithLabelValues("GET", "/test", "200", "unknown").Inc()
 	HttpRequestDuration.WithLabelValues("GET", "/test", "200", "unknown").Observe(10)
 	ShieldScanDuration.WithLabelValues("test-profile", "clean").Observe(10)
-	ShieldIncidentsBySeverity.WithLabelValues("blocked").Inc()
 	ShieldProfilesEvaluated.WithLabelValues("test-profile").Inc()
 
 	reg := newTestRegistry()
@@ -45,9 +44,6 @@ func TestMetricsPrefix(t *testing.T) {
 	}
 	if !strings.Contains(body, "maskchain_shield_scan_duration_ms") {
 		t.Error("expected maskchain_shield_scan_duration_ms")
-	}
-	if !strings.Contains(body, "maskchain_shield_incidents_by_severity") {
-		t.Error("expected maskchain_shield_incidents_by_severity")
 	}
 	if !strings.Contains(body, "maskchain_shield_profiles_evaluated") {
 		t.Error("expected maskchain_shield_profiles_evaluated")
@@ -115,7 +111,6 @@ func TestHTTPRequestDuration(t *testing.T) {
 // @sk-test 61-observability#T4.1: TestShieldMetrics verifies shield metrics record correctly (AC-004)
 func TestShieldMetrics(t *testing.T) {
 	ShieldScanDuration.WithLabelValues("test-profile", "clean").Observe(10)
-	ShieldIncidentsBySeverity.WithLabelValues("blocked").Inc()
 	ShieldProfilesEvaluated.WithLabelValues("test-profile").Inc()
 
 	reg := prometheus.NewRegistry()
@@ -129,9 +124,6 @@ func TestShieldMetrics(t *testing.T) {
 	body := w.Body.String()
 	if !strings.Contains(body, "shield_scan_duration_ms") {
 		t.Error("expected shield_scan_duration_ms in metrics")
-	}
-	if !strings.Contains(body, "shield_incidents_by_severity") {
-		t.Error("expected shield_incidents_by_severity in metrics")
 	}
 	if !strings.Contains(body, "shield_profiles_evaluated") {
 		t.Error("expected shield_profiles_evaluated in metrics")

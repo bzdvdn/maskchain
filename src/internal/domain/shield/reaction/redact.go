@@ -2,39 +2,32 @@ package reaction
 
 import (
 	"context"
-	"strings"
+
+	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 )
 
 // @sk-task 23-shield-reactions#T2.3: Implement RedactReaction (AC-002)
-type RedactReaction struct{}
-
-func NewRedactReaction() *RedactReaction {
-	return &RedactReaction{}
+// @sk-task remove-audit-incidents#T2.1: Remove Incident dependency, log instead (AC-007)
+type RedactReaction struct {
+	log *zap.Logger
 }
 
+// @sk-task remove-audit-incidents#T2.1: Constructor with logger instead of incidents (AC-007)
+func NewRedactReaction(log *zap.Logger) *RedactReaction {
+	return &RedactReaction{log: log}
+}
+
+// @sk-task remove-audit-incidents#T2.1: Log instead of redacting by incident data (AC-007)
 func (r *RedactReaction) Execute(_ context.Context, result *entity.ScanResult, text string) (string, error) {
 	if result == nil {
 		return text, nil
 	}
 
-	incidents := result.Incidents()
-	if len(incidents) == 0 {
-		return text, nil
-	}
-
-	out := text
-	for _, inc := range incidents {
-		fragment := inc.Fragment()
-		if fragment == "" {
-			continue
-		}
-		pos := strings.Index(out, fragment)
-		if pos < 0 {
-			continue
-		}
-		out = out[:pos] + strings.Repeat("*", len(fragment)) + out[pos+len(fragment):]
-	}
-	return out, nil
+	r.log.Info("shield redact reaction triggered",
+		zap.String("status", string(result.Status())),
+		zap.String("action", "redact"),
+	)
+	return text, nil
 }

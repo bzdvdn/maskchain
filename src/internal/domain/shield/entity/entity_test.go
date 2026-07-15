@@ -70,37 +70,11 @@ func TestNewPattern_EmptyExpression(t *testing.T) {
 	}
 }
 
-// @sk-test 20-shield-domain#T5.2: TestNewIncident
-func TestNewIncident(t *testing.T) {
-	patID, _ := value.NewPatternID("pat-1")
-	inc := NewIncident("det-1", patID, value.SeverityHigh, "sensitive data", 42)
-	if inc.DetectorID() != "det-1" {
-		t.Errorf("expected detectorID det-1, got %q", inc.DetectorID())
-	}
-	if inc.PatternID() != patID {
-		t.Errorf("unexpected patternID")
-	}
-	if inc.Severity() != value.SeverityHigh {
-		t.Errorf("expected SeverityHigh")
-	}
-	if inc.Fragment() != "sensitive data" {
-		t.Errorf("unexpected fragment")
-	}
-	if inc.Position() != 42 {
-		t.Errorf("expected position 42")
-	}
-}
-
-// @sk-test 20-shield-domain#T5.2: TestNewScanResult
+// @sk-test remove-audit-incidents#T4.1: TestNewScanResult without incidents (AC-014)
 func TestNewScanResult(t *testing.T) {
-	patID, _ := value.NewPatternID("pat-1")
-	inc := NewIncident("det-1", patID, value.SeverityLow, "test", 0)
-	result := NewScanResult(value.ScanStatusSuspicious, []Incident{*inc})
+	result := NewScanResult(value.ScanStatusSuspicious)
 	if result.Status() != value.ScanStatusSuspicious {
 		t.Errorf("expected Suspicious status")
-	}
-	if len(result.Incidents()) != 1 {
-		t.Errorf("expected 1 incident")
 	}
 	if result.ScannedAt().IsZero() {
 		t.Error("expected non-zero ScannedAt")

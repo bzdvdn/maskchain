@@ -17,7 +17,6 @@ func RegisterMetrics(reg *prometheus.Registry) {
 	reg.MustRegister(HttpRequestsTotal)
 	reg.MustRegister(HttpRequestDuration)
 	reg.MustRegister(ShieldScanDuration)
-	reg.MustRegister(ShieldIncidentsBySeverity)
 	reg.MustRegister(ShieldProfilesEvaluated)
 	reg.MustRegister(RateLimitExceededTotal)
 	reg.MustRegister(RateLimitRemaining)
@@ -91,15 +90,7 @@ var (
 		[]string{"profile", "status"},
 	)
 
-	ShieldIncidentsBySeverity = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Namespace: namespace,
-			Name:      "shield_incidents_by_severity",
-			Help:      "Shield incidents by severity status",
-		},
-		[]string{"status"},
-	)
-
+	// @sk-task remove-audit-incidents#T3.5: ShieldIncidentsBySeverity metric removed (AC-010)
 	ShieldProfilesEvaluated = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,

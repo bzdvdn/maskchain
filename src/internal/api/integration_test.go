@@ -66,7 +66,7 @@ func TestIntegration_FullCycle(t *testing.T) {
 
 	scanner := &integrationMockScanner{
 		resp: &appshield.ScanResponse{
-			ScanResult: entity.NewScanResult(value.ScanStatusClean, nil),
+			ScanResult: entity.NewScanResult(value.ScanStatusClean),
 		},
 	}
 	engine.Use(middleware.ShieldMiddleware(scanner, &config.ShieldConfig{}, log))

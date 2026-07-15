@@ -12,30 +12,19 @@ func NewPolicyEvaluator() *PolicyEvaluator {
 	return &PolicyEvaluator{}
 }
 
+// @sk-task remove-audit-incidents#T1.4: Use ScanStatus instead of incidents for evaluation (AC-006)
 func (e *PolicyEvaluator) Evaluate(result *entity.ScanResult) entity.Reaction {
 	if result == nil {
 		return entity.ReactionBlock
 	}
 
-	incidents := result.Incidents()
-	if len(incidents) == 0 {
+	switch result.Status() {
+	case value.ScanStatusClean:
 		return entity.ReactionAllow
-	}
-
-	highest := value.SeverityLow
-	for _, inc := range incidents {
-		if inc.Severity() > highest {
-			highest = inc.Severity()
-		}
-	}
-
-	switch highest {
-	case value.SeverityCritical:
+	case value.ScanStatusBlocked:
 		return entity.ReactionBlock
-	case value.SeverityHigh:
+	case value.ScanStatusSuspicious:
 		return entity.ReactionReview
-	case value.SeverityMedium, value.SeverityLow:
-		return entity.ReactionLog
 	default:
 		return entity.ReactionBlock
 	}

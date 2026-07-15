@@ -67,7 +67,7 @@ func TestScanPipeline_DisabledDetector(t *testing.T) {
 // @sk-test 20-shield-domain#T5.3: TestPolicyEvaluator no incidents (AC-004)
 func TestPolicyEvaluator_NoIncidents(t *testing.T) {
 	eval := NewPolicyEvaluator()
-	result := entity.NewScanResult(value.ScanStatusClean, nil)
+	result := entity.NewScanResult(value.ScanStatusClean)
 	reaction := eval.Evaluate(result)
 	if reaction != entity.ReactionAllow {
 		t.Errorf("expected allow for clean result, got %v", reaction)
@@ -83,42 +83,25 @@ func TestPolicyEvaluator_NilResult(t *testing.T) {
 	}
 }
 
-// @sk-test 20-shield-domain#T5.3: TestPolicyEvaluator severity mapping (AC-004)
-func TestPolicyEvaluator_SeverityMapping(t *testing.T) {
+// @sk-test remove-audit-incidents#T4.2: TestPolicyEvaluator status mapping (AC-004)
+func TestPolicyEvaluator_StatusMapping(t *testing.T) {
 	eval := NewPolicyEvaluator()
-	pid, _ := value.NewPatternID("p-eval")
 
 	tests := []struct {
-		severity value.Severity
-		want     entity.Reaction
+		status value.ScanStatus
+		want   entity.Reaction
 	}{
-		{value.SeverityCritical, entity.ReactionBlock},
-		{value.SeverityHigh, entity.ReactionReview},
-		{value.SeverityMedium, entity.ReactionLog},
-		{value.SeverityLow, entity.ReactionLog},
+		{value.ScanStatusClean, entity.ReactionAllow},
+		{value.ScanStatusBlocked, entity.ReactionBlock},
+		{value.ScanStatusSuspicious, entity.ReactionReview},
+		{value.ScanStatusError, entity.ReactionBlock},
 	}
 
 	for _, tt := range tests {
-		inc := entity.NewIncident("det-eval", pid, tt.severity, "test", 0)
-		result := entity.NewScanResult(value.ScanStatusSuspicious, []entity.Incident{*inc})
+		result := entity.NewScanResult(tt.status)
 		got := eval.Evaluate(result)
 		if got != tt.want {
-			t.Errorf("Evaluate with severity %v: expected %v, got %v", tt.severity, tt.want, got)
+			t.Errorf("Evaluate with status %v: expected %v, got %v", tt.status, tt.want, got)
 		}
-	}
-}
-
-// @sk-test 20-shield-domain#T5.3: TestPolicyEvaluator highest severity wins (AC-004)
-func TestPolicyEvaluator_HighestSeverity(t *testing.T) {
-	eval := NewPolicyEvaluator()
-	pid, _ := value.NewPatternID("p-highest")
-
-	low := entity.NewIncident("det-low", pid, value.SeverityLow, "low", 0)
-	high := entity.NewIncident("det-high", pid, value.SeverityHigh, "high", 0)
-	result := entity.NewScanResult(value.ScanStatusSuspicious, []entity.Incident{*low, *high})
-
-	reaction := eval.Evaluate(result)
-	if reaction != entity.ReactionReview {
-		t.Errorf("expected review for highest=high, got %v", reaction)
 	}
 }

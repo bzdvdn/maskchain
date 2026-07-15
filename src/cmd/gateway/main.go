@@ -17,7 +17,6 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
 	"github.com/bzdvdn/maskchain/src/internal/api"
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
-	"github.com/bzdvdn/maskchain/src/internal/api/handler/incident"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	maskrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/mask"
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
@@ -252,14 +251,7 @@ func main() {
 	srv.RegisterMetricsRoute(metricsHandler)
 	srv.RegisterMaskHandler(maskHandler)
 
-	// @sk-task 60-audit-incidents#T2.3: Wire incident handler (AC-001, AC-002)
-	if pgPool != nil {
-		incidentRepo := postgres.NewPostgresIncidentRepo(pgPool)
-		incidentHandler := incident.New(incidentRepo)
-		srv.RegisterIncidentHandler(incidentHandler)
-		logger.Info("incident handler registered")
-	}
-
+	// @sk-task remove-audit-incidents#T3.4: Incident handler wiring removed from gateway (AC-009)
 	// @sk-task 13-shield-middleware-wiring#T2.3: Simplified — no ProfileRepository DI (AC-005)
 	pipelineFactory := appshield.NewScanPipelineFactory(detectorRegistry)
 	scanUseCase := appshield.NewScanUseCase(pipelineFactory)

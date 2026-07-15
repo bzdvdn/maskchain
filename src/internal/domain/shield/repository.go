@@ -8,14 +8,6 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
 
-// @sk-task 60-audit-incidents#T1.3: IncidentFilter struct for list with filtering and pagination (AC-001, AC-006)
-type IncidentFilter struct {
-	Severity    *string
-	Tenant      *string
-	Page        int
-	PageSize    int
-}
-
 // @sk-task tenant-profile-sync#T1.3: Implement TenantRepository interface (AC-001, AC-005, AC-008)
 type TenantRepository interface {
 	List(ctx context.Context) ([]*entity.Tenant, error)
@@ -32,13 +24,4 @@ type TenantResolver interface {
 	List(ctx context.Context) ([]*entity.Tenant, error)
 	Get(ctx context.Context, slug value.TenantSlug) (*entity.Tenant, error)
 	SyncConfig(ctx context.Context, tenants map[string]*entity.Tenant) error
-}
-
-// @sk-task cleanup-profile-repository#T1.3: Remove ListByProfile, keep ListByTenant and List (AC-009)
-// @sk-task 60-audit-incidents#T1.3: Add List method with filtering and pagination (AC-001, AC-006)
-type IncidentRepository interface {
-	Save(ctx context.Context, incident *entity.Incident) error
-	FindByID(ctx context.Context, id string) (*entity.Incident, error)
-	ListByTenant(ctx context.Context, tenantID value.TenantID) ([]*entity.Incident, error)
-	List(ctx context.Context, filter IncidentFilter) ([]*entity.Incident, int, error)
 }
