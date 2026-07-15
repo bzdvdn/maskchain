@@ -2,9 +2,9 @@
 
 ## Назначение
 
-Построение production-grade платформы для маршрутизации, обеспечения безопасности (Content Shield) и управления AI-трафиком с возможностью сохранения и управления профилями справочников для политик безопасности.
+Построение production-grade платформы для маршрутизации, обеспечения безопасности (Content Shield) и управления AI-трафиком с управлением политиками безопасности на уровне тенантов.
 
-Миссия — предоставить организациям единый gateway для AI-трафика с встроенным Content Shield (AI DLP): обнаружение и реагирование на PII, secrets, финансовые данные в промптах и ответах. Профили справочников позволяют гибко настраивать политики обнаружения per-tenant, per-model, per-provider.
+Миссия — предоставить организациям единый gateway для AI-трафика с встроенным Content Shield (AI DLP): обнаружение и реагирование на PII, secrets, финансовые данные в промптах и ответах. Тенанты являются контейнером политик обнаружения: словари, PII-правила, препроцессоры конфигурируются непосредственно на тенанте.
 
 ## Ключевые принципы
 
@@ -16,11 +16,11 @@ Content Shield (AI DLP) — основной домен системы, а не 
 - Финансовых данных (номера карт с Luhn, IBAN, SWIFT)
 - Protected health information (PHI)
 
-Действия при обнаружении: block, redact, mask, alert. Политики настраиваются через профили справочников.
+Действия при обнаружении: block, redact, mask, alert. Политики настраиваются через тенантов.
 
-### II. Profile-Driven Policy Management
+### II. Tenant-Driven Policy Management
 
-Политики Content Shield управляются через профили справочников — переиспользуемые конфигурации детекторов, реакций и исключений. Профили хранятся в PostgreSQL, управляются через REST API и React UI. Поддерживается версионирование, импорт/экспорт, tenant-specific overrides.
+Политики Content Shield управляются через тенантов — каждый тенант содержит словари (dictionaries), PII-правила (piiConfig) и препроцессоры. Тенанты хранятся в PostgreSQL, управляются через REST API и React UI. Профили справочников удалены; вся конфигурация политик инкапсулирована в тенанте.
 
 ### III. Infrastructure, Not Chatbot
 
@@ -64,8 +64,9 @@ SSE, chunk forwarding, streaming retries, cancellation propagation, low-latency 
 ## Ограничения
 
 - Content Shield — обязательная возможность gateway, а не opt-in.
-- Профили справочников хранятся в PostgreSQL; Valkey — только для кэширования.
-- React UI — только для управления профилями и просмотра логов/инцидентов; не является панелью управления AI-трафиком в реальном времени.
+- Тенанты (словари, PII-правила, препроцессоры) хранятся в PostgreSQL; Valkey — только для кэширования.
+- React UI — только для управления тенантами и просмотра логов/инцидентов; не является панелью управления AI-трафиком в реальном времени.
+- Профили справочников удалены и не должны возвращаться; вся конфигурация политик — на уровне тенанта.
 - Envoy-режим — PostMVP; native-режим единственный до стабилизации core-доменов.
 - No chatbot UI, no prompt playground, no agent framework, no low-code platform.
 - Система должна работать в enterprise-сетях с outbound proxy и air-gapped окружениями.
@@ -82,7 +83,7 @@ SSE, chunk forwarding, streaming retries, cancellation propagation, low-latency 
 - **Data Plane:** Native (Go, in-process). Envoy — PostMVP.
 - **Content Shield / AI DLP:** Microsoft Presidio (PII detection), custom patterns engine (secrets, API keys, financial data)
 - **Observability:** OpenTelemetry, Prometheus, Grafana, Loki, Tempo
-- **Persistence:** PostgreSQL (profiles, audit, incidents)
+- **Persistence:** PostgreSQL (tenants, audit, incidents)
 - **Cache:** Valkey (Redis-compatible)
 - **Локальная разработка:** Docker Compose, mock-провайдеры
 
@@ -91,24 +92,24 @@ SSE, chunk forwarding, streaming retries, cancellation propagation, low-latency 
 ```
 Client → Gateway Runtime → Shield Engine → Routing → Egress → AI Providers
                             ↕
-                   Profile Repository (PG)
+                   Tenant Repository (PG)
                             ↕
-                      React UI (profiles, logs)
+                    React UI (tenants, logs)
 ```
 
 ### Gateway Runtime
 HTTP API, streaming, retries, failover, routing execution, observability. In-process Go: Gin HTTP server, `http.Client` с egress dialer wrappers, in-process SSE streaming. Single binary, zero external dependencies.
 
 ### Shield Engine
-Content inspection pipeline: PII redaction, secrets detection, AI DLP. Проверяет входящие промпты и исходящие ответы. Управляется профилями справочников из Profile Repository.
+Content inspection pipeline: PII redaction, secrets detection, AI DLP. Проверяет входящие промпты и исходящие ответы. Управляется конфигурацией тенанта (словари, PII-правила) через Tenant Repository.
 
-### Profile Repository
-Хранилище профилей справочников для Content Shield:
-- Profiles: именованные наборы правил детекции
-- Detectors: PII, secrets, financial, PHI, custom regex
+### Tenant Repository
+Хранилище тенантов для Content Shield:
+- Tenants: именованные контейнеры политик
+- Dictionaries: списки сущностей для точного детектирования
+- PII Config: regex-правила детекции PII, secrets, financial, PHI
+- Preprocessors: CSV/JSON препроцессоры для структурированных данных
 - Reactions: block, redact, mask, alert
-- Tenants: isolation профилей по tenant
-- Versioning: история изменений профилей
 
 ### Routing Engine
 Model selection, provider selection, fallback decisions, semantic routing.
@@ -120,7 +121,7 @@ Outbound proxy routing, retry orchestration, timeout management.
 OpenTelemetry, Prometheus, structured logging, distributed tracing.
 
 ### React UI
-Управление профилями справочников, просмотр инцидентов Shield, логи аудита.
+Управление тенантами (словари, PII-правила), просмотр инцидентов Shield, логи аудита.
 
 ## Языковая политика
 
@@ -169,7 +170,7 @@ OpenTelemetry, Prometheus, structured logging, distributed tracing.
 
 ### Domain Boundaries
 
-Core domains: shield (content security, PII detection, secrets detection), profiles (справочники политик), routing, providers, egress, streaming, observability, tenants. Архитектура организуется вокруг доменов, а не вокруг провайдеров.
+Core domains: shield (content security, PII detection, secrets detection, dictionaries, preprocessors), routing, providers, egress, streaming, observability, tenants. Профили справочников удалены; все политики конфигурируются на тенанте. Архитектура организуется вокруг доменов, а не вокруг провайдеров.
 
 ### Clean Architecture
 
@@ -219,10 +220,11 @@ Core domains: shield (content security, PII detection, secrets detection), profi
 
 ## Метаданные конституции
 
-- Version: 1.0.0
+- Version: 1.1.0
 - Ratified: 2026-07-10
-- Last Amended: 2026-07-10
+- Last Amended: 2026-07-15
 
 ## Последнее обновление
 
 2026-07-10 — начальная версия конституции MaskChain. Фокус: Content Shield (AI DLP), профили справочников, native-only data plane, React UI.
+2026-07-15 — v1.1.0: профили справочников удалены, политики конфигурируются на тенанте (словари, PII-правила, препроцессоры).

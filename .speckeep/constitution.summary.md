@@ -1,5 +1,5 @@
-- `Purpose:` Production-grade AI gateway с Content Shield (AI DLP) и управлением профилями справочников политик безопасности
-- `Non-negotiables:` Content Shield — core domain, а не opt-in; профили справочников хранятся в PostgreSQL; native-only data plane (Envoy — PostMVP); React UI — только для управления профилями и логов; система должна работать в enterprise-сетях с outbound proxy
+- `Purpose:` Production-grade AI gateway с Content Shield (AI DLP) и управлением политиками безопасности на уровне тенантов
+- `Non-negotiables:` Content Shield — core domain, а не opt-in; тенанты (словари, PII-правила, препроцессоры) хранятся в PostgreSQL; native-only data plane (Envoy — PostMVP); React UI — только для управления тенантами и логов; система должна работать в enterprise-сетях с outbound proxy; профили справочников удалены
 - `Stack/Architecture:` Go + Gin + cobra/viper (backend); React + TypeScript + Vite (UI); PostgreSQL + Valkey; DDD + Clean Architecture; Microsoft Presidio для PII detection
 - `Workflow/DoD:` spec → plan → tasks → implement → verify → archive; каждый AC требует observable proof; trace-маркеры @sk-task/@sk-test над owning declaration; запрещены маркеры на package/import/file-header; repo-map обновляется только при существенных изменениях структуры
 - `Branching:` feature/<slug>; spec-фаза создаёт ветку
