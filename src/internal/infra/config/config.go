@@ -57,6 +57,15 @@ type MaskConfig struct {
 	CacheTTLSec int `mapstructure:"cache_ttl_sec" yaml:"cache_ttl_sec"`
 }
 
+// @sk-task sessions#T1.3: Add SessionConfig section (AC-001, AC-002, AC-005, AC-007, AC-010)
+type SessionConfig struct {
+	DefaultTTL       time.Duration `mapstructure:"default_ttl" yaml:"default_ttl"`
+	MaxTTL           time.Duration `mapstructure:"max_ttl" yaml:"max_ttl"`
+	CleanupInterval  time.Duration `mapstructure:"cleanup_interval" yaml:"cleanup_interval"`
+	CleanupEnabled   bool          `mapstructure:"cleanup_enabled" yaml:"cleanup_enabled"`
+	CacheTTL         time.Duration `mapstructure:"cache_ttl" yaml:"cache_ttl"`
+}
+
 // @sk-task 51-shield-gateway-integration#T1.1: Add ShieldConfig section (AC-001, AC-002)
 // @sk-task 13-shield-middleware-wiring#T2.2: Remove ProfileMapping and DefaultAction (AC-005)
 type ShieldConfig struct {
@@ -184,8 +193,9 @@ type Config struct {
 	RateLimit *RateLimitConfig `mapstructure:"ratelimit" yaml:"ratelimit"`
 	Egress    *EgressConfig    `mapstructure:"egress" yaml:"egress"`
 	Debug     *DebugConfig     `mapstructure:"debug" yaml:"debug"`
+	Session         *SessionConfig         `mapstructure:"session" yaml:"session"`
 	DictionaryCache *DictionaryCacheConfig `mapstructure:"dictionary_cache" yaml:"dictionary_cache"`
-	Tenants   map[string]*TenantConfig `mapstructure:"tenants" yaml:"tenants"`
+	Tenants         map[string]*TenantConfig `mapstructure:"tenants" yaml:"tenants"`
 }
 
 var _ zapcore.ObjectMarshaler = (*Config)(nil)
@@ -279,6 +289,11 @@ const defaultDictionaryCacheValkeyTTL = 300
 const defaultDictionaryCacheLRUSize = 10000
 const defaultDictionaryCacheWarmOnStartup = true
 const defaultDictionaryCacheWarmConcurrency = 5
+const defaultSessionTTL = 30 * time.Minute
+const defaultSessionMaxTTL = 24 * time.Hour
+const defaultSessionCleanupInterval = 5 * time.Minute
+const defaultSessionCleanupEnabled = false
+const defaultSessionCacheTTL = 5 * time.Minute
 const defaultHealthCheckCriticalDeps = "database"
 
 // @sk-task 10-gateway-skeleton#T1.2: Set ServerConfig defaults in DefaultConfig (AC-001, AC-005)
@@ -331,6 +346,13 @@ func DefaultConfig() *Config {
 		Debug: &DebugConfig{
 			Enabled:    defaultDebugEnabled,
 			AdminToken: defaultDebugAdminToken,
+		},
+		Session: &SessionConfig{
+			DefaultTTL:       defaultSessionTTL,
+			MaxTTL:           defaultSessionMaxTTL,
+			CleanupInterval:  defaultSessionCleanupInterval,
+			CleanupEnabled:   defaultSessionCleanupEnabled,
+			CacheTTL:         defaultSessionCacheTTL,
 		},
 		DictionaryCache: &DictionaryCacheConfig{
 			ValkeyTTLSec:    defaultDictionaryCacheValkeyTTL,

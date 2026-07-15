@@ -17,6 +17,7 @@ import (
 	"go.uber.org/zap"
 
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
+	"github.com/bzdvdn/maskchain/src/internal/domain/session"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/detector"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/mask"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
@@ -114,7 +115,12 @@ type Scanner interface {
 // @sk-task 61-observability#T3.1: Instrument shield middleware with span attributes and metrics (AC-004)
 // @sk-task tenant-profile-sync#T3.1: ShieldMiddleware reads dictionaries from tenant (AC-006, AC-007)
 // @sk-task remove-audit-incidents#T2.3: Remove incident creation, X-Shield-Incident-ID, and ShieldIncidentsBySeverity (AC-008, AC-011)
-func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger) gin.HandlerFunc {
+// @sk-task sessions#T4.2: Integrate session increment counters after scan (AC-002)
+func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger, sessionUC ...*session.SessionUseCase) gin.HandlerFunc {
+	var sessUC *session.SessionUseCase
+	if len(sessionUC) > 0 {
+		sessUC = sessionUC[0]
+	}
 	return func(c *gin.Context) {
 		start := time.Now()
 
@@ -246,6 +252,7 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger)
 				} else if w := wrapUnmaskWriter(c, dictMaskMapping); w != nil {
 					defer w.flush()
 				}
+				incrementSessionFromContext(c, sessUC, dictMaskMapping, nil, tenantSlug, log)
 				c.Next()
 				return
 			}
@@ -301,6 +308,7 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger)
 				} else if w := wrapUnmaskWriter(c, dictMaskMapping); w != nil {
 					defer w.flush()
 				}
+				incrementSessionFromContext(c, sessUC, dictMaskMapping, resp, tenantSlug, log)
 				c.Next()
 			}
 
@@ -311,8 +319,34 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger)
 			} else if w := wrapUnmaskWriter(c, dictMaskMapping); w != nil {
 				defer w.flush()
 			}
+			incrementSessionFromContext(c, sessUC, dictMaskMapping, resp, tenantSlug, log)
 			c.Next()
 		}
+	}
+}
+
+// @sk-task sessions#T4.2: Increment session counters after shield scan (AC-002)
+func incrementSessionFromContext(c *gin.Context, sessUC *session.SessionUseCase, dictMaskMapping map[string]string, resp *appshield.ScanResponse, tenantSlug string, log *zap.Logger) {
+	if sessUC == nil {
+		return
+	}
+	sess, ok := SessionFromContext(c)
+	if !ok || sess == nil {
+		return
+	}
+
+	dictMaskCount := int32(len(dictMaskMapping))
+	var piiMaskCount int32
+	if resp != nil {
+		piiMaskCount = int32(len(resp.Replacements))
+	}
+	totalMasks := dictMaskCount + piiMaskCount
+
+	body, _ := c.GetRawData()
+	tokens := int64(len(body) / 4)
+
+	if err := sessUC.IncrementCounts(c.Request.Context(), tenantSlug, sess.SessionID, tokens, 1, totalMasks, dictMaskCount, piiMaskCount, 0); err != nil {
+		log.Warn("failed to increment session counters", zap.Error(err))
 	}
 }
 

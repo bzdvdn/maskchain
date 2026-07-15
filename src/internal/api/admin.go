@@ -99,6 +99,16 @@ func (s *AdminServer) RegisterSwaggerUI() {
 	})
 }
 
+// @sk-task sessions#T2.3: Register session routes on AdminServer (AC-001)
+func (s *AdminServer) RegisterSessionHandler(h *SessionHandler) {
+	group := s.engine.Group("/api/v1/sessions")
+	group.POST("", h.HandleCreate)
+	group.GET("", h.HandleList)
+	group.GET("/:id", h.HandleGet)
+	group.PATCH("/:id/extend", h.HandleExtend)
+	group.DELETE("/:id", h.HandleClose)
+}
+
 // @sk-task 118-api-consistency#T3.5: NoRoute checks Accept:text/html for SPA fallback (AC-009)
 // @sk-task 118-api-consistency#T3.5: NoRoute checks Accept:text/html for SPA fallback (AC-009)
 func (s *AdminServer) RegisterStaticFiles(fsys fs.FS) {

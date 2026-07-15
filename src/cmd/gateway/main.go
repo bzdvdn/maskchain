@@ -18,8 +18,11 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/api"
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
+	"github.com/bzdvdn/maskchain/src/internal/app/worker"
 	maskrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/mask"
+	sessionrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/session"
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
+	"github.com/bzdvdn/maskchain/src/internal/domain/session"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/detector"
 	domainMask "github.com/bzdvdn/maskchain/src/internal/domain/shield/mask"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
@@ -178,6 +181,16 @@ func main() {
 	maskUseCase := domainMask.NewMaskUseCase(detectorRegistry, maskStorage)
 	maskHandler := api.NewMaskHandler(maskUseCase, detectorRegistry)
 
+	// @sk-task sessions#T4.1: Wire session store, use case, and middleware (AC-010)
+	sessionCacheTTL := cfg.Session.CacheTTL
+	if sessionCacheTTL <= 0 {
+		sessionCacheTTL = 5 * time.Minute
+	}
+	sessionPG := sessionrepo.NewPostgresSessionStore(pgPool)
+	sessionVK := sessionrepo.NewValkeySessionCache(vkClient, sessionCacheTTL)
+	sessionStore := sessionrepo.NewCachedSessionStore(sessionPG, sessionVK, logger)
+	sessionUseCase := session.NewSessionUseCase(sessionStore)
+
 	// @sk-task 114-real-health-probes#T2.3: Create health service and wire into server (AC-001, AC-005, AC-008)
 	if cfg.Server.HealthCheck == nil {
 		cfg.Server.HealthCheck = &config.HealthCheckConfig{CriticalDeps: []string{"database"}}
@@ -258,7 +271,25 @@ func main() {
 	shieldEngine := appshield.NewShieldEngine(scanUseCase)
 	logger.Info("shield engine initialized")
 
-	srv.RegisterProxyRoute(middleware.ShieldMiddleware(shieldEngine, cfg.Shield, logger), routingHandler)
+	sessionMiddleware := middleware.SessionMiddleware(sessionUseCase, cfg.Session, logger)
+	srv.RegisterSessionMiddleware(sessionMiddleware)
+	logger.Info("session middleware registered")
+
+	// @sk-task sessions#T5.2: Wire CleanupWorker in gateway (AC-007)
+	if cfg.Session.CleanupEnabled {
+		cleanupWorker := worker.NewCleanupWorker(sessionUseCase, cfg.Session.CleanupInterval, logger)
+		cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
+		go cleanupWorker.Run(cleanupCtx)
+		logger.Info("session cleanup worker registered",
+			zap.Duration("interval", cfg.Session.CleanupInterval),
+		)
+		// @sk-task sessions#T5.2: Cancel cleanup context on shutdown (AC-007)
+		defer cleanupCancel()
+	} else {
+		logger.Debug("session cleanup worker disabled")
+	}
+
+	srv.RegisterProxyRoute(middleware.ShieldMiddleware(shieldEngine, cfg.Shield, logger, sessionUseCase), routingHandler)
 	logger.Info("proxy routes registered")
 
 	errCh := make(chan error, 1)

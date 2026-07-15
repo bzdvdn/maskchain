@@ -17,7 +17,10 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/admin"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
+	"github.com/bzdvdn/maskchain/src/internal/app/worker"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
+	sessionrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/session"
+	"github.com/bzdvdn/maskchain/src/internal/domain/session"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/resolver"
 	shvalue "github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
@@ -160,6 +163,26 @@ func main() {
 		srv.RegisterTenantHandler(tenantHandler)
 
 		// @sk-task remove-audit-incidents#T3.4: Incident handler wiring removed from admin (AC-009)
+
+		// @sk-task sessions#T2.3: Wire SessionHandler in admin (AC-001)
+		sessionStore := sessionrepo.NewPostgresSessionStore(pgPool)
+		sessionUseCase := session.NewSessionUseCase(sessionStore)
+		sessionHandler := api.NewSessionHandler(sessionUseCase, cfg.Session)
+		srv.RegisterSessionHandler(sessionHandler)
+
+		// @sk-task sessions#T5.2: Wire CleanupWorker in admin (AC-007)
+		if cfg.Session.CleanupEnabled {
+			cleanupWorker := worker.NewCleanupWorker(sessionUseCase, cfg.Session.CleanupInterval, logger)
+			cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
+			go cleanupWorker.Run(cleanupCtx)
+			logger.Info("session cleanup worker registered",
+				zap.Duration("interval", cfg.Session.CleanupInterval),
+			)
+			// @sk-task sessions#T5.2: Cancel cleanup context on shutdown (AC-007)
+			defer cleanupCancel()
+		} else {
+			logger.Debug("session cleanup worker disabled")
+		}
 	}
 
 	errCh := make(chan error, 1)

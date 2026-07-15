@@ -6,7 +6,7 @@
 MaskChain Gateway    — AI-прокси с маскированием, роутингом, fallback
 MaskChain Mask API   — /mask и /unmask для обратимого преобразования
 MaskChain Tenants    — тенанты, словари и политики маскирования
-MaskChain Sessions   — карта замен на всю цепочку диалога (новое)
+MaskChain Sessions   — статистика сессий по тенантам и моделям (новое)
 MaskChain Analytics  — токены, стоимость, трафик использования (новое)
 ```
 
@@ -298,74 +298,26 @@ MaskChain Analytics  — токены, стоимость, трафик испо
 
 ## Группа 13: Sessions ⬜ (MaskChain 2.0)
 
-**Контекст:** Сессия хранит карту замен `{placeholder: original}` на протяжении всей цепочки диалога. Клиент отправляет `X-Session-ID`, shield middleware пишет замены в сессию, `/unmask` по SessionID восстанавливает оригинал всего диалога.
+**Контекст:** Сессия трекает диалог: сколько сообщений, токенов, какая модель, какой тенант. Клиент отправляет `X-Session-ID`, shield middleware создаёт/обновляет сессию. Оператор смотрит статистику использования через REST API.
 
-### 120-sessions-domain ⬜
+### sessions ⬜
 
-**Цель:** Domain-слой Sessions.
+**Цель:** Session tracking — создание, обновление счётчиков, TTL, cleanup.
 
 **Ключевые артефакты:**
-- `Session` entity: `SessionID`, `TenantID`, `Model`, `ReplacementMap` (map[string]string), `TokenCount`, `MessageCount`, `Status` (active/expired/closed), `TTL`, `CreatedAt`, `ExpiresAt`
+- `Session` entity: `SessionID` (UUIDv7), `TenantID`, `Model`, `TokenCount`, `MessageCount`, `TotalMasks`, `DictMaskCount`, `PIIMaskCount`, `PreprocessorCount`, `Status` (active/expired/closed), `TTL`, `CreatedAt`, `ExpiresAt`
 - `SessionID` value object (UUIDv7)
-- `ReplacementMap` value object — упорядоченная карта замен с поддержкой diff
-- `SessionStore` port interface: `Save`, `Get`, `AppendReplacements`, `ExtendTTL`, `Close`, `DeleteExpired`
-- `SessionUseCase`: create session, append replacements, unmarshal by session, close/expire
+- `SessionStore` port interface: `Save`, `Get`, `IncrementCounts`, `ExtendTTL`, `Close`, `DeleteExpired`, `ListByTenant`
+- `SessionUseCase`: create, increment counts, close, extend TTL, list, delete expired
+- `PostgresSessionStore` — CRUD + атомарный UPDATE всех счётчиков
+- `ValkeySessionCache` — TTL-based кэш (fail-open)
+- `CleanupWorker` — фоновый interval-based cleanup expired сессий
+- REST API: `POST/GET /api/v1/sessions`, `PATCH .../extend`, `DELETE .../id`
+- Middleware: чтение `X-Session-ID`, создание/обновление сессии
+- Tenant-scoped, пагинация, OpenAPI spec
+- Graceful degradation: Valkey недоступен — работа через PG
 
-**Зависимости:** 20-shield-domain, 80-tenant-isolation, 01-config-bootstrap
-
----
-
-### 121-sessions-storage ⬜
-
-**Цель:** Postgres + Valkey repository для Sessions.
-
-**Ключевые артефакты:**
-- Миграция: `CREATE TABLE sessions (id UUID, tenant_id TEXT, model TEXT, replacements JSONB, token_count BIGINT, message_count INT, status TEXT, ttl INTERVAL, created_at TIMESTAMPTZ, expires_at TIMESTAMPTZ)`
-- Индекс по `tenant_id`, `status`, `expires_at`
-- `PostgresSessionStore` — CRUD + `AppendReplacements` (JSONB merge)
-- `ValkeySessionCache` — TTL-based кэш с read-through/write-through
-- `CleanupWorker` — фоновый inverval removal expired sessions (optional)
-- Graceful degradation: если Valkey недоступен — работа через PG (fail-open)
-
-**Зависимости:** 120-sessions-domain, 30-shield-persistence
-
----
-
-### 122-sessions-api ⬜
-
-**Цель:** REST API для управления сессиями.
-
-**Ключевые артефакты:**
-- `POST /api/v1/sessions` — создать сессию, вернуть `session_id`
-- `GET /api/v1/sessions/:id` — получить метаданные сессии
-- `GET /api/v1/sessions/:id/replacements` — получить карту замен (только для admin/tenant owner)
-- `PATCH /api/v1/sessions/:id/extend` — продлить TTL
-- `DELETE /api/v1/sessions/:id` — закрыть сессию
-- `POST /api/v1/unmask/session/:id` — unmarshal всего диалога по SessionID
-- Пагинация для `GET /api/v1/sessions`
-- Tenant-scoped: тенант видит только свои сессии
-- OpenAPI spec + Swagger UI
-
-**Зависимости:** 121-sessions-storage, 118-api-consistency, 80-tenant-isolation
-
----
-
-### 123-sessions-gateway ⬜
-
-**Цель:** Интеграция Sessions в request lifecycle gateway.
-
-**Ключевые артефакты:**
-- Middleware: читает `X-Session-ID` из запроса, создаёт сессию если нет, кладёт в контекст
-- Shield middleware: **пишет** `{placeholder → original}` в активную сессию вместо создания Incident
-- Session middleware: пробрасывает `X-Session-ID` в ответ
-- Headers: `X-Session-ID`, `X-Session-Expires-At`, `X-Session-Message-Count`
-- Config: `session.ttl` (default 30m), `session.max_messages` (default 100)
-- Metrics: `session_active_total`, `session_replacements_total`
-- Graceful degradation: если session store недоступен — маскирование работает без сохранения сессии (fail-open)
-
-**Критично для:** цепочки диалогов (multi-turn). Без сессий каждый запрос маскируется независимо, и unmarshal одного запроса не восстанавливает контекст предыдущих.
-
-**Зависимости:** 122-sessions-api, 51-shield-gateway-integration, 61-observability
+**Зависимости:** 20-shield-domain, 80-tenant-isolation, 30-shield-persistence, 01-config-bootstrap
 
 ---
 
@@ -452,9 +404,9 @@ MaskChain Analytics  — токены, стоимость, трафик испо
 110 → 111 → 112 → 113 → 116 → 114 → 115 → 117 → 118
 
 Новые фазы 2.0.0:
-120 → 121 → 122 → 123
+sessions
   ↓
 130 → 131 → 132
 ```
 
-Все фазы 1.0.0 выполнены. Фазы 120–132 — план MaskChain 2.0.
+Все фазы 1.0.0 выполнены. Фазы sessions и 130–132 — план MaskChain 2.0.

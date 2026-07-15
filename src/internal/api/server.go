@@ -20,13 +20,14 @@ import (
 // @sk-task 61-observability#T2.1: Add OTel and metrics middleware (AC-001, AC-002, AC-003)
 // @sk-task 117-critical-test-coverage#T2.1: Export http field for test access (AC-001)
 type Server struct {
-	engine         *gin.Engine
-	HTTP           *http.Server
-	cfg            *config.ServerConfig
-	log            *zap.Logger
-	serviceName    string
-	metricsHandler gin.HandlerFunc
-	healthHandler  *health.Handler
+	engine           *gin.Engine
+	HTTP             *http.Server
+	cfg              *config.ServerConfig
+	log              *zap.Logger
+	serviceName      string
+	metricsHandler   gin.HandlerFunc
+	healthHandler    *health.Handler
+	sessionMiddleware gin.HandlerFunc
 }
 
 // @sk-task 114-real-health-probes#T2.2: Accept healthSvc and replace static handlers (AC-001, AC-005, AC-008)
@@ -91,11 +92,21 @@ func (s *Server) RegisterRateLimit(mw gin.HandlerFunc) {
 func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHandler *RoutingProxyHandler) {
 	primary := s.engine.Group("/api/v1")
 	if routingHandler != nil {
-		primary.POST("/chat/completions", middleware.WrapSSE(), shieldMiddleware, routingHandler.HandleChatCompletion)
+		chain := []gin.HandlerFunc{middleware.WrapSSE()}
+		if s.sessionMiddleware != nil {
+			chain = append(chain, s.sessionMiddleware)
+		}
+		chain = append(chain, shieldMiddleware, routingHandler.HandleChatCompletion)
+		primary.POST("/chat/completions", chain...)
 	} else {
-		primary.POST("/chat/completions", shieldMiddleware, ProxyChatCompletionHandler)
+		chain := []gin.HandlerFunc{}
+		if s.sessionMiddleware != nil {
+			chain = append(chain, s.sessionMiddleware)
+		}
+		chain = append(chain, shieldMiddleware, ProxyChatCompletionHandler)
+		primary.POST("/chat/completions", chain...)
 	}
-	primary.POST("/completions", shieldMiddleware, ProxyCompletionHandler)
+	primary.POST("/completions", s.withSessionMiddleware(shieldMiddleware), ProxyCompletionHandler)
 
 	// @sk-task 118-api-consistency#T2.2: Deprecated /v1/ paths with 301 redirect (AC-002)
 	redirect := s.engine.Group("/v1")
@@ -106,6 +117,23 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 func redirectPermanent(target string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Redirect(http.StatusMovedPermanently, target)
+	}
+}
+
+// @sk-task sessions#T4.1: RegisterSessionMiddleware on gateway Server (AC-010)
+func (s *Server) RegisterSessionMiddleware(mw gin.HandlerFunc) {
+	s.sessionMiddleware = mw
+}
+
+func (s *Server) withSessionMiddleware(next gin.HandlerFunc) gin.HandlerFunc {
+	if s.sessionMiddleware == nil {
+		return next
+	}
+	return func(c *gin.Context) {
+		s.sessionMiddleware(c)
+		if !c.IsAborted() {
+			next(c)
+		}
 	}
 }
 
