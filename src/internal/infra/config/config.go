@@ -506,6 +506,7 @@ func normalizeProviderConfig(cfg *Config, v *viper.Viper) {
 }
 
 // @sk-task 111-provider-auth-and-config#T2.1: Validate APIKeys required + auth_scheme enum (AC-005)
+// @sk-task ollama-provider#T1.1: Relax api_keys validation for ollama (AC-001)
 func validateProviderAuth(cfg *Config) error {
 	if cfg.Routing == nil {
 		return nil
@@ -515,6 +516,9 @@ func validateProviderAuth(cfg *Config) error {
 			continue
 		}
 		if len(p.APIKeys) == 0 {
+			if p.APIType == "ollama" {
+				continue
+			}
 			return fmt.Errorf("routing.providers.%d.api_keys: required for provider %q", i, p.Name)
 		}
 		switch p.AuthScheme {

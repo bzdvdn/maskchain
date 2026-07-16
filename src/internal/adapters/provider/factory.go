@@ -34,6 +34,9 @@ func NewProviderClient(pcfg *config.ProviderConfig, egressCfg *config.EgressConf
 		return newOpenAIClient(pcfg, ec), nil
 	case "anthropic":
 		return newAnthropicClient(pcfg, ec), nil
+	// @sk-task ollama-provider#T2.2: Register ollama in factory (AC-001)
+	case "ollama":
+		return newOllamaClient(pcfg, ec), nil
 	default:
 		return nil, fmt.Errorf("provider %q: unsupported api_type %q", pcfg.Name, pcfg.APIType)
 	}
