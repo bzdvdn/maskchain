@@ -296,15 +296,16 @@ MaskChain Analytics  — токены, стоимость, трафик испо
 
 ---
 
-## Группа 13: Sessions ⬜ (MaskChain 2.0)
+## Группа 13: Sessions ✅ (MaskChain 2.0)
 
 **Контекст:** Сессия трекает диалог: сколько сообщений, токенов, какая модель, какой тенант. Клиент отправляет `X-Session-ID`, shield middleware создаёт/обновляет сессию. Оператор смотрит статистику использования через REST API.
 
-### sessions ⬜
+### sessions ✅
 
 **Цель:** Session tracking — создание, обновление счётчиков, TTL, cleanup.
 
 **Ключевые артефакты:**
+
 - `Session` entity: `SessionID` (UUIDv7), `TenantID`, `Model`, `TokenCount`, `MessageCount`, `TotalMasks`, `DictMaskCount`, `PIIMaskCount`, `PreprocessorCount`, `Status` (active/expired/closed), `TTL`, `CreatedAt`, `ExpiresAt`
 - `SessionID` value object (UUIDv7)
 - `SessionStore` port interface: `Save`, `Get`, `IncrementCounts`, `ExtendTTL`, `Close`, `DeleteExpired`, `ListByTenant`
@@ -330,6 +331,7 @@ MaskChain Analytics  — токены, стоимость, трафик испо
 **Цель:** Domain-слой аналитики.
 
 **Ключевые артефакты:**
+
 - `TokenUsage` entity: `TenantID`, `Model`, `InputTokens`, `OutputTokens`, `Cost`, `Timestamp`
 - `UsageRecord` value object: агрегированная запись за период
 - `CostRate` value object: стоимость токена по модели (config-driven)
@@ -345,6 +347,7 @@ MaskChain Analytics  — токены, стоимость, трафик испо
 **Цель:** Сбор и агрегация метрик использования.
 
 **Ключевые артефакты:**
+
 - `UsageMiddleware` — пост-обработка каждого запроса: читает токены из response, записывает UsageRecord
 - Token counting: из response body (usage поле в OpenAI-формате) или fallback через tiktoken
 - Async worker: буферизованная запись в UsageStore (batch insert каждые 5s)
@@ -362,6 +365,7 @@ MaskChain Analytics  — токены, стоимость, трафик испо
 **Цель:** API и дашборды аналитики.
 
 **Ключевые артефакты:**
+
 - `GET /api/v1/analytics/tokens` — токены по tenant/model за период (day/week/month)
 - `GET /api/v1/analytics/cost` — стоимость по tenant/model
 - `GET /api/v1/analytics/traffic` — количество запросов, latency P50/P95/P99
@@ -377,17 +381,17 @@ MaskChain Analytics  — токены, стоимость, трафик испо
 
 ## PostMVP (после 2.0)
 
-| Slug | Описание |
-|---|---|
-| `advanced-detectors` | ML-based классификаторы, context-aware PII, multi-language |
-| `policy-engine` | OPA/Rego policies, WASM filters, declarative policy model |
-| `envoy-data-plane` | Envoy ext_proc gRPC + xDS control plane. Build tag `envoy` |
-| `k8s-operator` | Kubernetes Operator: CRDs, reconciliation, Gateway API |
-| `shield-benchmark` | Performance benchmark: throughput, latency, accuracy |
-| `mcp-integration` | Model Context Protocol — маскирование на уровне MCP-тулов |
-| `agent-support` | Маскирование в multi-agent цепочках (агент вызывает агента) |
-| `cache-prompt` | Кэширование общих prefix-ов промптов для экономии токенов |
-| `model-selector` | Автоматический выбор модели под задачу (cost/quality balance) |
+| Slug                 | Описание                                                      |
+| -------------------- | ------------------------------------------------------------- |
+| `advanced-detectors` | ML-based классификаторы, context-aware PII, multi-language    |
+| `policy-engine`      | OPA/Rego policies, WASM filters, declarative policy model     |
+| `envoy-data-plane`   | Envoy ext_proc gRPC + xDS control plane. Build tag `envoy`    |
+| `k8s-operator`       | Kubernetes Operator: CRDs, reconciliation, Gateway API        |
+| `shield-benchmark`   | Performance benchmark: throughput, latency, accuracy          |
+| `mcp-integration`    | Model Context Protocol — маскирование на уровне MCP-тулов     |
+| `agent-support`      | Маскирование в multi-agent цепочках (агент вызывает агента)   |
+| `cache-prompt`       | Кэширование общих prefix-ов промптов для экономии токенов     |
+| `model-selector`     | Автоматический выбор модели под задачу (cost/quality balance) |
 
 ---
 
