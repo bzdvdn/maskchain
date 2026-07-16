@@ -18,6 +18,7 @@ type AnthropicClient struct {
 	apiKey            string
 	authScheme        string
 	authHeader        string
+	authPrefix        string
 	additionalHeaders map[string]string
 	ec                *egress.Client
 }
@@ -36,18 +37,20 @@ func newAnthropicClient(cfg *config.ProviderConfig, ec *egress.Client) *Anthropi
 	if authHeader == "" {
 		authHeader = "Authorization"
 	}
+	authPrefix := cfg.AuthPrefix
 	return &AnthropicClient{
 		baseURL:           baseURL,
 		apiKey:            apiKey,
 		authScheme:        authScheme,
 		authHeader:        authHeader,
+		authPrefix:        authPrefix,
 		additionalHeaders: cfg.AdditionalHeaders,
 		ec:                ec,
 	}
 }
 
 func (c *AnthropicClient) Call(ctx context.Context, req *ports.ProviderRequest) (*ports.ProviderResponse, error) {
-	authKey, authValue := buildAuthHeader(c.authScheme, c.authHeader, c.apiKey)
+	authKey, authValue := buildAuthHeader(c.authScheme, c.authHeader, c.authPrefix, c.apiKey)
 	headers := mergeHeaders(authKey, authValue, c.additionalHeaders)
 	for k, v := range req.Headers {
 		if _, exists := headers[k]; !exists {
@@ -78,7 +81,7 @@ func (c *AnthropicClient) Call(ctx context.Context, req *ports.ProviderRequest) 
 }
 
 func (c *AnthropicClient) Stream(ctx context.Context, req *ports.ProviderRequest) (<-chan ports.ProviderChunk, error) {
-	authKey, authValue := buildAuthHeader(c.authScheme, c.authHeader, c.apiKey)
+	authKey, authValue := buildAuthHeader(c.authScheme, c.authHeader, c.authPrefix, c.apiKey)
 	headers := mergeHeaders(authKey, authValue, c.additionalHeaders)
 	for k, v := range req.Headers {
 		if _, exists := headers[k]; !exists {

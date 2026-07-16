@@ -388,3 +388,33 @@ func assertHeader(t *testing.T, r *http.Request, key, expected string) {
 		t.Errorf("expected header %s=%q, got %q", key, expected, got)
 	}
 }
+
+// @sk-test custom-auth-prefix: TestProviderClient_CustomAuthPrefix — кастомный префикс (AC-004, AC-007)
+func TestProviderClient_CustomAuthPrefix(t *testing.T) {
+	srv := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertHeader(t, r, "X-OAuth", "Token sk-custom-token")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	defer srv.Close()
+
+	ec := egress.NewClient(&config.EgressConfig{MaxIdleConns: 1, IdleTimeout: time.Second})
+	client := newOpenAIClient(&config.ProviderConfig{
+		Name:       "test",
+		BaseURL:    srv.URL,
+		APIKeys:    []string{"sk-custom-token"},
+		AuthScheme: "bearer",
+		AuthHeader: "X-OAuth",
+		AuthPrefix: "Token ",
+	}, ec)
+
+	resp, err := client.Call(context.Background(), &ports.ProviderRequest{
+		Body: []byte(`{"model":"gpt-4"}`),
+	})
+	if err != nil {
+		t.Fatalf("Call failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}

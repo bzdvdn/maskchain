@@ -17,6 +17,7 @@ type OllamaClient struct {
 	apiKey            string
 	authScheme        string
 	authHeader        string
+	authPrefix        string
 	additionalHeaders map[string]string
 	ec                *egress.Client
 }
@@ -35,11 +36,13 @@ func newOllamaClient(cfg *config.ProviderConfig, ec *egress.Client) *OllamaClien
 	if authHeader == "" {
 		authHeader = "Authorization"
 	}
+	authPrefix := cfg.AuthPrefix
 	return &OllamaClient{
 		baseURL:           baseURL,
 		apiKey:            apiKey,
 		authScheme:        authScheme,
 		authHeader:        authHeader,
+		authPrefix:        authPrefix,
 		additionalHeaders: cfg.AdditionalHeaders,
 		ec:                ec,
 	}
@@ -89,7 +92,7 @@ func (c *OllamaClient) buildRequest(req *ports.ProviderRequest) *ports.ProviderR
 		}
 	}
 	if c.apiKey != "" {
-		authKey, authValue := buildAuthHeader(c.authScheme, c.authHeader, c.apiKey)
+		authKey, authValue := buildAuthHeader(c.authScheme, c.authHeader, c.authPrefix, c.apiKey)
 		headers[authKey] = authValue
 	}
 	return &ports.ProviderRequest{

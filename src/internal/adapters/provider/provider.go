@@ -61,17 +61,25 @@ func ParseProviderError(statusCode int, body []byte, apiType string) *ProviderEr
 }
 
 // @sk-task 111-provider-auth-and-config#T3.1: Build auth headers from ProviderConfig (AC-004, AC-007)
-func buildAuthHeader(scheme, headerName, key string) (string, string) {
+func buildAuthHeader(scheme, headerName, prefix, key string) (string, string) {
+	if prefix == "" {
+		switch scheme {
+		case "bearer":
+			prefix = "Bearer "
+		case "basic":
+			prefix = "Basic "
+		}
+	}
 	switch scheme {
 	case "bearer":
-		return headerName, "Bearer " + key
+		return headerName, prefix + key
 	case "api-key":
-		return headerName, key
+		return headerName, prefix + key
 	case "basic":
 		encoded := base64.StdEncoding.EncodeToString([]byte(":" + key))
-		return "Authorization", "Basic " + encoded
+		return "Authorization", prefix + encoded
 	default:
-		return headerName, key
+		return headerName, prefix + key
 	}
 }
 

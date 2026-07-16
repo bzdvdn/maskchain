@@ -159,6 +159,9 @@ func TestProviderConfig_AuthDefaults(t *testing.T) {
 	if cfg.Routing.Providers[0].AuthHeader != "Authorization" {
 		t.Errorf("expected AuthHeader=Authorization, got %q", cfg.Routing.Providers[0].AuthHeader)
 	}
+	if cfg.Routing.Providers[0].AuthPrefix != "Bearer " {
+		t.Errorf("expected AuthPrefix=Bearer , got %q", cfg.Routing.Providers[0].AuthPrefix)
+	}
 }
 
 // @sk-test 111-provider-auth-and-config#T4.3: TestProviderConfig_RequireAPIKeys — ошибка при отсутствии api_keys (AC-005)

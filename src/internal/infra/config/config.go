@@ -87,6 +87,7 @@ type ProviderConfig struct {
 	APIKeys           []string          `mapstructure:"api_keys" yaml:"api_keys" validate:"required"`
 	AuthScheme        string            `mapstructure:"auth_scheme" yaml:"auth_scheme"`
 	AuthHeader        string            `mapstructure:"auth_header" yaml:"auth_header"`
+	AuthPrefix        string            `mapstructure:"auth_prefix" yaml:"auth_prefix"`
 	AdditionalHeaders map[string]string `mapstructure:"additional_headers" yaml:"additional_headers"`
 }
 
@@ -255,6 +256,7 @@ type providerLogEntry struct {
 	BaseURL    string
 	APIType    string
 	AuthScheme string
+	AuthPrefix string
 }
 
 func (p providerLogEntry) MarshalLogObject(enc zapcore.ObjectEncoder) error {
@@ -263,6 +265,7 @@ func (p providerLogEntry) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("api_type", p.APIType)
 	enc.AddString("api_keys", "****")
 	enc.AddString("auth_scheme", p.AuthScheme)
+	enc.AddString("auth_prefix", p.AuthPrefix)
 	return nil
 }
 
@@ -272,6 +275,7 @@ func providerLogEntryFromConfig(p ProviderConfig) providerLogEntry {
 		BaseURL:    p.BaseURL,
 		APIType:    p.APIType,
 		AuthScheme: p.AuthScheme,
+		AuthPrefix: p.AuthPrefix,
 	}
 }
 
@@ -506,6 +510,16 @@ func normalizeProviderConfig(cfg *Config, v *viper.Viper) {
 		if p.AuthHeader == "" {
 			p.AuthHeader = "Authorization"
 		}
+		if p.AuthPrefix == "" {
+			switch p.AuthScheme {
+			case "bearer":
+				p.AuthPrefix = "Bearer "
+			case "basic":
+				p.AuthPrefix = "Basic "
+			default:
+				p.AuthPrefix = ""
+			}
+		}
 	}
 }
 
@@ -530,6 +544,9 @@ func validateProviderAuth(cfg *Config) error {
 		default:
 			return fmt.Errorf("routing.providers.%d.auth_scheme: unsupported %q (must be bearer, api-key, or basic)", i, p.AuthScheme)
 		}
+		if p.AuthScheme != "bearer" && p.AuthPrefix == "" {
+			p.AuthPrefix = ""
+		}
 	}
 	return nil
 }
@@ -550,6 +567,7 @@ func (p ProviderConfig) LogValue() slog.Value {
 		slog.Any("api_keys", masked),
 		slog.String("auth_scheme", p.AuthScheme),
 		slog.String("auth_header", p.AuthHeader),
+		slog.String("auth_prefix", p.AuthPrefix),
 		slog.Any("additional_headers", p.AdditionalHeaders),
 	)
 }
