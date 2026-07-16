@@ -1,28 +1,26 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { ProfileList, ProfileDetail, ProfileForm } from './pages/Profiles'
+import { TenantList, TenantDetail, TenantForm } from './pages/Tenants'
 import { ErrorBoundary } from './components/ErrorBoundary'
 
-// @sk-task 41-profiles-ui#T1.1: BrowserRouter + all route definitions (AC-008)
-// @sk-task remove-audit-incidents#T3.6: Remove incident routes (AC-012, AC-013)
 function App() {
   return (
     <div className="app">
       <ErrorBoundary>
         <header className="app-header">
-          <a href="/profiles" className="app-logo">
+          <a href="/tenants" className="app-logo">
             MaskChain
           </a>
           <nav>
-            <a href="/profiles">Profiles</a>
+            <a href="/tenants">Tenants</a>
           </nav>
         </header>
         <main className="app-main">
           <Routes>
-            <Route path="/" element={<Navigate to="/profiles" replace />} />
-            <Route path="/profiles" element={<ProfileList />} />
-            <Route path="/profiles/new" element={<ProfileForm />} />
-            <Route path="/profiles/:slug/edit" element={<ProfileForm />} />
-            <Route path="/profiles/:slug" element={<ProfileDetail />} />
+            <Route path="/" element={<Navigate to="/tenants" replace />} />
+            <Route path="/tenants" element={<TenantList />} />
+            <Route path="/tenants/new" element={<TenantForm />} />
+            <Route path="/tenants/:slug/edit" element={<TenantForm />} />
+            <Route path="/tenants/:slug" element={<TenantDetail />} />
           </Routes>
         </main>
       </ErrorBoundary>

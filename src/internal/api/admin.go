@@ -31,6 +31,7 @@ type AdminServer struct {
 	serviceName    string
 	metricsHandler gin.HandlerFunc
 	healthHandler  *health.Handler
+	authMw         gin.HandlerFunc
 }
 
 // @sk-task 114-real-health-probes#T2.2: Accept healthSvc and replace static handlers (AC-001, AC-005, AC-008)
@@ -64,7 +65,7 @@ func NewAdminServer(cfg *config.ServerConfig, log *zap.Logger, serviceName strin
 }
 
 func (s *AdminServer) RegisterAuth(mw gin.HandlerFunc) {
-	s.engine.Use(mw)
+	s.authMw = mw
 }
 
 func (s *AdminServer) RegisterMetricsRoute(handler gin.HandlerFunc) {
@@ -103,6 +104,9 @@ func (s *AdminServer) RegisterSwaggerUI() {
 // @sk-task sessions#T2.3: Register session routes on AdminServer (AC-001)
 func (s *AdminServer) RegisterSessionHandler(h *SessionHandler) {
 	group := s.engine.Group("/api/v1/sessions")
+	if s.authMw != nil {
+		group.Use(s.authMw)
+	}
 	group.POST("", h.HandleCreate)
 	group.GET("", h.HandleList)
 	group.GET("/:id", h.HandleGet)
@@ -131,20 +135,20 @@ func (s *AdminServer) RegisterStaticFiles(fsys fs.FS) {
 	root := http.FS(sub)
 	fileServer := http.FileServer(root)
 	s.engine.NoRoute(func(c *gin.Context) {
-		accept := c.GetHeader("Accept")
-		apiPath := strings.HasPrefix(c.Request.URL.Path, "/api/")
-		if !apiPath && (strings.Contains(accept, "text/html") || accept == "") {
-			spaPath := strings.TrimPrefix(c.Request.URL.Path, "/")
-			f, err := root.Open(spaPath)
-			if err != nil {
-				c.Request.URL.Path = "/"
-			} else {
-				f.Close()
-			}
-			fileServer.ServeHTTP(c.Writer, c.Request)
+		path := c.Request.URL.Path
+		if strings.HasPrefix(path, "/api/") {
+			c.JSON(http.StatusNotFound, dto.NewErrorResponse("NOT_FOUND", "route not found"))
 			return
 		}
-		c.JSON(http.StatusNotFound, dto.NewErrorResponse("NOT_FOUND", "route not found"))
+
+		spaPath := strings.TrimPrefix(path, "/")
+		f, err := root.Open(spaPath)
+		if err != nil {
+			c.Request.URL.Path = "/"
+		} else {
+			f.Close()
+		}
+		fileServer.ServeHTTP(c.Writer, c.Request)
 	})
 }
 
