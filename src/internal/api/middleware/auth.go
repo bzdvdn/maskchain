@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 
@@ -33,9 +34,32 @@ func isPublicPath(path string) bool {
 	return publicPaths[path]
 }
 
+// TenantProvider provides thread-safe access to tenants with hot-reload support.
+type TenantProvider struct {
+	mu      sync.RWMutex
+	tenants []*entity.Tenant
+}
+
+func NewTenantProvider(tenants []*entity.Tenant) *TenantProvider {
+	return &TenantProvider{tenants: tenants}
+}
+
+func (p *TenantProvider) Get() []*entity.Tenant {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.tenants
+}
+
+func (p *TenantProvider) Update(tenants []*entity.Tenant) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.tenants = tenants
+}
+
 // @sk-task tenant-profile-sync#T2.1: Multi-header auth middleware using TenantResolver (AC-002, AC-005)
-func Auth(tenants []*entity.Tenant) gin.HandlerFunc {
+func Auth(provider *TenantProvider) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		tenants := provider.Get()
 		if len(tenants) == 0 {
 			c.Next()
 			return

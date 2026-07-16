@@ -13,17 +13,17 @@ tenants:
     # Rules: каждый rule содержит тип детектора (pii, financial, secrets) и action (block|allow).
     pii_config:
       enabled: true
-      default_action: block
+      default_action: mask
       rules:
         - label: "email"
-          type: "pii"
+          type: "regex"
           pattern: "EMAIL"
           action: "block"
         - label: "phone"
-          type: "pii"
+          type: "regex"
           pattern: "PHONE"
           action: "block"
         - label: "ssn"
-          type: "pii"
+          type: "regex"
           pattern: "SSN"
           action: "block"

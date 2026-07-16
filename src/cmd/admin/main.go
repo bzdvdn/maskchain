@@ -21,6 +21,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/app/worker"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
 	analyticsrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/analytics"
+	dictionaryrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/dictionary"
 	sessionrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/session"
 	"github.com/bzdvdn/maskchain/src/internal/domain/session"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
@@ -143,7 +144,7 @@ func main() {
 			logger.Fatal("failed to load tenants from db", zap.Error(err))
 		}
 
-		authMw := middleware.Auth(dbTenants)
+		authMw := middleware.Auth(middleware.NewTenantProvider(dbTenants))
 		srv.RegisterAuth(authMw)
 		logger.Info("auth middleware registered", zap.Int("tenants", len(dbTenants)))
 	} else {
@@ -161,7 +162,8 @@ func main() {
 
 		// @sk-task tenant-profile-sync#T2.2: Wire TenantHandler in admin (AC-001, AC-005, AC-008)
 		pgTenantRepo := postgres.NewPostgresTenantRepo(pgPool, txMgr)
-		tenantHandler := admin.NewTenantHandler(pgTenantRepo)
+		dictCache := dictionaryrepo.NewValkeyDictionaryCache(vkClient, 5*time.Minute)
+		tenantHandler := admin.NewTenantHandler(pgTenantRepo, dictCache)
 		srv.RegisterTenantHandler(tenantHandler)
 
 		// @sk-task remove-audit-incidents#T3.4: Incident handler wiring removed from admin (AC-009)

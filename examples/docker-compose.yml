@@ -43,8 +43,10 @@ services:
       CONFIG_DATABASE_DSN: postgres://test:test@postgres:5432/maskchain?sslmode=disable
       CONFIG_VALKEY_ADDR: valkey:6379
       CONFIG_OTEL_ENDPOINT: ""
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
-      - ./config.yaml:/config.yaml:ro
+      - ./ollama/config.yaml:/config.yaml:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,7 +67,7 @@ services:
       CONFIG_VALKEY_ADDR: valkey:6379
       CONFIG_OTEL_ENDPOINT: ""
     volumes:
-      - ./config.yaml:/config.yaml:ro
+      - ./ollama/config.yaml:/config.yaml:ro
     depends_on:
       postgres:
         condition: service_healthy

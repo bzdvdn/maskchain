@@ -3,6 +3,7 @@ package shield
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
@@ -17,6 +18,13 @@ type ScanUseCase struct {
 
 func NewScanUseCase(pipelineFactory *ScanPipelineFactory) *ScanUseCase {
 	return &ScanUseCase{pipelineFactory: pipelineFactory}
+}
+
+type scanHit struct {
+	label    string
+	fragment string
+	startPos int
+	endPos   int
 }
 
 // @sk-task remove-audit-incidents#T2.2: Remove incident creation from scan use case (AC-006)
@@ -34,14 +42,21 @@ func (uc *ScanUseCase) Scan(ctx context.Context, req ScanRequest) (*ScanResponse
 	}
 
 	blocked := false
-	hasResults := false
+	var hits []scanHit
 	for _, binding := range pipeline.Detectors {
 		results, err := binding.Interface.Scan(ctx, req.Text)
 		if err != nil {
 			continue
 		}
 		if len(results) > 0 {
-			hasResults = true
+			for _, r := range results {
+				hits = append(hits, scanHit{
+					label:    binding.Label,
+					fragment: r.Fragment,
+					startPos: r.StartPos,
+					endPos:   r.EndPos,
+				})
+			}
 		}
 		if binding.Severity == value.SeverityCritical && len(results) > 0 {
 			blocked = true
@@ -52,15 +67,31 @@ func (uc *ScanUseCase) Scan(ctx context.Context, req ScanRequest) (*ScanResponse
 	switch {
 	case blocked:
 		scanStatus = value.ScanStatusBlocked
-	case hasResults:
+	case len(hits) > 0:
 		scanStatus = value.ScanStatusSuspicious
 	default:
 		scanStatus = value.ScanStatusClean
 	}
 
+	replacements := make(map[string]string)
+	processedText := req.Text
+	if len(hits) > 0 {
+		sort.Slice(hits, func(i, j int) bool {
+			return hits[i].startPos > hits[j].startPos
+		})
+		labelCounters := make(map[string]int)
+		for _, h := range hits {
+			labelCounters[h.label]++
+			ph := fmt.Sprintf("{{pii.%s.%d}}", h.label, labelCounters[h.label]-1)
+			replacements[ph] = h.fragment
+			processedText = processedText[:h.startPos] + ph + processedText[h.endPos:]
+		}
+	}
+
 	scanResult := entity.NewScanResult(scanStatus)
 	return &ScanResponse{
 		ScanResult:    scanResult,
-		ProcessedText: req.Text,
+		ProcessedText: processedText,
+		Replacements:  replacements,
 	}, nil
 }

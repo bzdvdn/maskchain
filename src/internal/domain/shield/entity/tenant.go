@@ -64,6 +64,7 @@ func (t *Tenant) Name() string                              { return t.name }
 func (t *Tenant) AuthHeader() string                        { return t.authHeader }
 func (t *Tenant) APIKeys() []string                         { return t.apiKeys }
 func (t *Tenant) Dictionaries() []*dictionary.Dictionary    { return t.dictionaries }
+func (t *Tenant) SetDictionaries(dicts []*dictionary.Dictionary) { t.dictionaries = dicts }
 func (t *Tenant) PIIConfig() PIIConfig                      { return t.piiConfig }
 func (t *Tenant) CreatedAt() time.Time                      { return t.createdAt }
 func (t *Tenant) UpdatedAt() time.Time                      { return t.updatedAt }

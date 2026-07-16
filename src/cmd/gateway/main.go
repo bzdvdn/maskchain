@@ -15,6 +15,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/adapters/provider"
 	analyticsrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/analytics"
 	budgetrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/budget"
+	dictionaryrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/dictionary"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
 	"github.com/bzdvdn/maskchain/src/internal/api"
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
@@ -194,6 +195,8 @@ func main() {
 	sessionStore := sessionrepo.NewCachedSessionStore(sessionPG, sessionVK, logger)
 	sessionUseCase := session.NewSessionUseCase(sessionStore)
 
+	dictCache := dictionaryrepo.NewValkeyDictionaryCache(vkClient, 5*time.Minute)
+
 	// @sk-task 114-real-health-probes#T2.3: Create health service and wire into server (AC-001, AC-005, AC-008)
 	if cfg.Server.HealthCheck == nil {
 		cfg.Server.HealthCheck = &config.HealthCheckConfig{CriticalDeps: []string{"database"}}
@@ -247,9 +250,57 @@ func main() {
 			logger.Fatal("failed to load tenants from db", zap.Error(err))
 		}
 
-		authMw := middleware.Auth(dbTenants)
+		// Warm Valkey dictionary cache at startup
+		for _, t := range dbTenants {
+			slug := t.Slug().String()
+			if dicts := t.Dictionaries(); len(dicts) > 0 {
+				if err := dictCache.Set(context.Background(), slug, dicts); err != nil {
+					logger.Warn("failed to warm dict cache at startup", zap.String("tenant", slug), zap.Error(err))
+				}
+			}
+		}
+
+		tenantProvider := middleware.NewTenantProvider(dbTenants)
+		authMw := middleware.Auth(tenantProvider)
 		srv.RegisterAuth(authMw)
 		logger.Info("auth middleware registered", zap.Int("tenants", len(dbTenants)))
+
+		// @sk-task hot-reload-tenants: Periodically reload tenants from DB (dictionaries, PIIConfig)
+		reloadCtx, reloadCancel := context.WithCancel(context.Background())
+		defer reloadCancel()
+		go func() {
+			ticker := time.NewTicker(cfg.Server.TenantReloadInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-reloadCtx.Done():
+					return
+				case <-ticker.C:
+					reloadCtx2, reloadCancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+					newTenants, err := tenantResolver.List(reloadCtx2)
+					reloadCancel2()
+					if err != nil {
+						logger.Warn("tenant reload failed", zap.Error(err))
+						continue
+					}
+					if len(newTenants) > 0 {
+						for _, t := range newTenants {
+							slug := t.Slug().String()
+							cachedDicts, cacheErr := dictCache.Get(context.Background(), slug)
+							if cacheErr == nil && cachedDicts != nil {
+								t.SetDictionaries(cachedDicts)
+							} else if dicts := t.Dictionaries(); len(dicts) > 0 {
+								if setErr := dictCache.Set(context.Background(), slug, dicts); setErr != nil {
+									logger.Warn("failed to warm dict cache on reload", zap.String("tenant", slug), zap.Error(setErr))
+								}
+							}
+						}
+						tenantProvider.Update(newTenants)
+						logger.Debug("tenants hot-reloaded", zap.Int("count", len(newTenants)))
+					}
+				}
+			}
+		}()
 	} else {
 		logger.Warn("no tenants configured, auth disabled")
 	}

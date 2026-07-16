@@ -334,12 +334,15 @@ func TestWrapSSEHeaders(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	engine.Use(WrapSSE())
-	engine.GET("/test", func(c *gin.Context) {
+	engine.POST("/test", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
 
+	// Streaming request → SSE headers should be set
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
+	body := strings.NewReader(`{"stream": true}`)
+	req, _ := http.NewRequest(http.MethodPost, "/test", body)
+	req.Header.Set("Content-Type", "application/json")
 	engine.ServeHTTP(w, req)
 
 	if ct := w.Header().Get("Content-Type"); ct != "text/event-stream" {
@@ -347,6 +350,17 @@ func TestWrapSSEHeaders(t *testing.T) {
 	}
 	if te := w.Header().Get("Transfer-Encoding"); te != "chunked" {
 		t.Errorf("expected Transfer-Encoding: chunked, got %s", te)
+	}
+
+	// Non-streaming request → no SSE headers
+	w2 := httptest.NewRecorder()
+	body2 := strings.NewReader(`{"stream": false}`)
+	req2, _ := http.NewRequest(http.MethodPost, "/test", body2)
+	req2.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w2, req2)
+
+	if ct := w2.Header().Get("Content-Type"); ct == "text/event-stream" {
+		t.Error("expected no event-stream Content-Type for non-streaming request")
 	}
 }
 

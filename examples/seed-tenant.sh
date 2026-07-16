@@ -78,11 +78,11 @@ PII_JSON=$(cat <<EOF
   "api_keys": ["sk-test-default"],
   "pii_config": {
     "enabled": true,
-    "default_action": "block",
+    "default_action": "mask",
     "rules": [
-      {"label": "email", "type": "pii", "pattern": "EMAIL", "action": "block"},
-      {"label": "phone", "type": "pii", "pattern": "PHONE", "action": "block"},
-      {"label": "ssn", "type": "pii", "pattern": "SSN", "action": "block"}
+      {"label": "email", "type": "regex", "pattern": "EMAIL", "action": "block"},
+      {"label": "phone", "type": "regex", "pattern": "PHONE", "action": "block"},
+      {"label": "ssn", "type": "regex", "pattern": "SSN", "action": "block"}
     ]
   }
 }

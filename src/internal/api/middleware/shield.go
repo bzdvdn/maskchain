@@ -170,19 +170,39 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger,
 		tenantSlug := tenant.Slug().String()
 		piiCfg := tenant.PIIConfig()
 
-		dictDetectors := make([]*detector.DictionaryDetector, 0, len(tenant.Dictionaries()))
-		for _, dict := range tenant.Dictionaries() {
+		tenantDicts := tenant.Dictionaries()
+		log.Debug("shield dict",
+			zap.Int("dict_count", len(tenantDicts)),
+			zap.String("tenant_slug", tenantSlug),
+		)
+		dictDetectors := make([]*detector.DictionaryDetector, 0, len(tenantDicts))
+		for _, dict := range tenantDicts {
+			if dict == nil {
+				continue
+			}
+			vals := dict.AllValues()
+			log.Debug("shield dict detector",
+				zap.String("dict_name", dict.Name()),
+				zap.String("match_mode", string(dict.MatchMode())),
+				zap.Int("entry_count", len(vals)),
+			)
 			dictDetectors = append(dictDetectors, detector.NewDictionaryDetector(dict))
 		}
 
 		hasDictHits := false
+		var totalDictMatches int
 		for _, dd := range dictDetectors {
 			results, err := dd.Scan(c.Request.Context(), promptText)
 			if err != nil || len(results) == 0 {
 				continue
 			}
 			hasDictHits = true
+			totalDictMatches += len(results)
 		}
+		log.Debug("shield dict scan",
+			zap.Bool("has_hits", hasDictHits),
+			zap.Int("total_matches", totalDictMatches),
+		)
 
 		// @sk-task 13-shield-middleware-wiring#T2.2: Store dict mask mapping per-request for later unmask (AC-006)
 		dictMaskMapping := make(map[string]string)
@@ -209,6 +229,10 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger,
 					}
 				}
 			}
+			log.Debug("shield dict mask",
+				zap.String("mask_id", dictMaskID),
+				zap.Int("placeholder_count", phCounter),
+			)
 			if phCounter > 0 {
 				newBody, _ := json.Marshal(chatReq)
 				c.Request.Body = io.NopCloser(bytes.NewBuffer(newBody))
@@ -256,6 +280,17 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger,
 				c.Next()
 				return
 			}
+
+			// Apply PII masking to request body (replace PII fragments with placeholders)
+			if resp != nil && len(resp.Replacements) > 0 {
+				bodyBytes, _ := io.ReadAll(c.Request.Body)
+				bodyStr := string(bodyBytes)
+				for ph, original := range resp.Replacements {
+					bodyStr = strings.ReplaceAll(bodyStr, original, ph)
+					dictMaskMapping[ph] = original
+				}
+				c.Request.Body = io.NopCloser(strings.NewReader(bodyStr))
+			}
 		}
 
 		duration := time.Since(start)
@@ -277,6 +312,7 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger,
 			zap.String("tenant_slug", tenantSlug),
 			zap.Bool("pii_enabled", piiCfg.Enabled),
 			zap.Int("rules_count", len(piiCfg.Rules)),
+			zap.Int("pii_masked", piiMaskedCount(resp)),
 			zap.String("model", chatReq.Model),
 			zap.Duration("latency", duration),
 			zap.Bool("unmasked", unmasked),
@@ -377,4 +413,11 @@ func abortWithShieldError(c *gin.Context, status int, message string, _ string) 
 		ShieldStatus: "error",
 		Error:        message,
 	})
+}
+
+func piiMaskedCount(resp *appshield.ScanResponse) int {
+	if resp == nil {
+		return 0
+	}
+	return len(resp.Replacements)
 }

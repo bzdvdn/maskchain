@@ -8,6 +8,7 @@ import (
 
 	"github.com/bzdvdn/maskchain/src/internal/api/dto"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
+	dictionaryrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/dictionary"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/dictionary"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
@@ -17,11 +18,12 @@ import (
 
 // @sk-task tenant-profile-sync#T2.2: TenantHandler for admin CRUD (AC-001, AC-005, AC-008)
 type TenantHandler struct {
-	repo shield.TenantRepository
+	repo           shield.TenantRepository
+	dictionaryCache *dictionaryrepo.ValkeyDictionaryCache
 }
 
-func NewTenantHandler(repo shield.TenantRepository) *TenantHandler {
-	return &TenantHandler{repo: repo}
+func NewTenantHandler(repo shield.TenantRepository, dictionaryCache *dictionaryrepo.ValkeyDictionaryCache) *TenantHandler {
+	return &TenantHandler{repo: repo, dictionaryCache: dictionaryCache}
 }
 
 func (h *TenantHandler) CreateTenant(c *gin.Context) {
@@ -225,6 +227,12 @@ func (h *TenantHandler) UpdateDictionaries(c *gin.Context) {
 		}
 		middleware.AbortWithError(c, http.StatusInternalServerError, middleware.ErrorCodeInternal, "failed to update dictionaries")
 		return
+	}
+
+	if h.dictionaryCache != nil {
+		if err := h.dictionaryCache.Set(c.Request.Context(), slugStr, dicts); err != nil {
+			// non-fatal: cache write failure should not break the request
+		}
 	}
 
 	c.JSON(http.StatusOK, dto.DictionaryResponse{Dictionaries: toDictionaryItems(dicts)})

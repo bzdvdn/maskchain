@@ -29,7 +29,7 @@ func authTestRequest(method, path, header, value string) *httptest.ResponseRecor
 	_, engine := gin.CreateTestContext(w)
 
 	_, tenants := setupAuthTest()
-	engine.Use(Auth(tenants))
+	engine.Use(Auth(NewTenantProvider(tenants)))
 	engine.GET("/api/v1/profiles", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -108,7 +108,7 @@ func TestTenantFromContext(t *testing.T) {
 	_, engine := gin.CreateTestContext(w)
 
 	ta, tenants := setupAuthTest()
-	engine.Use(Auth(tenants))
+	engine.Use(Auth(NewTenantProvider(tenants)))
 	engine.GET("/api/v1/profiles", func(c *gin.Context) {
 		got, ok := TenantFromContext(c)
 		if !ok {

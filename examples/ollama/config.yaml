@@ -1,0 +1,91 @@
+# MaskChain config for local testing with Ollama
+# Используется: docker compose -f ../docker-compose.yml up
+# Ollama должен быть запущен на хосте: ollama serve
+
+log:
+  level: debug
+
+server:
+  port: 8080
+  shutdown_timeout: 10
+  tenant_reload_interval: 15s
+
+database:
+  dsn: "postgres://test:test@postgres:5432/maskchain?sslmode=disable"
+  max_conns: 10
+  min_conns: 2
+  max_conn_lifetime: 30m
+
+valkey:
+  addr: valkey:6379
+  password: ""
+  ttl_sec: 3600
+
+routing:
+  providers:
+    - name: ollama
+      api_type: ollama
+      base_url: "http://host.docker.internal:11434"
+      health_endpoint: "/api/tags"
+      timeout: 120s
+      priority: 1
+
+  rules:
+    - tenant: default
+      routes:
+        - model: "gemma3:4b"
+          providers: ["ollama"]
+        - model: "llama3.2"
+          providers: ["ollama"]
+
+shield:
+  action_on_suspicious: mask
+  tenant_model_mapping:
+    default:
+      "gemma3:4b": "pii-protect"
+
+egress:
+  max_idle_conns: 10
+  idle_timeout: 30s
+  max_retries: 0
+  circuit_breaker:
+    max_failures: 5
+    cooldown: 30s
+
+analytics:
+  enabled: true
+  batch_interval: 5s
+  retention_days: 7
+
+debug:
+  enabled: true
+  admin_token: "admin-token"
+
+session:
+  default_ttl: 30m
+  max_ttl: 24h
+  cleanup_interval: 5m
+  cleanup_enabled: true
+
+tenants:
+  default:
+    name: "Default Tenant"
+    auth_header: "Authorization"
+    api_keys:
+      - "sk-test-default"
+    pii_config:
+      enabled: true
+      default_action: mask
+      rules:
+        - label: email
+          type: regex
+          pattern: EMAIL
+          action: block
+        - label: phone
+          type: regex
+          pattern: PHONE
+          action: block
+        - label: ssn
+          type: regex
+          pattern: SSN
+          action: block

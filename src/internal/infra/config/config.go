@@ -25,10 +25,11 @@ type LogConfig struct {
 }
 
 type ServerConfig struct {
-	Port            int                `mapstructure:"port" yaml:"port"`
-	ShutdownTimeout int                `mapstructure:"shutdown_timeout" yaml:"shutdown_timeout"`
-	CORSOrigins     []string           `mapstructure:"cors_origins" yaml:"cors_origins"`
-	HealthCheck     *HealthCheckConfig `mapstructure:"health_check" yaml:"health_check"`
+	Port                int                `mapstructure:"port" yaml:"port"`
+	ShutdownTimeout     int                `mapstructure:"shutdown_timeout" yaml:"shutdown_timeout"`
+	CORSOrigins         []string           `mapstructure:"cors_origins" yaml:"cors_origins"`
+	HealthCheck         *HealthCheckConfig `mapstructure:"health_check" yaml:"health_check"`
+	TenantReloadInterval time.Duration     `mapstructure:"tenant_reload_interval" yaml:"tenant_reload_interval"`
 }
 
 // @sk-task 114-real-health-probes#T1.2: Add HealthCheckConfig with CriticalDeps (AC-006)
@@ -220,6 +221,7 @@ func (c *Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	if c.Server != nil {
 		enc.AddInt("port", c.Server.Port)
 		enc.AddInt("shutdown_timeout", c.Server.ShutdownTimeout)
+		enc.AddString("tenant_reload_interval", c.Server.TenantReloadInterval.String())
 	}
 	if c.Valkey != nil && c.Valkey.Addr != "" {
 		enc.AddString("valkey_addr", c.Valkey.Addr)
@@ -312,6 +314,7 @@ const defaultSessionCacheTTL = 5 * time.Minute
 const defaultAnalyticsRetentionDays = 7
 const defaultAnalyticsBatchInterval = "5s"
 const defaultHealthCheckCriticalDeps = "database"
+const defaultTenantReloadInterval = 15 * time.Second
 
 // @sk-task 10-gateway-skeleton#T1.2: Set ServerConfig defaults in DefaultConfig (AC-001, AC-005)
 func DefaultConfig() *Config {
@@ -320,8 +323,9 @@ func DefaultConfig() *Config {
 			Level: defaultLogLevel,
 		},
 		Server: &ServerConfig{
-			Port:            defaultPort,
-			ShutdownTimeout: defaultShutdownTimeout,
+			Port:                 defaultPort,
+			ShutdownTimeout:      defaultShutdownTimeout,
+			TenantReloadInterval: defaultTenantReloadInterval,
 			HealthCheck: &HealthCheckConfig{
 				CriticalDeps: []string{defaultHealthCheckCriticalDeps},
 			},

@@ -62,7 +62,7 @@ func TestIntegration_FullCycle(t *testing.T) {
 	)
 
 	engine.Use(middleware.RequestID())
-	engine.Use(middleware.Auth([]*entity.Tenant{tenant}))
+	engine.Use(middleware.Auth(middleware.NewTenantProvider([]*entity.Tenant{tenant})))
 
 	scanner := &integrationMockScanner{
 		resp: &appshield.ScanResponse{
