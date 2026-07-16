@@ -15,6 +15,7 @@ import (
 	"github.com/bzdvdn/maskchain/docs"
 	"github.com/bzdvdn/maskchain/src/internal/api/dto"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/admin"
+	"github.com/bzdvdn/maskchain/src/internal/api/handler/analytics"
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
@@ -110,6 +111,17 @@ func (s *AdminServer) RegisterSessionHandler(h *SessionHandler) {
 }
 
 // @sk-task 118-api-consistency#T3.5: NoRoute checks Accept:text/html for SPA fallback (AC-009)
+// @sk-task 132-analytics-api#T2.2: Register analytics routes (AC-001, AC-002, AC-003, AC-004)
+func (s *AdminServer) RegisterAnalyticsHandler(h *analytics.AnalyticsHandler, debugCfg *config.DebugConfig) {
+	group := s.engine.Group("/api/v1/analytics")
+	group.GET("/tokens", h.HandleTokens)
+	group.GET("/cost", h.HandleCost)
+	group.GET("/traffic", h.HandleTraffic)
+	summary := group.Group("/tenants/:slug/summary")
+	summary.Use(middleware.AdminAuth(debugCfg))
+	summary.GET("", h.HandleTenantSummary)
+}
+
 // @sk-task 118-api-consistency#T3.5: NoRoute checks Accept:text/html for SPA fallback (AC-009)
 func (s *AdminServer) RegisterStaticFiles(fsys fs.FS) {
 	sub, err := fs.Sub(fsys, "dist")

@@ -15,10 +15,12 @@ import (
 	"github.com/bzdvdn/maskchain/src/cmd/internal/bootstrap"
 	"github.com/bzdvdn/maskchain/src/internal/api"
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
+	analyticshandler "github.com/bzdvdn/maskchain/src/internal/api/handler/analytics"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/admin"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/app/worker"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
+	analyticsrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/analytics"
 	sessionrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/session"
 	"github.com/bzdvdn/maskchain/src/internal/domain/session"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
@@ -169,6 +171,12 @@ func main() {
 		sessionUseCase := session.NewSessionUseCase(sessionStore)
 		sessionHandler := api.NewSessionHandler(sessionUseCase, cfg.Session)
 		srv.RegisterSessionHandler(sessionHandler)
+
+		// @sk-task 132-analytics-api#T2.3: Wire AnalyticsHandler in admin (AC-001, AC-002, AC-003, AC-004)
+		pgUsageStore := analyticsrepo.NewPgUsageStore(pgPool)
+		analyticsHandler := analyticshandler.NewAnalyticsHandler(pgUsageStore)
+		srv.RegisterAnalyticsHandler(analyticsHandler, cfg.Debug)
+		logger.Info("analytics handler registered")
 
 		// @sk-task sessions#T5.2: Wire CleanupWorker in admin (AC-007)
 		if cfg.Session.CleanupEnabled {
