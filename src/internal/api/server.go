@@ -20,14 +20,15 @@ import (
 // @sk-task 61-observability#T2.1: Add OTel and metrics middleware (AC-001, AC-002, AC-003)
 // @sk-task 117-critical-test-coverage#T2.1: Export http field for test access (AC-001)
 type Server struct {
-	engine           *gin.Engine
-	HTTP             *http.Server
-	cfg              *config.ServerConfig
-	log              *zap.Logger
-	serviceName      string
-	metricsHandler   gin.HandlerFunc
-	healthHandler    *health.Handler
+	engine            *gin.Engine
+	HTTP              *http.Server
+	cfg               *config.ServerConfig
+	log               *zap.Logger
+	serviceName       string
+	metricsHandler    gin.HandlerFunc
+	healthHandler     *health.Handler
 	sessionMiddleware gin.HandlerFunc
+	usageMiddleware   gin.HandlerFunc
 }
 
 // @sk-task 114-real-health-probes#T2.2: Accept healthSvc and replace static handlers (AC-001, AC-005, AC-008)
@@ -96,14 +97,22 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 		if s.sessionMiddleware != nil {
 			chain = append(chain, s.sessionMiddleware)
 		}
-		chain = append(chain, shieldMiddleware, routingHandler.HandleChatCompletion)
+		chain = append(chain, shieldMiddleware)
+		if s.usageMiddleware != nil {
+			chain = append(chain, s.usageMiddleware)
+		}
+		chain = append(chain, routingHandler.HandleChatCompletion)
 		primary.POST("/chat/completions", chain...)
 	} else {
 		chain := []gin.HandlerFunc{}
 		if s.sessionMiddleware != nil {
 			chain = append(chain, s.sessionMiddleware)
 		}
-		chain = append(chain, shieldMiddleware, ProxyChatCompletionHandler)
+		chain = append(chain, shieldMiddleware)
+		if s.usageMiddleware != nil {
+			chain = append(chain, s.usageMiddleware)
+		}
+		chain = append(chain, ProxyChatCompletionHandler)
 		primary.POST("/chat/completions", chain...)
 	}
 	primary.POST("/completions", s.withSessionMiddleware(shieldMiddleware), ProxyCompletionHandler)
@@ -123,6 +132,11 @@ func redirectPermanent(target string) gin.HandlerFunc {
 // @sk-task sessions#T4.1: RegisterSessionMiddleware on gateway Server (AC-010)
 func (s *Server) RegisterSessionMiddleware(mw gin.HandlerFunc) {
 	s.sessionMiddleware = mw
+}
+
+// @sk-task 131-analytics-pipeline#T3.3: RegisterUsageMiddleware on gateway Server (AC-006)
+func (s *Server) RegisterUsageMiddleware(mw gin.HandlerFunc) {
+	s.usageMiddleware = mw
 }
 
 func (s *Server) withSessionMiddleware(next gin.HandlerFunc) gin.HandlerFunc {

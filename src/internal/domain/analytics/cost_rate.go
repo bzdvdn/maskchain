@@ -31,3 +31,25 @@ func (c *CostRate) Cost(inputTokens, outputTokens int64) float64 {
 	outputK := float64(outputTokens) / 1000.0
 	return inputK*c.InputPricePer1K + outputK*c.OutputPricePer1K
 }
+
+// @sk-task 131-analytics-pipeline#T2.2: Implement CostRateRegistry (AC-007)
+type CostRateRegistry struct {
+	rates map[string]*CostRate
+}
+
+func NewCostRateRegistry(rates []*CostRate) *CostRateRegistry {
+	m := make(map[string]*CostRate, len(rates))
+	for _, r := range rates {
+		m[r.Model] = r
+	}
+	return &CostRateRegistry{rates: m}
+}
+
+func (r *CostRateRegistry) Lookup(model string) *CostRate {
+	cr, ok := r.rates[model]
+	if !ok {
+		return &CostRate{Model: model, InputPricePer1K: 0, OutputPricePer1K: 0}
+	}
+	return cr
+}
+

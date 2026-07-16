@@ -13,15 +13,18 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/adapters/provider"
+	analyticsrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/analytics"
 	budgetrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/budget"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
 	"github.com/bzdvdn/maskchain/src/internal/api"
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
+	analyticsapp "github.com/bzdvdn/maskchain/src/internal/app/analytics"
 	"github.com/bzdvdn/maskchain/src/internal/app/worker"
 	maskrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/mask"
 	sessionrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/session"
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
+	"github.com/bzdvdn/maskchain/src/internal/domain/analytics"
 	"github.com/bzdvdn/maskchain/src/internal/domain/session"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/detector"
 	domainMask "github.com/bzdvdn/maskchain/src/internal/domain/shield/mask"
@@ -287,6 +290,48 @@ func main() {
 		defer cleanupCancel()
 	} else {
 		logger.Debug("session cleanup worker disabled")
+	}
+
+	// @sk-task 131-analytics-pipeline#T3.3: Wire analytics pipeline (AC-006)
+	analyticsCtx, analyticsCancel := context.WithCancel(context.Background())
+	defer analyticsCancel()
+	if cfg.Analytics != nil && pgPool != nil {
+		costRates := make([]*analytics.CostRate, 0, len(cfg.Analytics.CostRates))
+		for _, cr := range cfg.Analytics.CostRates {
+			rate, err := analytics.NewCostRate(cr.Model, cr.InputPricePer1K, cr.OutputPricePer1K)
+			if err != nil {
+				logger.Warn("analytics: invalid cost rate, skipping", zap.String("model", cr.Model), zap.Error(err))
+				continue
+			}
+			costRates = append(costRates, rate)
+		}
+		costRegistry := analytics.NewCostRateRegistry(costRates)
+		logger.Info("cost rate registry created", zap.Int("rates", len(costRates)))
+
+		pgUsageStore := analyticsrepo.NewPgUsageStore(pgPool)
+		batchInterval, _ := time.ParseDuration(cfg.Analytics.BatchInterval)
+		if batchInterval <= 0 {
+			batchInterval = 5 * time.Second
+		}
+		asyncWorker := analyticsapp.NewAsyncWorker(pgUsageStore, 1000, batchInterval, logger)
+		go asyncWorker.Run(analyticsCtx)
+		logger.Info("analytics async worker started", zap.Duration("batch_interval", batchInterval))
+
+		usageMw := middleware.NewUsageMiddleware(costRegistry, asyncWorker.Buffer(), logger)
+		srv.RegisterUsageMiddleware(usageMw.Handler())
+		logger.Info("usage middleware registered")
+
+		retention := time.Duration(cfg.Analytics.RetentionDays) * 24 * time.Hour
+		cleanupInterval := 10 * batchInterval
+		aggWorker := analyticsapp.NewAggregationWorker(pgPool, batchInterval, logger)
+		go aggWorker.Run(analyticsCtx)
+		logger.Info("analytics aggregation worker started")
+
+		cleanupWorker := analyticsapp.NewCleanupWorker(pgUsageStore, cleanupInterval, retention, logger)
+		go cleanupWorker.Run(analyticsCtx)
+		logger.Info("analytics cleanup worker started", zap.Duration("retention", retention))
+	} else {
+		logger.Debug("analytics pipeline disabled — no analytics config or no db pool")
 	}
 
 	srv.RegisterProxyRoute(middleware.ShieldMiddleware(shieldEngine, cfg.Shield, logger, sessionUseCase), routingHandler)

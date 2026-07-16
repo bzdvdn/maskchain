@@ -13,6 +13,7 @@ import (
 const namespace = "maskchain"
 
 // @sk-task 61-observability#T1.3: RegisterMetrics registers all Prometheus metrics (AC-002, AC-003, AC-004)
+// @sk-task 131-analytics-pipeline#T2.4: Register analytics metrics (AC-003)
 func RegisterMetrics(reg *prometheus.Registry) {
 	reg.MustRegister(HttpRequestsTotal)
 	reg.MustRegister(HttpRequestDuration)
@@ -24,6 +25,9 @@ func RegisterMetrics(reg *prometheus.Registry) {
 	reg.MustRegister(DictionaryCacheMissesTotal)
 	reg.MustRegister(DictionaryCacheStaleTotal)
 	reg.MustRegister(DictionaryCacheInvalidationsTotal)
+	reg.MustRegister(TokensTotal)
+	reg.MustRegister(CostTotal)
+	reg.MustRegister(RequestTotal)
 }
 
 // @sk-task 90-production-hardening#T3.2: Register PG pool metrics collector (<AC-003>)
@@ -156,4 +160,41 @@ var (
 		},
 		[]string{"operation"},
 	)
+
+	// @sk-task 131-analytics-pipeline#T2.4: Add tokens total metric (AC-003)
+	TokensTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "tokens_total",
+			Help:      "Total number of tokens processed, by tenant, model, and type (input/output)",
+		},
+		[]string{"tenant", "model", "type"},
+	)
+
+	// @sk-task 131-analytics-pipeline#T2.4: Add cost total metric (AC-003)
+	CostTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "cost_total",
+			Help:      "Total cost of LLM requests by tenant and model",
+		},
+		[]string{"tenant", "model"},
+	)
+
+	// @sk-task 131-analytics-pipeline#T2.4: Add request total metric (AC-003)
+	RequestTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "request_total",
+			Help:      "Total number of LLM requests by tenant and model",
+		},
+		[]string{"tenant", "model"},
+	)
 )
+
+// @sk-task 131-analytics-pipeline#T4.1: Reset clears analytics metrics for test isolation
+func Reset() {
+	TokensTotal.Reset()
+	CostTotal.Reset()
+	RequestTotal.Reset()
+}

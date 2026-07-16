@@ -218,6 +218,8 @@ func TestUsageStoreInterface(t *testing.T) {
 type mockUsageStore struct{}
 
 func (m *mockUsageStore) Record(_ context.Context, _ TokenUsage) error { return nil }
+func (m *mockUsageStore) RecordBatch(_ context.Context, _ []TokenUsage) error { return nil }
+func (m *mockUsageStore) DeleteOlderThan(_ context.Context, _ time.Time) (int64, error) { return 0, nil }
 func (m *mockUsageStore) QueryByTenant(_ context.Context, _ value.TenantID, _, _ time.Time) ([]UsageRecord, error) {
 	return nil, nil
 }
@@ -226,4 +228,82 @@ func (m *mockUsageStore) QueryByModel(_ context.Context, _ string, _, _ time.Tim
 }
 func (m *mockUsageStore) AggregateByDay(_ context.Context, _ value.TenantID, _, _ time.Time) ([]Aggregation, error) {
 	return nil, nil
+}
+
+func floatEqual(a, b float64) bool {
+	const epsilon = 1e-9
+	diff := a - b
+	if diff < 0 {
+		diff = -diff
+	}
+	return diff < epsilon
+}
+
+// @sk-test 131-analytics-pipeline#T4.5: TestCostRateRegistry (AC-007)
+func TestCostRateRegistry(t *testing.T) {
+	t.Run("lookup known model returns correct rate", func(t *testing.T) {
+		rates := []*CostRate{
+			{Model: "gpt-4", InputPricePer1K: 0.01, OutputPricePer1K: 0.03},
+			{Model: "gpt-3.5-turbo", InputPricePer1K: 0.001, OutputPricePer1K: 0.002},
+		}
+		reg := NewCostRateRegistry(rates)
+		cr := reg.Lookup("gpt-4")
+		if cr.Model != "gpt-4" {
+			t.Errorf("Model = %q, want %q", cr.Model, "gpt-4")
+		}
+		if cr.InputPricePer1K != 0.01 {
+			t.Errorf("InputPricePer1K = %f, want %f", cr.InputPricePer1K, 0.01)
+		}
+		if cr.OutputPricePer1K != 0.03 {
+			t.Errorf("OutputPricePer1K = %f, want %f", cr.OutputPricePer1K, 0.03)
+		}
+		cost := cr.Cost(1000, 500)
+		expected := 1.0*0.01 + 0.5*0.03
+		if cost != expected {
+			t.Errorf("Cost = %f, want %f", cost, expected)
+		}
+	})
+
+	t.Run("lookup unknown model returns zero cost rate", func(t *testing.T) {
+		rates := []*CostRate{
+			{Model: "gpt-4", InputPricePer1K: 0.01, OutputPricePer1K: 0.03},
+		}
+		reg := NewCostRateRegistry(rates)
+		cr := reg.Lookup("unknown-model")
+		if cr.Model != "unknown-model" {
+			t.Errorf("Model = %q, want %q", cr.Model, "unknown-model")
+		}
+		if cr.InputPricePer1K != 0 {
+			t.Errorf("InputPricePer1K = %f, want 0", cr.InputPricePer1K)
+		}
+		if cr.OutputPricePer1K != 0 {
+			t.Errorf("OutputPricePer1K = %f, want 0", cr.OutputPricePer1K)
+		}
+		cost := cr.Cost(1000, 500)
+		if cost != 0 {
+			t.Errorf("Cost = %f, want 0", cost)
+		}
+	})
+
+	t.Run("empty registry returns zero cost for any model", func(t *testing.T) {
+		reg := NewCostRateRegistry(nil)
+		cr := reg.Lookup("any-model")
+		if cr.InputPricePer1K != 0 || cr.OutputPricePer1K != 0 {
+			t.Error("expected zero cost rate from empty registry")
+		}
+	})
+
+	t.Run("multiple models all return correct rates", func(t *testing.T) {
+		rates := []*CostRate{
+			{Model: "gpt-4", InputPricePer1K: 0.01, OutputPricePer1K: 0.03},
+			{Model: "gpt-3.5-turbo", InputPricePer1K: 0.001, OutputPricePer1K: 0.002},
+			{Model: "claude-3", InputPricePer1K: 0.015, OutputPricePer1K: 0.075},
+		}
+		reg := NewCostRateRegistry(rates)
+		cost := reg.Lookup("claude-3").Cost(1, 1)
+		expected := 0.015/1000 + 0.075/1000
+		if !floatEqual(cost, expected) {
+			t.Errorf("unexpected cost for claude-3: %f, want %f", cost, expected)
+		}
+	})
 }

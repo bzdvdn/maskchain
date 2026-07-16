@@ -179,6 +179,20 @@ type DictionaryCacheConfig struct {
 	WarmConcurrency int  `mapstructure:"warm_concurrency" yaml:"warm_concurrency"`
 }
 
+// @sk-task 131-analytics-pipeline#T1.2: Add AnalyticsConfig with CostRateConfig (AC-007)
+type CostRateConfig struct {
+	Model            string  `mapstructure:"model" yaml:"model"`
+	InputPricePer1K  float64 `mapstructure:"input_price_per_1k" yaml:"input_price_per_1k"`
+	OutputPricePer1K float64 `mapstructure:"output_price_per_1k" yaml:"output_price_per_1k"`
+}
+
+// @sk-task 131-analytics-pipeline#T1.2: Add AnalyticsConfig (AC-002, AC-007, AC-008)
+type AnalyticsConfig struct {
+	CostRates     []CostRateConfig `mapstructure:"cost_rates" yaml:"cost_rates"`
+	RetentionDays int              `mapstructure:"retention_days" yaml:"retention_days"`
+	BatchInterval string           `mapstructure:"batch_interval" yaml:"batch_interval"`
+}
+
 // @sk-task 80-tenant-isolation#T1.2: Add Tenants map to Config struct (AC-001, AC-003, AC-004, AC-005)
 // @sk-task 90-production-hardening#T1.1: Wire Debug into Config (<AC-001>)
 type Config struct {
@@ -195,6 +209,7 @@ type Config struct {
 	Debug     *DebugConfig     `mapstructure:"debug" yaml:"debug"`
 	Session         *SessionConfig         `mapstructure:"session" yaml:"session"`
 	DictionaryCache *DictionaryCacheConfig `mapstructure:"dictionary_cache" yaml:"dictionary_cache"`
+	Analytics       *AnalyticsConfig       `mapstructure:"analytics" yaml:"analytics"`
 	Tenants         map[string]*TenantConfig `mapstructure:"tenants" yaml:"tenants"`
 }
 
@@ -294,6 +309,8 @@ const defaultSessionMaxTTL = 24 * time.Hour
 const defaultSessionCleanupInterval = 5 * time.Minute
 const defaultSessionCleanupEnabled = false
 const defaultSessionCacheTTL = 5 * time.Minute
+const defaultAnalyticsRetentionDays = 7
+const defaultAnalyticsBatchInterval = "5s"
 const defaultHealthCheckCriticalDeps = "database"
 
 // @sk-task 10-gateway-skeleton#T1.2: Set ServerConfig defaults in DefaultConfig (AC-001, AC-005)
@@ -359,6 +376,10 @@ func DefaultConfig() *Config {
 			LRUSize:         defaultDictionaryCacheLRUSize,
 			WarmOnStartup:   defaultDictionaryCacheWarmOnStartup,
 			WarmConcurrency: defaultDictionaryCacheWarmConcurrency,
+		},
+		Analytics: &AnalyticsConfig{
+			RetentionDays: defaultAnalyticsRetentionDays,
+			BatchInterval: defaultAnalyticsBatchInterval,
 		},
 	}
 }
