@@ -114,3 +114,7 @@ func (s *CachedSessionStore) DeleteExpired(ctx context.Context) (int64, error) {
 func (s *CachedSessionStore) ListByTenant(ctx context.Context, tenantID string, page, limit int32) (*session.ListResult, error) {
 	return s.primary.ListByTenant(ctx, tenantID, page, limit)
 }
+
+func (s *CachedSessionStore) ListAll(ctx context.Context, page, limit int32) (*session.ListResult, error) {
+	return s.primary.ListAll(ctx, page, limit)
+}

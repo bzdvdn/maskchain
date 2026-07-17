@@ -89,6 +89,18 @@ func (m *mockStore) ListByTenant(ctx context.Context, tenantID string, page, lim
 	return &ListResult{Items: items, Total: total, Page: int(page), Limit: int(limit)}, nil
 }
 
+func (m *mockStore) ListAll(ctx context.Context, page, limit int32) (*ListResult, error) {
+	var items []Session
+	for _, s := range m.sessions {
+		items = append(items, *s)
+	}
+	total := len(items)
+	if items == nil {
+		items = []Session{}
+	}
+	return &ListResult{Items: items, Total: total, Page: int(page), Limit: int(limit)}, nil
+}
+
 // @sk-test sessions#T2.4: TestCreateSession (AC-001)
 func TestCreateSession(t *testing.T) {
 	store := newMockStore()

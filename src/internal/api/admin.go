@@ -32,6 +32,7 @@ type AdminServer struct {
 	metricsHandler gin.HandlerFunc
 	healthHandler  *health.Handler
 	authMw         gin.HandlerFunc
+	adminSessionMw gin.HandlerFunc
 }
 
 // @sk-task 114-real-health-probes#T2.2: Accept healthSvc and replace static handlers (AC-001, AC-005, AC-008)
@@ -68,13 +69,34 @@ func (s *AdminServer) RegisterAuth(mw gin.HandlerFunc) {
 	s.authMw = mw
 }
 
+// @sk-task admin-ui-design#T2.3: Register admin session middleware for API protection (AC-001)
+func (s *AdminServer) RegisterAdminSessionMiddleware(mw gin.HandlerFunc) {
+	s.adminSessionMw = mw
+}
+
+// @sk-task admin-ui-design#T2.3: Register admin auth login/logout/verify routes (AC-001)
+func (s *AdminServer) RegisterAdminAuthRoutes(h *admin.AdminAuthHandler) {
+	group := s.engine.Group("/api/v1/admin")
+	group.POST("/login", h.HandleLogin)
+	group.POST("/logout", h.HandleLogout)
+	verify := group.Group("")
+	verify.Use(s.adminSessionMw)
+	verify.GET("/verify", h.HandleVerify)
+}
+
 func (s *AdminServer) RegisterMetricsRoute(handler gin.HandlerFunc) {
 	s.engine.GET("/metrics", handler)
 }
 
 // @sk-task remove-audit-incidents#T3.3: RegisterIncidentHandler removed from AdminServer (AC-009)
-func (s *AdminServer) RegisterTenantHandler(h *admin.TenantHandler) {
+// @sk-task seed-tenant-fix#T1.1: Accept middleware parameter for combined auth (AC-001)
+func (s *AdminServer) RegisterTenantHandler(h *admin.TenantHandler, mw gin.HandlerFunc) {
 	group := s.engine.Group("/api/v1/tenants")
+	if mw != nil {
+		group.Use(mw)
+	} else if s.adminSessionMw != nil {
+		group.Use(s.adminSessionMw)
+	}
 	group.POST("", h.CreateTenant)
 	group.GET("", h.ListTenants)
 	group.GET("/:slug", h.GetTenant)
@@ -101,11 +123,11 @@ func (s *AdminServer) RegisterSwaggerUI() {
 	})
 }
 
-// @sk-task sessions#T2.3: Register session routes on AdminServer (AC-001)
+// @sk-task admin-ui-design#T2.3: Register session routes with admin session middleware (AC-001)
 func (s *AdminServer) RegisterSessionHandler(h *SessionHandler) {
 	group := s.engine.Group("/api/v1/sessions")
-	if s.authMw != nil {
-		group.Use(s.authMw)
+	if s.adminSessionMw != nil {
+		group.Use(s.adminSessionMw)
 	}
 	group.POST("", h.HandleCreate)
 	group.GET("", h.HandleList)
@@ -114,10 +136,33 @@ func (s *AdminServer) RegisterSessionHandler(h *SessionHandler) {
 	group.DELETE("/:id", h.HandleClose)
 }
 
+// @sk-task admin-ui-design#T3.2: Register audit log route (AC-005)
+func (s *AdminServer) RegisterAuditHandler(h *admin.AuditHandler) {
+	group := s.engine.Group("/api/v1/audit")
+	if s.adminSessionMw != nil {
+		group.Use(s.adminSessionMw)
+	}
+	group.GET("", h.HandleList)
+	group.GET("/", h.HandleList)
+}
+
+// @sk-task admin-ui-design#T3.1: Register routing data endpoint (AC-006)
+func (s *AdminServer) RegisterRoutingHandler(h *admin.RoutingHandler) {
+	group := s.engine.Group("/api/v1/routing")
+	if s.adminSessionMw != nil {
+		group.Use(s.adminSessionMw)
+	}
+	group.GET("", h.HandleRouting)
+	group.GET("/", h.HandleRouting)
+}
+
 // @sk-task 118-api-consistency#T3.5: NoRoute checks Accept:text/html for SPA fallback (AC-009)
 // @sk-task 132-analytics-api#T2.2: Register analytics routes (AC-001, AC-002, AC-003, AC-004)
 func (s *AdminServer) RegisterAnalyticsHandler(h *analytics.AnalyticsHandler, debugCfg *config.DebugConfig) {
 	group := s.engine.Group("/api/v1/analytics")
+	if s.adminSessionMw != nil {
+		group.Use(s.adminSessionMw)
+	}
 	group.GET("/tokens", h.HandleTokens)
 	group.GET("/cost", h.HandleCost)
 	group.GET("/traffic", h.HandleTraffic)

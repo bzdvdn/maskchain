@@ -95,16 +95,38 @@ func (h *SessionHandler) HandleGet(c *gin.Context) {
 }
 
 // @sk-task sessions#T2.2: Implement HandleList (AC-004)
+// @sk-task admin-ui-design#T4.4: If admin session present, list all sessions (AC-006)
 func (h *SessionHandler) HandleList(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+
+	// admin context — list all sessions
+	if adminSess, ok := middleware.AdminFromContext(c.Request.Context()); ok && adminSess != nil {
+		result, err := h.useCase.ListAll(c.Request.Context(), int32(page), int32(limit))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		items := make([]gin.H, len(result.Items))
+		for i, s := range result.Items {
+			items[i] = sessionToResponse(&s)
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"items": items,
+			"total": result.Total,
+			"page":  result.Page,
+			"limit": result.Limit,
+		})
+		return
+	}
+
+	// tenant context — list by tenant
 	tenant, ok := middleware.TenantFromContext(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing tenant"})
 		return
 	}
 	tenantID := tenant.Slug().String()
-
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 
 	result, err := h.useCase.ListByTenant(c.Request.Context(), tenantID, int32(page), int32(limit))
 	if err != nil {

@@ -98,3 +98,7 @@ func (c *ValkeySessionCache) DeleteExpired(ctx context.Context) (int64, error) {
 func (c *ValkeySessionCache) ListByTenant(ctx context.Context, tenantID string, page, limit int32) (*session.ListResult, error) {
 	return &session.ListResult{Items: []session.Session{}, Total: 0, Page: int(page), Limit: int(limit)}, nil
 }
+
+func (c *ValkeySessionCache) ListAll(ctx context.Context, page, limit int32) (*session.ListResult, error) {
+	return &session.ListResult{Items: []session.Session{}, Total: 0, Page: int(page), Limit: int(limit)}, nil
+}

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"log/slog"
 	"os"
@@ -114,6 +115,14 @@ type OtelConfig struct {
 	SamplingRatio float64 `mapstructure:"sampling_ratio" yaml:"sampling_ratio"`
 }
 
+// @sk-task admin-ui-design#T1.1: Add AdminConfig for env-based admin auth (AC-001, AC-004)
+type AdminConfig struct {
+	Username              string        `mapstructure:"username" yaml:"username"`
+	Password              string        `mapstructure:"password" yaml:"password"`
+	SessionTTL            time.Duration `mapstructure:"session_ttl" yaml:"session_ttl"`
+	DashboardPollInterval time.Duration `mapstructure:"dashboard_poll_interval" yaml:"dashboard_poll_interval"`
+}
+
 // @sk-task 80-tenant-isolation#T1.2: Add TenantConfig struct (AC-001, AC-003, AC-004)
 type TenantConfig struct {
 	Name        string                `mapstructure:"name" yaml:"name"`
@@ -213,6 +222,7 @@ type Config struct {
 	DictionaryCache *DictionaryCacheConfig `mapstructure:"dictionary_cache" yaml:"dictionary_cache"`
 	Analytics       *AnalyticsConfig       `mapstructure:"analytics" yaml:"analytics"`
 	Tenants         map[string]*TenantConfig `mapstructure:"tenants" yaml:"tenants"`
+	Admin           *AdminConfig             `mapstructure:"admin" yaml:"admin"`
 }
 
 var _ zapcore.ObjectMarshaler = (*Config)(nil)
@@ -319,6 +329,8 @@ const defaultAnalyticsRetentionDays = 7
 const defaultAnalyticsBatchInterval = "5s"
 const defaultHealthCheckCriticalDeps = "database"
 const defaultTenantReloadInterval = 15 * time.Second
+const defaultAdminSessionTTL = 30 * time.Minute
+const defaultDashboardPollInterval = 5 * time.Second
 
 // @sk-task 10-gateway-skeleton#T1.2: Set ServerConfig defaults in DefaultConfig (AC-001, AC-005)
 func DefaultConfig() *Config {
@@ -389,6 +401,10 @@ func DefaultConfig() *Config {
 			RetentionDays: defaultAnalyticsRetentionDays,
 			BatchInterval: defaultAnalyticsBatchInterval,
 		},
+		Admin: &AdminConfig{
+			SessionTTL:            defaultAdminSessionTTL,
+			DashboardPollInterval: defaultDashboardPollInterval,
+		},
 	}
 }
 
@@ -434,6 +450,14 @@ func LoadConfig(cmd *cobra.Command) (*Config, error) {
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return nil, fmt.Errorf("read config: %w", err)
+		}
+	} else if cfgFile := v.ConfigFileUsed(); cfgFile != "" {
+		data, err := os.ReadFile(cfgFile)
+		if err == nil {
+			expanded := os.ExpandEnv(string(data))
+			if err := v.ReadConfig(bytes.NewReader([]byte(expanded))); err != nil {
+				return nil, fmt.Errorf("read expanded config: %w", err)
+			}
 		}
 	}
 

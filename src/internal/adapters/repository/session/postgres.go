@@ -183,3 +183,51 @@ func (s *PostgresSessionStore) ListByTenant(ctx context.Context, tenantID string
 		Limit: int(limit),
 	}, nil
 }
+
+// @sk-task admin-ui-design#T4.4: ListAll returns all sessions (no tenant filter)
+func (s *PostgresSessionStore) ListAll(ctx context.Context, page, limit int32) (*session.ListResult, error) {
+	if s.pool == nil {
+		return &session.ListResult{Items: []session.Session{}, Total: 0, Page: int(page), Limit: int(limit)}, nil
+	}
+	offset := (page - 1) * limit
+
+	var total int32
+	err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM sessions`).Scan(&total)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, tenant_id, model, token_count, message_count, total_masks, dict_mask_count, pii_mask_count, preprocessor_count, status, ttl, created_at, expires_at
+		 FROM sessions
+		 ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+		limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []session.Session
+	for rows.Next() {
+		var sess session.Session
+		var statusStr string
+		if err := rows.Scan(
+			&sess.SessionID, &sess.TenantID, &sess.Model,
+			&sess.TokenCount, &sess.MessageCount, &sess.TotalMasks, &sess.DictMaskCount, &sess.PIIMaskCount, &sess.PreprocessorCount,
+			&statusStr, &sess.TTL, &sess.CreatedAt, &sess.ExpiresAt); err != nil {
+			return nil, err
+		}
+		sess.Status = session.SessionStatus(statusStr)
+		items = append(items, sess)
+	}
+	if items == nil {
+		items = []session.Session{}
+	}
+
+	return &session.ListResult{
+		Items: items,
+		Total: int(total),
+		Page:  int(page),
+		Limit: int(limit),
+	}, nil
+}

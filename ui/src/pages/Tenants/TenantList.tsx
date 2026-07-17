@@ -25,10 +25,10 @@ export function TenantList() {
   }
 
   return (
-    <div className="tenant-list">
-      <div className="page-header">
-        <h1>Tenants</h1>
-        <Link to="/tenants/new" className="btn btn-primary">
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 600 }}>All Tenants</h2>
+        <Link to="/tenants/new" className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px' }}>
           Create Tenant
         </Link>
       </div>
@@ -36,47 +36,47 @@ export function TenantList() {
       {tenants.length === 0 ? (
         <div className="empty-state">
           <p>No tenants yet.</p>
-          <Link to="/tenants/new" className="btn btn-primary">
+          <Link to="/tenants/new" className="btn btn-primary" style={{ width: 'auto' }}>
             Create your first tenant
           </Link>
         </div>
       ) : (
-        <>
-          <table className="profiles-table">
-            <thead>
-              <tr>
-                <th>Slug</th>
-                <th>Name</th>
-                <th>Auth Header</th>
-                <th>PII</th>
-                <th>API Keys</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {tenants.map((t) => (
-                <tr key={t.slug}>
-                  <td><code>{t.slug}</code></td>
-                  <td>{t.name}</td>
-                  <td><code>{t.auth_header}</code></td>
-                  <td>
-                    <span className={`status-badge ${t.pii_config?.enabled ? 'status-active' : 'status-disabled'}`}>
-                      {t.pii_config?.enabled ? 'Enabled' : 'Disabled'}
-                    </span>
-                  </td>
-                  <td>
-                    <code>{t.api_keys[0]?.slice(0, 12)}...</code>
-                  </td>
-                  <td>
-                    <Link to={`/tenants/${t.slug}`} className="btn btn-small">
-                      View
-                    </Link>
-                  </td>
+        <div className="card">
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Slug</th>
+                  <th>Name</th>
+                  <th>API Keys</th>
+                  <th>PII</th>
+                  <th>Created</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
+              </thead>
+              <tbody>
+                {tenants.map((t) => (
+                  <tr key={t.slug}>
+                    <td><code>{t.slug}</code></td>
+                    <td>{t.name}</td>
+                    <td><code>{t.api_keys[0]?.slice(0, 12)}...</code></td>
+                    <td>
+                      <span className={`badge ${t.pii_config?.enabled ? 'badge-up' : 'badge-warn'}`}>
+                        {t.pii_config?.enabled ? 'On' : 'No rules'}
+                      </span>
+                    </td>
+                    <td>{t.created_at ? new Date(t.created_at).toLocaleDateString() : '—'}</td>
+                    <td>
+                      <Link to={`/tenants/${t.slug}`} className="btn btn-small">
+                        Edit
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   )

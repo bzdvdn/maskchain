@@ -43,6 +43,8 @@ services:
       CONFIG_DATABASE_DSN: postgres://test:test@postgres:5432/maskchain?sslmode=disable
       CONFIG_VALKEY_ADDR: valkey:6379
       CONFIG_OTEL_ENDPOINT: ""
+    env_file:
+      - .env
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -65,7 +67,11 @@ services:
       CONFIG_SERVER_PORT: "8081"
       CONFIG_DATABASE_DSN: postgres://test:test@postgres:5432/maskchain?sslmode=disable
       CONFIG_VALKEY_ADDR: valkey:6379
+      CONFIG_ADMIN_USERNAME: admin
+      CONFIG_ADMIN_PASSWORD: test
       CONFIG_OTEL_ENDPOINT: ""
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./ollama/config.yaml:/config.yaml:ro
     depends_on:

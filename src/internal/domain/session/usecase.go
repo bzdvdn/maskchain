@@ -120,6 +120,24 @@ func (uc *SessionUseCase) ListByTenant(ctx context.Context, tenantID string, pag
 	return result, nil
 }
 
+// @sk-task admin-ui-design#T4.4: ListAll returns all sessions (admin use)
+func (uc *SessionUseCase) ListAll(ctx context.Context, page, limit int32) (*ListResult, error) {
+	if page < 1 {
+		page = defaultPage
+	}
+	if limit < 1 {
+		limit = defaultLimit
+	}
+	if limit > maxLimit {
+		limit = maxLimit
+	}
+	result, err := uc.store.ListAll(ctx, page, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list all sessions: %w", err)
+	}
+	return result, nil
+}
+
 // @sk-task sessions#T1.2: Implement DeleteExpired (AC-007)
 func (uc *SessionUseCase) DeleteExpired(ctx context.Context) (int64, error) {
 	deleted, err := uc.store.DeleteExpired(ctx)

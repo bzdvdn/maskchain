@@ -24,6 +24,7 @@ import (
 	dictionaryrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/dictionary"
 	sessionrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/session"
 	"github.com/bzdvdn/maskchain/src/internal/domain/session"
+	"github.com/bzdvdn/maskchain/src/internal/domain/admin_session"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/resolver"
 	shvalue "github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
@@ -160,11 +161,61 @@ func main() {
 	if pgPool != nil {
 		txMgr := postgres.NewPGXTransactionManager(pgPool)
 
-		// @sk-task tenant-profile-sync#T2.2: Wire TenantHandler in admin (AC-001, AC-005, AC-008)
+		// @sk-task admin-ui-design#T2.3: Wire admin auth handler and middleware (AC-001, AC-004)
+		adminSessionStore := postgres.NewPostgresAdminSessionStore(pgPool)
+		adminSessionUC := admin_session.NewAdminSessionUseCase(adminSessionStore)
+		adminAuthHandler := admin.NewAdminAuthHandler(adminSessionUC, cfg.Admin)
+		// IMPORTANT: adminSessionMw must be registered before routes that use it
+		srv.RegisterAdminSessionMiddleware(middleware.AdminSessionAuth(adminSessionUC))
+		srv.RegisterAdminAuthRoutes(adminAuthHandler)
+		logger.Info("admin auth registered", zap.String("username", cfg.Admin.Username))
+
+		// @sk-task admin-ui-design#T2.3: Wire audit log store (AC-005)
+		auditLogStore := postgres.NewAuditLogStore(pgPool, 100)
+		defer auditLogStore.Shutdown()
+		auditAdapter := &auditLogAdapter{store: auditLogStore}
+
+		// @sk-task admin-ui-design#T3.2: Wire TenantHandler with audit logger (AC-005)
+		// @sk-task seed-tenant-fix#T1.1: Use combined middleware for seed script compat (AC-001)
 		pgTenantRepo := postgres.NewPostgresTenantRepo(pgPool, txMgr)
 		dictCache := dictionaryrepo.NewValkeyDictionaryCache(vkClient, 5*time.Minute)
-		tenantHandler := admin.NewTenantHandler(pgTenantRepo, dictCache)
-		srv.RegisterTenantHandler(tenantHandler)
+		tenantHandler := admin.NewTenantHandler(pgTenantRepo, dictCache, auditAdapter)
+		tenantMw := middleware.AdminSessionOrTokenAuth(adminSessionUC, cfg.Debug, func(ctx context.Context, apiKey string) bool {
+			tenants, err := pgTenantRepo.List(ctx)
+			if err != nil {
+				logger.Warn("tenant list for API key check", zap.Error(err))
+				return false
+			}
+			for _, t := range tenants {
+				for _, k := range t.APIKeys() {
+					if k == apiKey {
+						return true
+					}
+				}
+			}
+			return false
+		})
+		srv.RegisterTenantHandler(tenantHandler, tenantMw)
+
+		// @sk-task admin-ui-design#T3.2: Wire AuditHandler (AC-005)
+		auditHandler := admin.NewAuditHandler(auditAdapter)
+		srv.RegisterAuditHandler(auditHandler)
+
+		// @sk-task admin-ui-design#T4.3: Wire RoutingHandler with health checker (AC-006)
+		healthChecker := admin.NewProviderHealthChecker(5 * time.Second)
+		if cfg.Routing != nil {
+			var targets []admin.ProviderTarget
+			for _, p := range cfg.Routing.Providers {
+				targets = append(targets, admin.ProviderTarget{
+					Name: p.Name, BaseURL: p.BaseURL, HealthEndpoint: p.HealthEndpoint,
+				})
+			}
+			if len(targets) > 0 {
+				healthChecker.StartBackgroundRefresh(context.Background(), 30*time.Second, targets)
+			}
+		}
+		routingHandler := admin.NewRoutingHandler(cfg.Routing, healthChecker)
+		srv.RegisterRoutingHandler(routingHandler)
 
 		// @sk-task remove-audit-incidents#T3.4: Incident handler wiring removed from admin (AC-009)
 
@@ -233,6 +284,39 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Info("admin server stopped")
+}
+
+// @sk-task admin-ui-design#T3.2: Adapter from postgres.AuditLogEntry to admin.AuditEvent (AC-005)
+type auditLogAdapter struct {
+	store *postgres.AuditLogStore
+}
+
+func (a *auditLogAdapter) Write(ctx context.Context, event *admin.AuditEvent) error {
+	return a.store.Write(ctx, &postgres.AuditLogEntry{
+		AdminUsername: event.AdminUsername,
+		Action:        event.Action,
+		Target:        event.Target,
+		Details:       event.Details,
+		CreatedAt:     event.CreatedAt,
+	})
+}
+
+func (a *auditLogAdapter) List(ctx context.Context, limit, offset int) ([]admin.AuditEvent, error) {
+	entries, err := a.store.List(ctx, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	events := make([]admin.AuditEvent, len(entries))
+	for i, e := range entries {
+		events[i] = admin.AuditEvent{
+			AdminUsername: e.AdminUsername,
+			Action:        e.Action,
+			Target:        e.Target,
+			Details:       e.Details,
+			CreatedAt:     e.CreatedAt,
+		}
+	}
+	return events, nil
 }
 
 

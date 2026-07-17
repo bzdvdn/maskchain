@@ -21,4 +21,5 @@ type SessionStore interface {
 	Close(ctx context.Context, tenantID, sessionID string) error
 	DeleteExpired(ctx context.Context) (int64, error)
 	ListByTenant(ctx context.Context, tenantID string, page, limit int32) (*ListResult, error)
+	ListAll(ctx context.Context, page, limit int32) (*ListResult, error)
 }

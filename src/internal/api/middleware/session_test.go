@@ -71,6 +71,10 @@ func (m *mockSessionStoreMW) ListByTenant(ctx context.Context, tenantID string, 
 	return &session.ListResult{Items: []session.Session{}, Total: 0, Page: int(page), Limit: int(limit)}, nil
 }
 
+func (m *mockSessionStoreMW) ListAll(ctx context.Context, page, limit int32) (*session.ListResult, error) {
+	return &session.ListResult{Items: []session.Session{}, Total: 0, Page: int(page), Limit: int(limit)}, nil
+}
+
 func setupSessionMWTest(t *testing.T) (*gin.Engine, *mockSessionStoreMW, *entity.Tenant) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)

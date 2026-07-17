@@ -66,6 +66,10 @@ func (m *mockStore) ListByTenant(ctx context.Context, tenantID string, page, lim
 	return &session.ListResult{Items: []session.Session{}, Total: 0, Page: 1, Limit: 20}, nil
 }
 
+func (m *mockStore) ListAll(ctx context.Context, page, limit int32) (*session.ListResult, error) {
+	return &session.ListResult{Items: []session.Session{}, Total: 0, Page: int(page), Limit: int(limit)}, nil
+}
+
 func (m *mockStore) count() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()

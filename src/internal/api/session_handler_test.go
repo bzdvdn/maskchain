@@ -97,6 +97,17 @@ func (m *mockSessionStore) ListByTenant(ctx context.Context, tenantID string, pa
 	return &session.ListResult{Items: items, Total: len(items), Page: int(page), Limit: int(limit)}, nil
 }
 
+func (m *mockSessionStore) ListAll(ctx context.Context, page, limit int32) (*session.ListResult, error) {
+	var items []session.Session
+	for _, s := range m.sessions {
+		items = append(items, *s)
+	}
+	if items == nil {
+		items = []session.Session{}
+	}
+	return &session.ListResult{Items: items, Total: len(items), Page: int(page), Limit: int(limit)}, nil
+}
+
 func sessionHandlerTestTenant(t *testing.T) *entity.Tenant {
 	t.Helper()
 	slug, err := value.NewTenantSlug("test-tenant")

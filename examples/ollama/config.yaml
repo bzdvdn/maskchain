@@ -30,6 +30,15 @@ routing:
       timeout: 120s
       priority: 1
 
+    - name: mistral
+      api_type: openai
+      base_url: "https://api.mistral.ai"
+      # ключ через env: export MISTRAL_KEY=твой-ключ
+      api_keys:
+        - "${MISTRAL_KEY}"
+      timeout: 60s
+      priority: 2
+
   rules:
     - tenant: default
       routes:
@@ -37,6 +46,16 @@ routing:
           providers: ["ollama"]
         - model: "llama3.2"
           providers: ["ollama"]
+        - model: "open-mistral-nemo"
+          providers: ["mistral"]
+        - model: "codestral-latest"
+          providers: ["mistral"]
+        - model: "mistral-small-latest"
+          providers: ["mistral"]
+        - model: "mistral-medium-latest"
+          providers: ["mistral"]
+        - model: "mistral-large-latest"
+          providers: ["mistral"]
 
 shield:
   action_on_suspicious: mask

@@ -55,16 +55,16 @@ export function TenantDetail() {
   }
 
   return (
-    <div className="profile-detail">
-      <div className="page-header">
-        <h1>{tenant.name}</h1>
-        <div className="header-actions">
-          <Link to={`/tenants/${tenant.slug}/edit`} className="btn">
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 600 }}>{tenant.name}</h2>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Link to={`/tenants/${tenant.slug}/edit`} className="btn btn-small">
             Edit
           </Link>
           <button
             type="button"
-            className="btn btn-danger"
+            className="btn btn-small btn-danger"
             onClick={() => setShowConfirm(true)}
           >
             Delete
@@ -72,27 +72,16 @@ export function TenantDetail() {
         </div>
       </div>
 
-      <div className="detail-grid">
-        <div className="detail-field">
-          <label>Slug</label>
-          <span><code>{tenant.slug}</code></span>
-        </div>
-        <div className="detail-field">
-          <label>Auth Header</label>
-          <span><code>{tenant.auth_header}</code></span>
-        </div>
-        <div className="detail-field">
-          <label>API Keys</label>
-          <span><code>{formatKeys(tenant.api_keys)}</code></span>
-        </div>
-        <div className="detail-field">
-          <label>Created</label>
-          <span>{new Date(tenant.created_at).toLocaleString()}</span>
-        </div>
-        <div className="detail-field">
-          <label>Updated</label>
-          <span>{new Date(tenant.updated_at).toLocaleString()}</span>
-        </div>
+      <div className="card" style={{ marginBottom: 12 }}>
+        <table>
+          <tbody>
+            <tr><td style={{ fontWeight: 600, padding: '8px 12px', width: 140 }}>Slug</td><td style={{ padding: '8px 12px' }}><code>{tenant.slug}</code></td></tr>
+            <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>Auth Header</td><td style={{ padding: '8px 12px' }}><code>{tenant.auth_header}</code></td></tr>
+            <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>API Keys</td><td style={{ padding: '8px 12px' }}><code>{formatKeys(tenant.api_keys)}</code></td></tr>
+            <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>Created</td><td style={{ padding: '8px 12px' }}>{new Date(tenant.created_at).toLocaleString()}</td></tr>
+            <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>Updated</td><td style={{ padding: '8px 12px' }}>{new Date(tenant.updated_at).toLocaleString()}</td></tr>
+          </tbody>
+        </table>
       </div>
 
       {showConfirm && (
@@ -123,35 +112,39 @@ export function TenantDetail() {
       )}
 
       {tenant.pii_config && (
-        <section>
-          <h2>PII Config</h2>
-          <div className="card">
-            <p>
-              <strong>Enabled:</strong>{' '}
-              <span className={`status-badge ${tenant.pii_config.enabled ? 'status-active' : 'status-disabled'}`}>
-                {tenant.pii_config.enabled ? 'Yes' : 'No'}
-              </span>
-            </p>
-            <p><strong>Default Action:</strong> {tenant.pii_config.default_action}</p>
-            {tenant.pii_config.rules.length > 0 && (
-              <>
-                <p><strong>Rules ({tenant.pii_config.rules.length})</strong></p>
-                <ul>
+        <div className="card">
+          <h3>PII Config</h3>
+          <table>
+            <tbody>
+              <tr><td style={{ fontWeight: 600, padding: '8px 12px', width: 140 }}>Enabled</td><td style={{ padding: '8px 12px' }}><span className={`badge ${tenant.pii_config.enabled ? 'badge-up' : 'badge-warn'}`}>{tenant.pii_config.enabled ? 'Yes' : 'No'}</span></td></tr>
+              <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>Default Action</td><td style={{ padding: '8px 12px' }}>{tenant.pii_config.default_action}</td></tr>
+            </tbody>
+          </table>
+          {tenant.pii_config.rules.length > 0 && (
+            <div className="table-wrap" style={{ marginTop: 8 }}>
+              <table>
+                <thead>
+                  <tr><th>Label</th><th>Type</th><th>Pattern</th><th>Action</th></tr>
+                </thead>
+                <tbody>
                   {tenant.pii_config.rules.map((r, i) => (
-                    <li key={i}>
-                      <code>{r.label}</code> — type: {r.type}, pattern: {r.pattern}, action: {r.action}
-                    </li>
+                    <tr key={i}>
+                      <td><code>{r.label}</code></td>
+                      <td>{r.type}</td>
+                      <td><code>{r.pattern}</code></td>
+                      <td>{r.action}</td>
+                    </tr>
                   ))}
-                </ul>
-              </>
-            )}
-          </div>
-        </section>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
 
       {tenant.dictionaries && tenant.dictionaries.length > 0 && (
         <section>
-          <h2>Dictionaries</h2>
+          <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>Dictionaries</h2>
           {tenant.dictionaries.map((d, i) => {
             const entries = Array.isArray(d.entries) ? d.entries : []
             return (
@@ -166,16 +159,15 @@ export function TenantDetail() {
                     View all ({entries.length})
                   </button>
                 </div>
-                <p>Match mode: <code>{d.match_mode}</code></p>
-                <p>Entries: {entries.length}</p>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>Match mode: <code>{d.match_mode}</code></p>
                 <ul>
                   {entries.slice(0, 10).map((e: any, j: number) => (
-                    <li key={j}>
+                    <li key={j} style={{ padding: '4px 0', borderBottom: '1px solid var(--border)', fontSize: 13, listStyle: 'none' }}>
                       {typeof e === 'string' ? e : JSON.stringify(e)}
                     </li>
                   ))}
                   {entries.length > 10 && (
-                    <li className="text-muted">...and {entries.length - 10} more</li>
+                    <li style={{ padding: '4px 0', fontSize: 13, listStyle: 'none', color: 'var(--text-muted)' }}>...and {entries.length - 10} more</li>
                   )}
                 </ul>
               </div>
