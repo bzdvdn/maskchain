@@ -226,6 +226,9 @@ func (m *mockUsageStore) QueryByTenant(_ context.Context, _ value.TenantID, _, _
 func (m *mockUsageStore) QueryByModel(_ context.Context, _ string, _, _ time.Time) ([]UsageRecord, error) {
 	return nil, nil
 }
+func (m *mockUsageStore) QueryAll(_ context.Context, _, _ time.Time) ([]UsageRecord, error) {
+	return nil, nil
+}
 func (m *mockUsageStore) AggregateByDay(_ context.Context, _ value.TenantID, _, _ time.Time) ([]Aggregation, error) {
 	return nil, nil
 }

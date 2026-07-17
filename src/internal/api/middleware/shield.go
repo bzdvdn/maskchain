@@ -282,15 +282,23 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger,
 				return
 			}
 
-			// Apply PII masking to request body (replace PII fragments with placeholders)
+			// Apply PII masking to message content only (not raw JSON body)
+			// to avoid corrupting JSON structural elements when fragments
+			// accidentally match model names, numeric params, or field keys.
 			if resp != nil && len(resp.Replacements) > 0 {
-				bodyBytes, _ := io.ReadAll(c.Request.Body)
-				bodyStr := string(bodyBytes)
+				for mi := range chatReq.Messages {
+					for ph, original := range resp.Replacements {
+						chatReq.Messages[mi].Content = strings.ReplaceAll(chatReq.Messages[mi].Content, original, ph)
+					}
+				}
+				newBody, _ := json.Marshal(chatReq)
+				c.Request.Body = io.NopCloser(bytes.NewBuffer(newBody))
 				for ph, original := range resp.Replacements {
-					bodyStr = strings.ReplaceAll(bodyStr, original, ph)
 					dictMaskMapping[ph] = original
 				}
-				c.Request.Body = io.NopCloser(strings.NewReader(bodyStr))
+				log.Debug("shield pii mask",
+					zap.Int("pii_replacement_count", len(resp.Replacements)),
+				)
 			}
 		}
 

@@ -20,40 +20,49 @@ docker compose -f ../docker-compose.yml up -d --build
 # 3. Засей словари тенанта
 ../seed-tenant.sh
 
-# 4. Открой test-prompt.md — 4 Postman-запроса для всех сценариев
-#    (особенно Request 2: словарные данные без PII — проверка маскировки)
-#    или запусти автоматический тест:
-./test-ollama.sh
+# 4. Запусти авто-тест:
+../test-mask.sh
+
+#    Или для другой модели:
+../test-mask.sh http://localhost:8080 sk-test-default "mistral-small-latest"
 ```
 
 ## Конфигурация
 
-`config.yaml` настраивает:
+Единый конфиг в `examples/config.yaml`. Настраивает:
 
 - **Ollama provider**: `api_type: ollama`, `base_url: http://host.docker.internal:11434`
-- **Routing**: модель `gemma3:4b` → Ollama
+- **Mistral provider**: `api_type: openai`, ключ через `${MISTRAL_KEY}`
+- **Routing**: модель `gemma3:4b` → Ollama; `mistral-*` → Mistral
 - **Tenant**: `default` с PII-правилами (email, phone, SSN — block)
 - **Shield**: `action_on_suspicious: mask` — словарные значения маскируются перед отправкой к LLM
-- **Analytics**: сбор usage (batch каждые 5 секунд)
+- **Analytics**: сбор usage (batch 5s), cost rates для Ollama ($0) и Mistral
+
+## Структура
+
+```
+examples/
+├── config.yaml         # единый конфиг (gateway + admin)
+├── docker-compose.yml  # стек: PG, Valkey, gateway, admin
+├── seed-tenant.sh      # создание тенанта + словари
+├── test-mask.sh        # авто-тест shield маскировки
+├── test-prompt.md      # Postman-запросы для всех сценариев
+└── ollama/             # (устаревшее — конфиг вынесен на уровень выше)
+```
+
+## Конфигурация
+
+Общий конфиг в `examples/config.yaml` (теперь единый для gateway и admin). Настраивает:
+
+- **Ollama provider**: `api_type: ollama`, `base_url: http://host.docker.internal:11434`
+- **Mistral provider**: `api_type: openai`, ключ через `${MISTRAL_KEY}`
+- **Routing**: модель `gemma3:4b` → Ollama; `mistral-*` → Mistral
+- **Tenant**: `default` с PII-правилами (email, phone, SSN — block)
+- **Shield**: `action_on_suspicious: mask` — словарные значения маскируются перед отправкой к LLM
+- **Analytics**: сбор usage (batch 5s), cost rates для Ollama ($0) и Mistral
+- **Debug**: admin-token для прямого доступа к API
 
 ## Ожидаемое поведение
-
-### Словарная маскировка (действует всегда)
-
-При любом запросе shield находит в тексте совпадения со словарями тенанта (имена, отделы, проекты) и **заменяет** их на `{{dict.<id>.<N>}}` перед отправкой к LLM. В ответе все плейсхолдеры восстанавливаются обратно.
-
-### PII-маскировка
-
-PII-правила (email, phone, SSN) обнаруживаются PII-детектором. Shield **заменяет** обнаруженные PII-фрагменты на `{{pii.<label>.<N>}}` перед отправкой к LLM, а в ответе восстанавливает оригиналы. `action_on_suspicious: mask` — при обнаружении PII запрос не блокируется, PII и словари маскируются.
-
-### Сценарии (4 запроса в `test-prompt.md`)
-
-| Запрос | Словари | PII | Ожидание |
-|--------|---------|-----|----------|
-| 1. Базовая проверка | нет | нет | 200, clean |
-| 2. Словари без PII | **да** | нет | **200, `{{dict.*}}` → unmask** |
-| 3. PII + словари | **да** | **да** | **200, `{{dict.*}}` + `{{pii.*}}` → unmask** |
-| 4. Streaming | нет | нет | SSE chunks |
 
 ## Проверка
 

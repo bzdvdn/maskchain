@@ -41,6 +41,10 @@ func (m *mockUsageStore) QueryByModel(ctx context.Context, model string, from, t
 	return m.records, m.err
 }
 
+func (m *mockUsageStore) QueryAll(ctx context.Context, from, to time.Time) ([]analytics.UsageRecord, error) {
+	return m.records, m.err
+}
+
 func (m *mockUsageStore) AggregateByDay(ctx context.Context, tenantID value.TenantID, from, to time.Time) ([]analytics.Aggregation, error) {
 	return m.aggregations, m.err
 }

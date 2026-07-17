@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+MODEL="${3:-gemma3:4b}"
 GATEWAY_URL="${1:-http://localhost:8080}"
 API_KEY="${2:-sk-test-default}"
 AUTH="Authorization: Bearer ${API_KEY}"
 
-echo "=== MaskChain + Ollama Test ==="
+echo "=== MaskChain Shield Test ==="
 echo "Gateway: ${GATEWAY_URL}"
-echo "Model: gemma3:4b"
+echo "Model: ${MODEL}"
 echo ""
 
 # 1. Health check
@@ -24,9 +25,9 @@ RESPONSE=$(curl -s -w "\n%{http_code}\n%{header_json}" \
   -X POST "${GATEWAY_URL}/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -H "${AUTH}" \
-  -d @- <<'JSON'
+  -d "$(cat <<JSON
 {
-  "model": "gemma3:4b",
+  "model": "${MODEL}",
   "messages": [
     {
       "role": "user",
@@ -36,6 +37,7 @@ RESPONSE=$(curl -s -w "\n%{http_code}\n%{header_json}" \
   "stream": false
 }
 JSON
+)" \
 )
 
 HTTP_CODE=$(echo "${RESPONSE}" | tail -1)
@@ -55,7 +57,10 @@ curl -s -D - -o /dev/null \
   -X POST "${GATEWAY_URL}/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -H "${AUTH}" \
-  -d '{"model":"gemma3:4b","messages":[{"role":"user","content":"hello world"}],"stream":false}' 2>/dev/null | head -20
+  -d "$(cat <<JSON
+{"model":"${MODEL}","messages":[{"role":"user","content":"hello world"}],"stream":false}
+JSON
+)" 2>/dev/null | head -20
 
 echo ""
 echo ""

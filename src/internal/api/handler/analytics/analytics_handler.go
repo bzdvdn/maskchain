@@ -32,7 +32,7 @@ const defaultPerPage = 50
 func (h *AnalyticsHandler) HandleTokens(c *gin.Context) {
 	q := parseQuery(c)
 	from, to := resolvePeriod(q)
-	records, err := h.store.QueryByTenant(c.Request.Context(), tenantID(c), from, to)
+	records, err := h.fetchRecords(c, from, to)
 	if err != nil {
 		_ = c.Error(err)
 		return
@@ -63,7 +63,7 @@ func (h *AnalyticsHandler) HandleTokens(c *gin.Context) {
 func (h *AnalyticsHandler) HandleCost(c *gin.Context) {
 	q := parseQuery(c)
 	from, to := resolvePeriod(q)
-	records, err := h.store.QueryByTenant(c.Request.Context(), tenantID(c), from, to)
+	records, err := h.fetchRecords(c, from, to)
 	if err != nil {
 		_ = c.Error(err)
 		return
@@ -94,7 +94,7 @@ func (h *AnalyticsHandler) HandleCost(c *gin.Context) {
 func (h *AnalyticsHandler) HandleTraffic(c *gin.Context) {
 	q := parseQuery(c)
 	from, to := resolvePeriod(q)
-	records, err := h.store.QueryByTenant(c.Request.Context(), tenantID(c), from, to)
+	records, err := h.fetchRecords(c, from, to)
 	if err != nil {
 		_ = c.Error(err)
 		return
@@ -171,6 +171,14 @@ func tenantID(c *gin.Context) value.TenantID {
 	}
 	id, _ := value.NewTenantID(t.Slug().String())
 	return id
+}
+
+func (h *AnalyticsHandler) fetchRecords(c *gin.Context, from, to time.Time) ([]analytics.UsageRecord, error) {
+	tid := tenantID(c)
+	if tid.String() == "" {
+		return h.store.QueryAll(c.Request.Context(), from, to)
+	}
+	return h.store.QueryByTenant(c.Request.Context(), tid, from, to)
 }
 
 func parseQuery(c *gin.Context) dto.AnalyticsQuery {

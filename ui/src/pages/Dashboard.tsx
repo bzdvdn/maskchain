@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react'
 
-interface Metrics {
-  rps?: number
-  p95?: number
-  p99?: number
-  errorRate?: number
-  activeTenants?: number
-  tokensToday?: number
+interface TokenRecord {
+  tenant_id: string
+  model: string
+  total_input_tokens: number
+  total_output_tokens: number
+}
+
+interface TokenTotals {
+  total_input_tokens: number
+  total_output_tokens: number
+}
+
+interface TokensData {
+  records: TokenRecord[]
+  totals: TokenTotals
 }
 
 interface Session {
@@ -18,41 +26,47 @@ interface Session {
   expires_at: string
 }
 
+interface SessionsData {
+  items: Session[]
+}
+
 export function Dashboard() {
-  const [metrics, setMetrics] = useState<Metrics>({})
+  const [records, setRecords] = useState<TokenRecord[]>([])
+  const [totals, setTotals] = useState<TokenTotals>({ total_input_tokens: 0, total_output_tokens: 0 })
   const [sessions, setSessions] = useState<Session[]>([])
   const [error, setError] = useState('')
 
-  function fetchAll() {
+  function fetchTokens() {
     fetch('/api/v1/analytics/tokens', { credentials: 'include' })
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load')
         return res.json()
       })
-      .then((data) => {
-        const body = data.data ?? data
-        setMetrics({
-          rps: body.rps ?? body.requests_per_second,
-          p95: body.p95 ?? body.latency_p95,
-          p99: body.p99 ?? body.latency_p99,
-          errorRate: body.error_rate ?? body.errorRate,
-          activeTenants: body.active_tenants ?? body.activeTenants,
-          tokensToday: body.tokens_today ?? body.tokensToday,
-        })
+      .then((envelope) => {
+        const body: TokensData = envelope.data?.data ?? envelope.data ?? envelope
+        setRecords(body.records ?? [])
+        setTotals(body.totals ?? { total_input_tokens: 0, total_output_tokens: 0 })
         setError('')
       })
       .catch(() => setError('No data yet'))
+  }
 
+  function fetchSessions() {
     fetch('/api/v1/sessions', { credentials: 'include' })
       .then((r) => {
         if (!r.ok) throw new Error('fetch failed')
         return r.json()
       })
       .then((body) => {
-        const d = body.data ?? body
-        setSessions(Array.isArray(d.items) ? d.items.slice(0, 5) : Array.isArray(d) ? d.slice(0, 5) : [])
+        const d: SessionsData = body.data ?? body
+        setSessions(Array.isArray(d.items) ? d.items.slice(0, 5) : [])
       })
       .catch(() => {})
+  }
+
+  function fetchAll() {
+    fetchTokens()
+    fetchSessions()
   }
 
   useEffect(() => {
@@ -61,14 +75,24 @@ export function Dashboard() {
     return () => clearInterval(interval)
   }, [])
 
+  const tokensTotal = totals.total_input_tokens + totals.total_output_tokens
+  const activeTenants = new Set(records.map((r) => r.tenant_id)).size
+
   const cards = [
-    { label: 'Requests/sec', value: metrics.rps ?? 0 },
-    { label: 'P95 Latency', value: metrics.p95 != null ? `${metrics.p95}ms` : '0ms' },
-    { label: 'P99 Latency', value: metrics.p99 != null ? `${metrics.p99}ms` : '0ms' },
-    { label: 'Error Rate', value: metrics.errorRate != null ? `${metrics.errorRate}%` : '0%' },
-    { label: 'Active Tenants', value: metrics.activeTenants ?? 0 },
-    { label: 'Tokens Today', value: metrics.tokensToday != null ? `${(metrics.tokensToday / 1000000).toFixed(1)}M` : '0M' },
+    { label: 'Requests', value: records.length },
+    { label: 'Input Tokens', value: totals.total_input_tokens.toLocaleString() },
+    { label: 'Output Tokens', value: totals.total_output_tokens.toLocaleString() },
+    { label: 'Total Tokens', value: tokensTotal.toLocaleString() },
+    { label: 'Active Tenants', value: activeTenants },
+    { label: 'Models Used', value: new Set(records.map((r) => r.model)).size },
   ]
+
+  const modelTotals: Record<string, { input: number; output: number }> = {}
+  for (const r of records) {
+    if (!modelTotals[r.model]) modelTotals[r.model] = { input: 0, output: 0 }
+    modelTotals[r.model].input += r.total_input_tokens
+    modelTotals[r.model].output += r.total_output_tokens
+  }
 
   return (
     <div>
@@ -82,6 +106,29 @@ export function Dashboard() {
       </div>
 
       {error && <p className="text-muted" style={{ marginBottom: 24 }}>{error}</p>}
+
+      {Object.keys(modelTotals).length > 0 && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <h3>Token Usage by Model</h3>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Model</th><th>Input Tokens</th><th>Output Tokens</th><th>Total</th></tr>
+              </thead>
+              <tbody>
+                {Object.entries(modelTotals).map(([model, counts]) => (
+                  <tr key={model}>
+                    <td><code>{model}</code></td>
+                    <td>{counts.input.toLocaleString()}</td>
+                    <td>{counts.output.toLocaleString()}</td>
+                    <td>{(counts.input + counts.output).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <h3>Active Sessions</h3>

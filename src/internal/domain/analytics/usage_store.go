@@ -15,5 +15,6 @@ type UsageStore interface {
 	DeleteOlderThan(ctx context.Context, before time.Time) (int64, error)
 	QueryByTenant(ctx context.Context, tenantID value.TenantID, from, to time.Time) ([]UsageRecord, error)
 	QueryByModel(ctx context.Context, model string, from, to time.Time) ([]UsageRecord, error)
+	QueryAll(ctx context.Context, from, to time.Time) ([]UsageRecord, error)
 	AggregateByDay(ctx context.Context, tenantID value.TenantID, from, to time.Time) ([]Aggregation, error)
 }

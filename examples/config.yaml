@@ -1,5 +1,116 @@
-# MaskChain example config — mounted into Docker containers
-# Simple overrides (CONFIG_VALKEY_ADDR, CONFIG_OTEL_ENDPOINT, etc.) can still use env vars.
+# MaskChain unified example config — монтируется в Docker-контейнеры
+# Оверрайды через CONFIG_* env vars (напр. CONFIG_VALKEY_ADDR) работают поверх YAML.
+# Аннотации ключей: provider | internal | platform
+
+log:
+  level: debug
+
+server:
+  port: 8080
+  shutdown_timeout: 10
+  tenant_reload_interval: 15s
+
+database:
+  dsn: "postgres://test:test@postgres:5432/maskchain?sslmode=disable"
+  max_conns: 10
+  min_conns: 2
+  max_conn_lifetime: 30m
+
+valkey:
+  addr: valkey:6379
+  password: ""
+  ttl_sec: 3600
+
+routing:
+  providers:
+    - name: ollama
+      api_type: ollama
+      base_url: "http://host.docker.internal:11434"
+      health_endpoint: "/api/tags"
+      timeout: 120s
+      priority: 1
+
+    - name: mistral
+      api_type: openai
+      base_url: "https://api.mistral.ai"
+      api_keys:
+        - "${MISTRAL_KEY}"
+      timeout: 60s
+      priority: 2
+    
+    - name: yandex
+      api_type: openai
+      base_url: "https://llm.api.cloud.yandex.net"
+      auth_scheme: api-key
+      auth_prefix: "Api-Key "
+      api_keys:
+        - "${YANDEX_AI_KEY}"
+      timeout: 60s
+      priority: 2
+
+  rules:
+    - tenant: default
+      routes:
+        - model: "gemma3:4b"
+          providers: ["ollama"]
+        - model: "llama3.2"
+          providers: ["ollama"]
+        - model: "open-mistral-nemo"
+          providers: ["mistral"]
+        - model: "codestral-latest"
+          providers: ["mistral"]
+        - model: "mistral-small-latest"
+          providers: ["mistral"]
+        - model: "mistral-medium-latest"
+          providers: ["mistral"]
+        - model: "mistral-large-latest"
+          providers: ["mistral"]
+        - model: "gpt://b1ggb5ebrubb9a4gbp2o/yandexgpt/latest"
+          providers: ["yandex"]
+
+shield:
+  action_on_suspicious: mask
+  tenant_model_mapping:
+    default:
+      "gemma3:4b": "pii-protect"
+
+egress:
+  max_idle_conns: 10
+  idle_timeout: 30s
+  max_retries: 0
+  circuit_breaker:
+    max_failures: 5
+    cooldown: 30s
+
+analytics:
+  batch_interval: 5s
+  retention_days: 7
+  cost_rates:
+    - model: "gemma3:4b"
+      input_price_per_1k: 0
+      output_price_per_1k: 0
+    - model: "mistral-small-latest"
+      input_price_per_1k: 0.001
+      output_price_per_1k: 0.003
+    - model: "mistral-medium-latest"
+      input_price_per_1k: 0.002
+      output_price_per_1k: 0.006
+    - model: "mistral-large-latest"
+      input_price_per_1k: 0.004
+      output_price_per_1k: 0.012
+    - model: "gpt://b1ggb5ebrubb9a4gbp2o/yandexgpt/latest"
+      input_price_per_1k: 0.004
+      output_price_per_1k: 0.004
+
+debug:
+  enabled: true
+  admin_token: "admin-token"
+
+session:
+  default_ttl: 30m
+  max_ttl: 24h
+  cleanup_interval: 5m
+  cleanup_enabled: true
 
 tenants:
   default:
@@ -7,23 +118,19 @@ tenants:
     auth_header: "Authorization"
     api_keys:
       - "sk-test-default"
-    # PII rules are per-tenant via PIIConfig.
-    # Enabled=false → PII scanning disabled (dict-only mode).
-    # DefaultAction применяется при ошибке engine.Scan (block|allow).
-    # Rules: каждый rule содержит тип детектора (pii, financial, secrets) и action (block|allow).
     pii_config:
       enabled: true
       default_action: mask
       rules:
-        - label: "email"
-          type: "regex"
-          pattern: "EMAIL"
-          action: "block"
-        - label: "phone"
-          type: "regex"
-          pattern: "PHONE"
-          action: "block"
-        - label: "ssn"
-          type: "regex"
-          pattern: "SSN"
-          action: "block"
+        - label: email
+          type: regex
+          pattern: EMAIL
+          action: block
+        - label: phone
+          type: regex
+          pattern: PHONE
+          action: block
+        - label: ssn
+          type: regex
+          pattern: SSN
+          action: block

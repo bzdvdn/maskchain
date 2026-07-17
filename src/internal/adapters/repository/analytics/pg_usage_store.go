@@ -92,6 +92,30 @@ func (s *PgUsageStore) QueryByTenant(ctx context.Context, tenantID value.TenantI
 	return records, rows.Err()
 }
 
+func (s *PgUsageStore) QueryAll(ctx context.Context, from, to time.Time) ([]analytics.UsageRecord, error) {
+	if s.pool == nil {
+		return nil, nil
+	}
+	rows, err := s.pool.Query(ctx,
+		`SELECT tenant_id, model, recorded_at, recorded_at, input_tokens, output_tokens, cost, 1
+		 FROM usage_raw WHERE recorded_at >= $1 AND recorded_at <= $2
+		 ORDER BY recorded_at`, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []analytics.UsageRecord
+	for rows.Next() {
+		var r analytics.UsageRecord
+		if err := rows.Scan(&r.TenantID, &r.Model, &r.PeriodStart, &r.PeriodEnd,
+			&r.TotalInputTokens, &r.TotalOutputTokens, &r.TotalCost, &r.RequestCount); err != nil {
+			return nil, err
+		}
+		records = append(records, r)
+	}
+	return records, rows.Err()
+}
+
 func (s *PgUsageStore) QueryByModel(ctx context.Context, model string, from, to time.Time) ([]analytics.UsageRecord, error) {
 	if s.pool == nil {
 		return nil, nil

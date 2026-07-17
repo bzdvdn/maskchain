@@ -44,6 +44,10 @@ func (m *mockUsageStore) QueryByModel(_ context.Context, _ string, _, _ time.Tim
 	return nil, nil
 }
 
+func (m *mockUsageStore) QueryAll(_ context.Context, _, _ time.Time) ([]analytics.UsageRecord, error) {
+	return nil, nil
+}
+
 func (m *mockUsageStore) AggregateByDay(_ context.Context, _ value.TenantID, _, _ time.Time) ([]analytics.Aggregation, error) {
 	return nil, nil
 }
