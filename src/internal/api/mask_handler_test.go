@@ -120,7 +120,7 @@ func TestPreprocessorPipeline(t *testing.T) {
 	if strings.Contains(md.lastText, "jane@test.com") {
 		t.Error("detector received unmasked email: jane@test.com")
 	}
-	if !strings.Contains(md.lastText, "{{csv.") {
+	if !strings.Contains(md.lastText, "[MASK_csv.") {
 		t.Error("detector should receive text with CSV placeholders")
 	}
 }
@@ -166,7 +166,7 @@ func TestHandleUnmask(t *testing.T) {
 		origText := "hello world"
 		maskEntry := &mask.MaskEntry{
 			MaskID:       "test-mask-1",
-			Replacements: map[string]string{"{{test.1}}": "world"},
+			Replacements: map[string]string{"[MASK_test.1]": "world"},
 		}
 		if err := ms.Save(nil, maskEntry); err != nil {
 			t.Fatal(err)
@@ -175,7 +175,7 @@ func TestHandleUnmask(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/shield/unmask?mask_ids=test-mask-1",
-			strings.NewReader("hello {{test.1}}"))
+			strings.NewReader("hello [MASK_test.1]"))
 		c.Request.Header.Set("Content-Type", "text/plain")
 		handler.HandleUnmask(c)
 
@@ -267,7 +267,7 @@ func TestMaskUnmaskCycle(t *testing.T) {
 	if maskedText == origBody {
 		t.Fatal("masked text should differ from original")
 	}
-	if !strings.Contains(maskedText, "{{") {
+	if !strings.Contains(maskedText, "[MASK_") {
 		t.Fatal("masked text should contain placeholders")
 	}
 

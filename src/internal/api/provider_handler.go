@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -34,6 +35,27 @@ type RoutingProxyHandler struct {
 
 func NewRoutingProxyHandler(selector *routingSvc.RouteSelector, fallback *routingSvc.FallbackHandler) *RoutingProxyHandler {
 	return &RoutingProxyHandler{selector: selector, fallback: fallback}
+}
+
+// hop-by-hop headers that must not be forwarded from upstream response
+var filteredUpstreamHeaders = map[string]bool{
+	"content-length":    true,
+	"transfer-encoding": true,
+	"connection":        true,
+	"keep-alive":        true,
+	"te":                true,
+	"trailer":           true,
+	"upgrade":           true,
+	"content-encoding":  true,
+}
+
+func forwardUpstreamHeaders(c *gin.Context, headers map[string]string) {
+	for k, v := range headers {
+		if filteredUpstreamHeaders[strings.ToLower(k)] {
+			continue
+		}
+		c.Header(k, v)
+	}
 }
 
 // @sk-task 118-api-consistency#T3.2: Use ApiResponse envelope for proxy handler errors
@@ -94,9 +116,7 @@ func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
 		resp, providerName, fbErr := h.fallback.Call(c.Request.Context(), []string{firstProvider.Name}, providerReq)
 		if fbErr == nil && resp != nil {
 			c.Header("X-Provider", providerName)
-			for k, v := range resp.Headers {
-				c.Header(k, v)
-			}
+			forwardUpstreamHeaders(c, resp.Headers)
 			c.Set(middleware.SkipEnvelopeKey, true)
 			c.Data(resp.StatusCode, "application/json", resp.Body)
 			return
@@ -127,9 +147,7 @@ func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
 	}
 
 	c.Header("X-Provider", providerName)
-	for k, v := range resp.Headers {
-		c.Header(k, v)
-	}
+	forwardUpstreamHeaders(c, resp.Headers)
 	c.Set(middleware.SkipEnvelopeKey, true)
 	c.Data(resp.StatusCode, "application/json", resp.Body)
 }

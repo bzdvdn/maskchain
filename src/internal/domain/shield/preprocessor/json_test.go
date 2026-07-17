@@ -17,7 +17,7 @@ func TestJSONProcessorNestedField(t *testing.T) {
 	data := `{"user": {"email": "test@test.com", "name": "John"}}`
 	result := p.Process(data, "req-1")
 
-	if !strings.Contains(result.ModifiedText, "{{") {
+	if !strings.Contains(result.ModifiedText, "[MASK_") {
 		t.Error("expected placeholder in output")
 	}
 	if strings.Contains(result.ModifiedText, "test@test.com") {
@@ -40,7 +40,7 @@ func TestJSONProcessorMarkdownFence(t *testing.T) {
 	data := "some text\n```json\n{\"secret\": \"sensitive\"}\n```\nmore text"
 	result := p.Process(data, "req-1")
 
-	if !strings.Contains(result.ModifiedText, "{{") {
+	if !strings.Contains(result.ModifiedText, "[MASK_") {
 		t.Error("expected placeholder in output")
 	}
 	if strings.Contains(result.ModifiedText, "sensitive") {
@@ -66,7 +66,7 @@ func TestJSONProcessorWildcard(t *testing.T) {
 	data := `{"items": [{"secret": "a"}, {"secret": "b"}]}`
 	result := p.Process(data, "req-1")
 
-	if !strings.Contains(result.ModifiedText, "{{json") {
+	if !strings.Contains(result.ModifiedText, "[MASK_json") {
 		t.Error("expected placeholder in output")
 	}
 	if strings.Contains(result.ModifiedText, "\"secret\": \"a\"") {
@@ -89,7 +89,7 @@ func TestJSONProcessorTopLevelField(t *testing.T) {
 	data := `{"email": "test@test.com", "name": "John"}`
 	result := p.Process(data, "req-1")
 
-	if !strings.Contains(result.ModifiedText, "{{") {
+	if !strings.Contains(result.ModifiedText, "[MASK_") {
 		t.Error("expected placeholder for email")
 	}
 	if strings.Contains(result.ModifiedText, "test@test.com") {

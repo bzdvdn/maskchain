@@ -76,7 +76,7 @@ func walkAndMask(node interface{}, segments []jsonPathSegment, phPrefix string, 
 		}
 		if len(rest) == 0 {
 			orig := fmt.Sprintf("%v", val)
-			ph := fmt.Sprintf("{{%s.%d}}", phPrefix, *phIdx)
+			ph := fmt.Sprintf("[MASK_%s.%d]", phPrefix, *phIdx)
 			replacements[orig] = ph
 			*phIdx++
 			v[seg.key] = ph
@@ -90,7 +90,7 @@ func walkAndMask(node interface{}, segments []jsonPathSegment, phPrefix string, 
 			for i := range v {
 				if len(rest) == 0 {
 					orig := fmt.Sprintf("%v", v[i])
-					ph := fmt.Sprintf("{{%s.%d}}", phPrefix, *phIdx)
+					ph := fmt.Sprintf("[MASK_%s.%d]", phPrefix, *phIdx)
 					replacements[orig] = ph
 					*phIdx++
 					v[i] = ph
@@ -106,7 +106,7 @@ func walkAndMask(node interface{}, segments []jsonPathSegment, phPrefix string, 
 			}
 			if len(rest) == 0 {
 				orig := fmt.Sprintf("%v", v[seg.index])
-				ph := fmt.Sprintf("{{%s.%d}}", phPrefix, *phIdx)
+				ph := fmt.Sprintf("[MASK_%s.%d]", phPrefix, *phIdx)
 				replacements[orig] = ph
 				*phIdx++
 				v[seg.index] = ph

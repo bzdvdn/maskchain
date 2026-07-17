@@ -76,7 +76,7 @@ func (uc *MaskUseCase) MaskFromResults(ctx context.Context, text string, maskID 
 	masked := []byte(text)
 	counter := 1
 	for _, r := range kept {
-		placeholder := fmt.Sprintf("{{%s.%d}}", docID, counter)
+		placeholder := fmt.Sprintf("[MASK_%s.%d]", docID, counter)
 		entry.Replacements[placeholder] = r.Fragment
 
 		before := string(masked[:r.StartPos])

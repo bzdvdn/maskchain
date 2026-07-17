@@ -506,7 +506,8 @@ func TestDictUnmask(t *testing.T) {
 		io.Copy(buf, c.Request.Body)
 		var chatReq chatRequest
 		json.Unmarshal([]byte(buf.String()), &chatReq)
-		echoContent := chatReq.Messages[0].Content
+		last := chatReq.Messages[len(chatReq.Messages)-1]
+		echoContent := last.Content
 		c.JSON(http.StatusOK, map[string]interface{}{
 			"choices": []map[string]interface{}{
 				{"message": map[string]interface{}{
@@ -559,7 +560,8 @@ func TestStreamingDictUnmask(t *testing.T) {
 		bodyBytes, _ := io.ReadAll(c.Request.Body)
 		var chatReq chatRequest
 		json.Unmarshal(bodyBytes, &chatReq)
-		content := chatReq.Messages[0].Content
+		last := chatReq.Messages[len(chatReq.Messages)-1]
+		content := last.Content
 
 		c.Writer.WriteHeader(http.StatusOK)
 		c.Writer.Write([]byte(fmt.Sprintf("data: {\"choices\":[{\"delta\":{\"content\":\"The person %s did great\"}}]}\n\n", content)))
@@ -683,7 +685,8 @@ func TestShieldEdge_InvalidPlaceholderNotReplaced(t *testing.T) {
 		bodyBytes, _ := io.ReadAll(c.Request.Body)
 		var chatReq chatRequest
 		json.Unmarshal(bodyBytes, &chatReq)
-		echoContent := chatReq.Messages[0].Content
+		last := chatReq.Messages[len(chatReq.Messages)-1]
+		echoContent := last.Content
 		c.JSON(http.StatusOK, map[string]interface{}{
 			"choices": []map[string]interface{}{
 				{"message": map[string]interface{}{

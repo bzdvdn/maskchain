@@ -120,12 +120,12 @@ func TestMaskFromResults_SingleReplacement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := "Hi {{abc.1}}!"
+	expected := "Hi [MASK_abc.1]!"
 	if masked != expected {
 		t.Errorf("expected %q, got %q", expected, masked)
 	}
-	if entry.Replacements["{{abc.1}}"] != "test@example.com" {
-		t.Errorf("expected replacement for {{abc.1}}, got %v", entry.Replacements)
+	if entry.Replacements["[MASK_abc.1]"] != "test@example.com" {
+		t.Errorf("expected replacement for [MASK_abc.1], got %v", entry.Replacements)
 	}
 }
 
@@ -136,13 +136,13 @@ func TestUnmaskText_Single(t *testing.T) {
 		MaskID: "abc",
 		DocumentMaskID: "abc",
 		Replacements: map[string]string{
-			"{{abc.1}}": "test@example.com",
+			"[MASK_abc.1]": "test@example.com",
 		},
 	}
 	reg := detector.NewDetectorRegistry()
 	uc := NewMaskUseCase(reg, store)
 
-	restored, err := uc.UnmaskText(context.Background(), "Hi {{abc.1}}!", []string{"abc"})
+	restored, err := uc.UnmaskText(context.Background(), "Hi [MASK_abc.1]!", []string{"abc"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,21 +183,21 @@ func TestMaskText_MultipleMaskIDs(t *testing.T) {
 		MaskID: "a",
 		DocumentMaskID: "a",
 		Replacements: map[string]string{
-			"{{a.1}}": "alice@example.com",
+			"[MASK_a.1]": "alice@example.com",
 		},
 	}
 	store.data["b"] = &MaskEntry{
 		MaskID: "b",
 		DocumentMaskID: "b",
 		Replacements: map[string]string{
-			"{{b.1}}": "+1-555-0000",
+			"[MASK_b.1]": "+1-555-0000",
 		},
 	}
 	reg := detector.NewDetectorRegistry()
 	uc := NewMaskUseCase(reg, store)
 
 	restored, err := uc.UnmaskText(context.Background(),
-		"Email: {{a.1}}, Phone: {{b.1}}", []string{"a", "b"})
+		"Email: [MASK_a.1], Phone: [MASK_b.1]", []string{"a", "b"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,8 +221,8 @@ func TestMaskFromResults_OverlapFilter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if masked != "{{ov.1}}" {
-		t.Errorf("expected %q, got %q", "{{ov.1}}", masked)
+	if masked != "[MASK_ov.1]" {
+		t.Errorf("expected %q, got %q", "[MASK_ov.1]", masked)
 	}
 	if len(entry.Replacements) != 1 {
 		t.Errorf("expected 1 replacement (deduped), got %d", len(entry.Replacements))

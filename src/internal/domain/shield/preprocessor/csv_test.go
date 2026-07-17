@@ -17,10 +17,10 @@ func TestCSVProcessorFullMask(t *testing.T) {
 	data := "name,email,phone\nJohn,john@test.com,555-0100\nJane,jane@test.com,555-0200"
 	result := p.Process(data, "req-1")
 
-	if !strings.Contains(result.ModifiedText, "{{csv.req-1.0}}") {
-		t.Error("expected placeholder {{csv.req-1.0}} for first email")
+	if !strings.Contains(result.ModifiedText, "[MASK_csv.req-1.0]") {
+		t.Error("expected placeholder [MASK_csv.req-1.0] for first email")
 	}
-	if !strings.Contains(result.ModifiedText, "{{csv.req-1.2}}") {
+	if !strings.Contains(result.ModifiedText, "[MASK_csv.req-1.2]") {
 		t.Error("expected placeholder for second phone")
 	}
 	if strings.Contains(result.ModifiedText, "john@test.com") {
@@ -75,7 +75,7 @@ func TestCSVProcessorQuoting(t *testing.T) {
 	data := "name,email,note\n\"John \"\"Johnny\"\" Doe\",john@test.com,\"note, with comma\""
 	result := p.Process(data, "req-1")
 
-	if !strings.Contains(result.ModifiedText, "{{csv.req-1.0}}") {
+	if !strings.Contains(result.ModifiedText, "[MASK_csv.req-1.0]") {
 		t.Error("expected placeholder for email")
 	}
 	if strings.Contains(result.ModifiedText, "john@test.com") {
@@ -135,10 +135,10 @@ func TestCSVProcessorMultipleBlocks(t *testing.T) {
 	data := "header before\nsecret,value\na,123\nb,456\ntext between\nsecret,value\nc,789"
 	result := p.Process(data, "req-1")
 
-	if !strings.Contains(result.ModifiedText, "{{csv.req-1.0}}") {
+	if !strings.Contains(result.ModifiedText, "[MASK_csv.req-1.0]") {
 		t.Error("expected placeholder in first block")
 	}
-	if !strings.Contains(result.ModifiedText, "{{csv.req-1.2}}") {
+	if !strings.Contains(result.ModifiedText, "[MASK_csv.req-1.2]") {
 		t.Error("expected placeholder in second block")
 	}
 	if strings.Contains(result.ModifiedText, "a,123") {

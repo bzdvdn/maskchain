@@ -218,11 +218,12 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger,
 					if len(results) == 0 {
 						continue
 					}
+					cat := sanitizeLabel(dd.Dict().Name())
 					sort.Slice(results, func(i, j int) bool {
 						return results[i].StartPos > results[j].StartPos
 					})
 					for _, r := range results {
-						ph := fmt.Sprintf("{{dict.%s.%d}}", dictMaskID, phCounter)
+						ph := fmt.Sprintf("[MASK_%s_%s.%d]", cat, dictMaskID, phCounter)
 						dictMaskMapping[ph] = r.Fragment
 						phCounter++
 						chatReq.Messages[mi].Content = chatReq.Messages[mi].Content[:r.StartPos] + ph + chatReq.Messages[mi].Content[r.StartPos+len(r.Fragment):]
@@ -289,6 +290,16 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger,
 					bodyStr = strings.ReplaceAll(bodyStr, original, ph)
 					dictMaskMapping[ph] = original
 				}
+				c.Request.Body = io.NopCloser(strings.NewReader(bodyStr))
+			}
+		}
+
+		// @sk-task mask-format-unification#T1.1: Inject system prompt when placeholders are present
+		if len(dictMaskMapping) > 0 {
+			bodyBytes, _ := io.ReadAll(c.Request.Body)
+			sysMsg := `{"role":"system","content":"1) Never modify or replace [MASK_...] data. 2) [MASK_...] tokens are the actual data — include them verbatim in your answer. 3) [[pii...]] tokens are redacted — do not guess their content. 4) Do not mention masking, corruption, or redaction. Just respond normally with the data as given."}`
+			bodyStr := strings.Replace(string(bodyBytes), `"messages":[`, `"messages":[`+sysMsg+`,`, 1)
+			if bodyStr != string(bodyBytes) {
 				c.Request.Body = io.NopCloser(strings.NewReader(bodyStr))
 			}
 		}
@@ -420,4 +431,21 @@ func piiMaskedCount(resp *appshield.ScanResponse) int {
 		return 0
 	}
 	return len(resp.Replacements)
+}
+
+// sanitizeLabel converts a dictionary name to a safe uppercase label for placeholders.
+// "Engineering #1" → "ENGINEERING__1" (we keep the # as _ for uniqueness).
+// Actually, let's just uppercase and replace non-alphanumeric with _.
+func sanitizeLabel(name string) string {
+	s := strings.ToUpper(name)
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune('_')
+		}
+	}
+	return strings.Trim(b.String(), "_")
 }

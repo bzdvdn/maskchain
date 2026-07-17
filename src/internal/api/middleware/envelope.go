@@ -23,6 +23,8 @@ func ResponseEnvelope() gin.HandlerFunc {
 		c.Writer = w
 		c.Next()
 
+		w.Header().Del("Content-Length")
+
 		if c.GetBool(SkipEnvelopeKey) {
 			w.ResponseWriter.WriteHeader(w.status)
 			w.ResponseWriter.Write(w.body.Bytes())

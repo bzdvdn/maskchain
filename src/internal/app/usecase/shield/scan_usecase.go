@@ -82,7 +82,7 @@ func (uc *ScanUseCase) Scan(ctx context.Context, req ScanRequest) (*ScanResponse
 		labelCounters := make(map[string]int)
 		for _, h := range hits {
 			labelCounters[h.label]++
-			ph := fmt.Sprintf("{{pii.%s.%d}}", h.label, labelCounters[h.label]-1)
+			ph := fmt.Sprintf("[[pii.%s.%d]]", h.label, labelCounters[h.label]-1)
 			replacements[ph] = h.fragment
 			processedText = processedText[:h.startPos] + ph + processedText[h.endPos:]
 		}

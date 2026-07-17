@@ -128,7 +128,7 @@ func (p *CSVProcessor) Process(data string, namespace string) *ProcessResult {
 				orig := row[t.idx]
 				switch t.mode {
 				case "full":
-					ph := fmt.Sprintf("{{csv.%s.%d}}", namespace, phIdx)
+					ph := fmt.Sprintf("[MASK_csv.%s.%d]", namespace, phIdx)
 					replacements[orig] = ph
 					row[t.idx] = ph
 					phIdx++
