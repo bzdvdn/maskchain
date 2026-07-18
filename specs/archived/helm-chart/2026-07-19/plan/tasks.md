@@ -134,11 +134,11 @@ Stop if: нет.
 
 Цель: финальная валидация chart'а.
 
-- [ ] T7.1 Проверить `helm lint` и `helm template` для комбинаций: gateway.enabled, admin.enabled, all.enabled, gateway+admin, × dbMode={internal,external} × routeMode={ingress,gatewayAPI}. ConfigMap содержит все секции, Secret — api-keys, шаблоны без ошибок.
+- [x] T7.1 Проверить `helm lint` и `helm template` для комбинаций: gateway.enabled, admin.enabled, all.enabled, gateway+admin, × dbMode={internal,external} × routeMode={ingress,gatewayAPI}. ConfigMap содержит все секции, Secret — api-keys, шаблоны без ошибок.
   Touches: deployments/helm/maskchain/templates/*.yaml
   AC: AC-001, AC-002, AC-003, AC-004, AC-005, AC-007, AC-008, AC-009, AC-010, AC-011
 
-- [ ] T7.2 Проверить `helm install` в kind (minikube) для internal mode: gateway + postgresql + valkey, все pod'ы Ready за <120s. Проверить external mode template (без install, т.к. нет external DB).
+- [x] T7.2 Проверить `helm install` в kind (minikube) для internal mode: gateway + postgresql + valkey, все pod'ы Ready за <120s. Проверить external mode template (без install, т.к. нет external DB).
   Touches: deployments/helm/maskchain/
   AC: AC-006
 

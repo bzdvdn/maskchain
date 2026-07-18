@@ -25,6 +25,7 @@ egress:
   circuit_breaker:
     max_failures: 5
     cooldown: 30s
+  # Per-provider proxy_url (HTTP/HTTPS/SOCKS5) задаётся в routing.providers[].proxy_url
 
 session:
   default_ttl: 30m

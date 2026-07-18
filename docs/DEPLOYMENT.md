@@ -32,6 +32,7 @@ Environment variables with the `CONFIG_*` prefix override any YAML config value 
 | `CONFIG_DATABASE_DSN` | PostgreSQL connection string |
 | `CONFIG_VALKEY_ADDR` | Valkey address (`host:port`) |
 | `CONFIG_ROUTING_PROVIDERS_0_API_KEYS_0` | OpenAI API key |
+| `CONFIG_ROUTING_PROVIDERS_1_PROXY_URL` | Per-provider egress proxy (HTTP/HTTPS/SOCKS5) |
 | `CONFIG_TENANTS_DEFAULT_API_KEYS_0` | Default tenant API key |
 
 The stack includes three services — `gateway` (port 8080, 2 replicas), `admin` (port 8081, 1 replica), and `combined` (single binary with both profiles, port 8080 + 9090). Config is loaded from `config-base.yaml` and `config-runtime.yaml` mounted into `/etc/maskchain/conf.d/`.
@@ -113,7 +114,7 @@ CGO_ENABLED=0 go build -tags admin -ldflags="-s -w" -o admin ./src/cmd/admin/
 - **Database connection pool**: Tune `max_conns` and `min_conns` in `configBase.database`.
 - **Rate limiting**: Adjust `default_rate_per_window` and `default_window_sec` in `configBase.ratelimit`.
 - **Dictionary cache**: Tune `lru_size` and `valkey_ttl_sec` in `configBase.dictionary_cache`.
-- **Egress**: Configure `max_idle_conns`, `max_idle_conns_per_host`, `max_retries`, and circuit breaker settings under `configBase.egress`.
+- **Egress**: Configure `max_idle_conns`, `max_idle_conns_per_host`, `max_retries`, and circuit breaker settings under `configBase.egress`. Per-provider `proxy_url` (HTTP/HTTPS/SOCKS5) set in provider config for corporate proxy environments.
 
 ## Troubleshooting
 

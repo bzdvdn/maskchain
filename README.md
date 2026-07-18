@@ -122,6 +122,7 @@ Images are tagged with `latest` (main branch), commit SHA, and SemVer tags on re
 - Per-tenant per-model provider routing
 - Automatic fallback + circuit breaker
 - Provider health checking
+- Per-provider egress proxy (HTTP/HTTPS/SOCKS5) with `proxy_url` config
 
 ### Observability
 - OpenTelemetry tracing (gRPC exporter)
@@ -156,6 +157,10 @@ routing:
       api_type: openai
       base_url: https://api.openai.com
       api_keys: ["sk-..."]
+    - name: anthropic-via-corp
+      api_type: anthropic
+      api_keys: ["sk-ant-..."]
+      proxy_url: http://corp-proxy:3128      # per-provider egress proxy
 tenants:
   default:
     auth_header: "Authorization"

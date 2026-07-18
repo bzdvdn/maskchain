@@ -125,6 +125,14 @@ configRuntime:
           - "${OPENAI_API_KEY}"
         timeout: 120s
         priority: 1
+      - name: anthropic
+        api_type: anthropic
+        base_url: "https://api.anthropic.com"
+        api_keys:
+          - "${ANTHROPIC_API_KEY}"
+        proxy_url: "http://corp-proxy:3128"   # per-provider egress proxy (HTTP/HTTPS/SOCKS5)
+        timeout: 120s
+        priority: 2
     rules:
       - tenant: default
         routes:
@@ -132,6 +140,8 @@ configRuntime:
             providers: ["openai"]
           - model: "gpt-4o-mini"
             providers: ["openai"]
+          - model: "claude-sonnet-4"
+            providers: ["anthropic"]
 
   admin:
     username: admin
@@ -158,6 +168,7 @@ configRuntime:
 # Each key becomes an environment variable in the Deployment.
 apiKeys: {}
   # OPENAI_API_KEY: "sk-..."
+  # ANTHROPIC_API_KEY: "sk-ant-..."   # required if anthropic provider is configured
   # ADMIN_PASSWORD: "admin-secret"
   # DEFAULT_API_KEY: "dk-..."
   # POSTGRES_DSN: "postgres://user:pass@host:5432/db?sslmode=disable"

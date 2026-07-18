@@ -138,14 +138,14 @@ Stop if: нет.
   - AC: AC-006
   - Touches: src/internal/adapters/repository/profile/ (rename to dictionary/), src/internal/infra/config/config.go, src/internal/infra/metrics/metrics.go, src/cmd/admin/main.go, src/cmd/gateway/main.go
 
-- [ ] T4.2 Удалить Profile entity, repository, handler, DTO.
+- [x] T4.2 Удалить Profile entity, repository, handler, DTO.
   - Удалить: entity/profile.go, value/profile_slug.go, value/profile_id.go, postgres/profile.go.
   - Удалить: handler/profile/ весь пакет, dto/profile.go.
   - Удалить ProfileRepository из repository.go.
   - AC: AC-009
   - Touches: src/internal/domain/shield/entity/profile.go, src/internal/domain/shield/value/profile_slug.go, src/internal/domain/shield/value/profile_id.go, src/internal/domain/shield/repository.go, src/internal/adapters/repository/postgres/profile.go, src/internal/api/handler/profile/, src/internal/api/dto/profile.go
 
-- [ ] T4.3 Создать миграцию 006: cleanup → DROP profiles, dictionary_entries, ALTER incidents.
+- [x] T4.3 Создать миграцию 006: cleanup → DROP profiles, dictionary_entries, ALTER incidents.
   - UPDATE incidents SET tenant_slug = profile_slug WHERE tenant_slug IS NULL.
   - DROP TABLE dictionary_entries, profiles.
   - incidents: tenant_slug TEXT NOT NULL REFERENCES tenants(slug).
@@ -157,7 +157,7 @@ Stop if: нет.
 
 Цель: examples конфиги и скрипты.
 
-- [ ] T5.1 Обновить examples.
+- [x] T5.1 Обновить examples.
   - examples/config.yaml: tenants с dictionaries (без profile_slug).
   - examples/seed-profile.sh: POST /api/v1/admin/tenants с dictionaries.
   - examples/test-prompt.md: убрать X-Shield-Profile-Slug, shield scan использует tenant.
@@ -168,25 +168,25 @@ Stop if: нет.
 
 Цель: доказать, что фича работает.
 
-- [ ] T6.1 Написать unit-тесты для TenantRepository и TenantResolver.
+- [x] T6.1 Написать unit-тесты для TenantRepository и TenantResolver.
   - TenantRepository: Create, Get, Update, Delete, GetDictionaries, UpdateDictionaries.
   - TenantResolver: List (config + DB), Get (DB приоритет), SyncConfig (не перезатирает).
   - AC: AC-001, AC-002, AC-003, AC-004, AC-005, AC-008
   - Touches: src/internal/adapters/repository/postgres/tenant_test.go, src/internal/domain/shield/resolver/tenant_resolver_test.go
 
-- [ ] T6.2 Написать тесты для shield middleware без X-Shield-Profile-Slug.
+- [x] T6.2 Написать тесты для shield middleware без X-Shield-Profile-Slug.
   - Shield middleware читает dictionaries из tenant в контексте.
   - Пустые dictionaries → нет dictionary match.
   - AC: AC-006, AC-007
   - Touches: src/internal/api/middleware/shield_test.go
 
-- [ ] T6.3 Написать тесты для tenant handler (CRUD + dictionaries endpoint).
+- [x] T6.3 Написать тесты для tenant handler (CRUD + dictionaries endpoint).
   - HTTP-хендлер: 201, 200, 204, 400, 404, 409.
   - dictionaries endpoint: замена не трогает api_keys.
   - AC: AC-001, AC-005, AC-008
   - Touches: src/internal/api/handler/admin/tenant_handler_test.go
 
-- [ ] T6.4 Проверить миграцию 006: SQL-запрос к information_schema.
+- [x] T6.4 Проверить миграцию 006: SQL-запрос к information_schema.
   - Таблицы profiles, dictionary_entries отсутствуют.
   - incidents имеет FK на tenants(slug).
   - AC: AC-009

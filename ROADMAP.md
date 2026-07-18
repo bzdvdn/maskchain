@@ -379,6 +379,108 @@ MaskChain Analytics  — токены, стоимость, трафик испо
 
 ---
 
+## Группа 15: Platform Maturity ✅ (дополнительно к плану 1.0)
+
+**Контекст:** Cross-cutting улучшения, выполненные параллельно с основным планом: CI/CD, Helm, egress proxy, качество кода, документация.
+
+### 119-provider-egress-proxy ✅
+
+**Цель:** Per-provider egress proxy: HTTP/HTTPS/SOCKS5 для каждого LLM-провайдера.
+
+**Ключевые артефакты:**
+- `ProviderConfig.ProxyURL` — опциональный `proxy_url` в конфиге провайдера
+- `proxyFuncFromURL(url)` — HTTP/HTTPS proxy DialContext
+- `socks5DialContext()` — SOCKS5 через `golang.org/x/net/proxy`
+- `NewTransport(cfg, proxyURL)` — расширенная сигнатура
+- Fallback: пустой `proxy_url` → `HTTP_PROXY` env var
+- 8 unit-тестов в `proxy_test.go`
+
+**Зависимости:** 71-egress-streaming, 110-provider-adapters, 01-config-bootstrap
+
+---
+
+### 120-tenant-profile-sync ✅
+
+**Цель:** Миграция с ProfileRepository на Tenant entity + словари inline. Удаление deprecated ProfileRepository.
+
+**Ключевые артефакты:**
+- Tenant entity со встроенными Dictionaries + PIIConfig (вместо Profile)
+- PostgresTenantRepo с 7 методами
+- DBFirstTenantResolver с SyncConfig для синхронизации YAML→DB
+- Auth middleware через TenantProvider
+- DictionaryCache (бывший ProfileCache) с warm-up
+- Миграции 005 (создание) + 008 (cleanup)
+- Tenant CRUD handler + dictionaries endpoint
+
+**Зависимости:** 80-tenant-isolation, 30-shield-persistence
+
+---
+
+### 121-ci-cd-pipeline ✅
+
+**Цель:** GitHub Actions CI/CD — lint, test, build, docker, helm, smoke, docker-push.
+
+**Ключевые артефакты:**
+- `.github/workflows/ci.yml` — 6 стадий (lint → test → build → docker → helm → smoke)
+- Docker Push на push в main/master
+- `.github/dependabot.yml` — 4 экосистемы (Go, GitHub Actions, Docker, Helm)
+- `src/pkg/version/version.go` — Version/Commit/Date через ldflags
+- Makefile: `ci` target, `helm-lint`, `security-check`, `test` с `-race -count=1`
+
+**Зависимости:** 00-project-foundation
+
+---
+
+### 122-docs-community ✅
+
+**Цель:** Полная документация и community standards.
+
+**Ключевые артефакты:**
+- README: бейджи, comparison table (MaskChain vs LiteLLM vs privacy-filter), Use Cases
+- `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`
+- `docs/TUTORIAL.md` — 5-minute walkthrough
+- `docs/DEPLOYMENT.md` — Docker Compose + Helm + Bare Binary
+- `docs/SHIELD.md` — architecture deep-dive content shield
+- `docs/PERFORMANCE.md` — benchmarks and tuning
+- `demo/pii-demo.sh` — демо PII-маскирования
+- `.github/ISSUE_TEMPLATE/` (bug_report.yml, feature_request.yml, config.yml)
+- `.github/PULL_REQUEST_TEMPLATE.md`
+
+**Зависимости:** все фазы
+
+---
+
+### 123-quality-config-refactoring ✅
+
+**Цель:** Качество кода: расширение линтеров, рефакторинг GOD-объекта конфига.
+
+**Ключевые артефакты:**
+- `.golangci.yml`: 6→14 linters (+gosec, gosimple, bodyclose, noctx, thelper, prealloc, misspell, exportloopref)
+- `config.go` рефакторинг: 864→7 файлов (config.go, validator.go, watcher.go, defaults.go, diff.go, serialize.go, cmd.go)
+- Docker security: `.dockerignore` (5→30 entries), hardened multi-stage, nonroot, LABELs
+- 3 Dockerfile: `Dockerfile`, `Dockerfile.gateway`, `Dockerfile.admin`
+
+**Зависимости:** 01-config-bootstrap, 00-project-foundation
+
+---
+
+### 124-helm-chart ✅
+
+**Цель:** Полноценный Helm chart для Kubernetes deployment.
+
+**Ключевые артефакты:**
+- `deployments/helm/maskchain/` — 20+ файлов
+- Bitnami PostgreSQL/Valkey subchart dependencies
+- ConfigMap split: base (инфраструктура) + runtime (бизнес-логика)
+- Secret `apiKeys` с `${VAR}` placeholder resolution
+- Deployment/Service/Ingress для gateway/admin/all режимов
+- Gateway API HTTPRoute, ServiceMonitor, PDB, NetworkPolicy
+- `helm-lint` в CI
+
+**Зависимости:** 100-admin-control-plane, 101-gateway-diet
+
+---
+
 ## PostMVP (после 2.0)
 
 | Slug                 | Описание                                                      |
@@ -395,10 +497,10 @@ MaskChain Analytics  — токены, стоимость, трафик испо
 
 ---
 
-## Порядок разработки (2.0.0)
+## Порядок разработки
 
 ```
-Уже реализовано (1.0.0):
+1.0.0 (основной план):
 00 → 01 → 10 → 20 → 21 → 22 → 23 → 24 → 25
                                              ↓
 30 → 40 → 41 → 50 → 51 → 61
@@ -407,10 +509,17 @@ MaskChain Analytics  — токены, стоимость, трафик испо
                                     ↓
 110 → 111 → 112 → 113 → 116 → 114 → 115 → 117 → 118
 
-Новые фазы 2.0.0:
-sessions
-  ↓
-130 → 131 → 132
+2.0.0 (в разработке):
+sessions → 130 → 131 → 132
+
+Дополнительно (out-of-order, параллельно 1.0.0):
+119-provider-egress-proxy ── после 71 (per-provider proxy)
+120-tenant-profile-sync   ── после 80 (чистка ProfileRepository)
+121-ci-cd-pipeline        ── параллельно 100+ (CI/CD)
+122-docs-community        ── финальная документация
+123-quality-config-refact ── рефакторинг в любой момент
+124-helm-chart            ── после 101 (Helm deployment)
 ```
 
-Все фазы 1.0.0 выполнены. Фазы sessions и 130–132 — план MaskChain 2.0.
+Все фазы 1.0.0 + дополнительные фазы выполнены.  
+Фазы `sessions` и 130–132 — план MaskChain 2.0.
