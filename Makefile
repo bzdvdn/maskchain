@@ -4,7 +4,7 @@ GOFLAGS := -ldflags="-s -w"
 GOCMD := go
 GOPATH := $(shell $(GOCMD) env GOPATH)
 
-.PHONY: build build-gateway build-admin test lint clean ui-build ui-dev docker-build docker-build-gateway docker-build-admin check-structure security-check load-test
+.PHONY: build build-gateway build-admin build-combined test lint clean ui-build ui-dev docker-build docker-build-gateway docker-build-admin docker-build-combined check-structure security-check load-test
 
 # @sk-task 100-admin-control-plane#T1.2: Add build-gateway, build-admin, docker-build-gateway, docker-build-admin targets (AC-008)
 build: build-gateway build-admin
@@ -20,6 +20,12 @@ build-admin: ui-build
 	@mkdir -p bin
 	@CGO_ENABLED=0 $(GOCMD) build $(GOFLAGS) -tags admin -o $(BINARY_ADMIN) ./src/cmd/admin/
 	@echo "built $(BINARY_ADMIN)"
+
+# @sk-task combined-binary: Build combined binary (admin + gateway in one)
+build-combined: ui-build
+	@mkdir -p bin
+	@CGO_ENABLED=0 $(GOCMD) build $(GOFLAGS) -o bin/maskchain ./src/cmd/all/
+	@echo "built bin/maskchain"
 
 test:
 	@$(GOCMD) test ./...
@@ -58,6 +64,15 @@ docker-build-gateway:
 docker-build-admin:
 	@if command -v docker >/dev/null 2>&1; then \
 		docker build -f Dockerfile.admin -t maskchain/admin:latest .; \
+	else \
+		echo "docker not found. Please install Docker first."; \
+		exit 1; \
+	fi
+
+# @sk-task combined-binary: Docker build for combined binary
+docker-build-combined:
+	@if command -v docker >/dev/null 2>&1; then \
+		docker build -f Dockerfile.combined -t maskchain/combined:latest .; \
 	else \
 		echo "docker not found. Please install Docker first."; \
 		exit 1; \

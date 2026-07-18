@@ -26,11 +26,12 @@ type LogConfig struct {
 }
 
 type ServerConfig struct {
-	Port                int                `mapstructure:"port" yaml:"port"`
-	ShutdownTimeout     int                `mapstructure:"shutdown_timeout" yaml:"shutdown_timeout"`
-	CORSOrigins         []string           `mapstructure:"cors_origins" yaml:"cors_origins"`
-	HealthCheck         *HealthCheckConfig `mapstructure:"health_check" yaml:"health_check"`
-	TenantReloadInterval time.Duration     `mapstructure:"tenant_reload_interval" yaml:"tenant_reload_interval"`
+	Port                 int                `mapstructure:"port" yaml:"port"`
+	AdminPort            int                `mapstructure:"admin_port" yaml:"admin_port"`
+	ShutdownTimeout      int                `mapstructure:"shutdown_timeout" yaml:"shutdown_timeout"`
+	CORSOrigins          []string           `mapstructure:"cors_origins" yaml:"cors_origins"`
+	HealthCheck          *HealthCheckConfig `mapstructure:"health_check" yaml:"health_check"`
+	TenantReloadInterval time.Duration      `mapstructure:"tenant_reload_interval" yaml:"tenant_reload_interval"`
 }
 
 // @sk-task 114-real-health-probes#T1.2: Add HealthCheckConfig with CriticalDeps (AC-006)
@@ -291,6 +292,7 @@ func providerLogEntryFromConfig(p ProviderConfig) providerLogEntry {
 
 const defaultLogLevel = "info"
 const defaultPort = 8080
+const defaultAdminPort = 9090
 const defaultShutdownTimeout = 30
 const defaultValkeyAddr = "localhost:6379"
 const defaultValkeyTTL = 3600
@@ -340,6 +342,7 @@ func DefaultConfig() *Config {
 		},
 		Server: &ServerConfig{
 			Port:                 defaultPort,
+			AdminPort:            defaultAdminPort,
 			ShutdownTimeout:      defaultShutdownTimeout,
 			TenantReloadInterval: defaultTenantReloadInterval,
 			HealthCheck: &HealthCheckConfig{
