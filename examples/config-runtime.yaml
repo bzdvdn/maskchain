@@ -1,0 +1,100 @@
+# MaskChain example runtime config — секции с бизнес-логикой.
+routing:
+  providers:
+    - name: ollama
+      api_type: ollama
+      base_url: "http://host.docker.internal:11434"
+      health_endpoint: "/api/tags"
+      timeout: 120s
+      priority: 1
+
+    - name: mistral
+      api_type: openai
+      base_url: "https://api.mistral.ai"
+      api_keys:
+        - "${MISTRAL_KEY}"
+      timeout: 60s
+      priority: 2
+    
+    - name: yandex
+      api_type: openai
+      base_url: "https://llm.api.cloud.yandex.net"
+      auth_scheme: api-key
+      auth_prefix: "Api-Key "
+      api_keys:
+        - "${YANDEX_AI_KEY}"
+      timeout: 60s
+      priority: 2
+
+  rules:
+    - tenant: default
+      routes:
+        - model: "gemma3:4b"
+          providers: ["ollama"]
+        - model: "llama3.2"
+          providers: ["ollama"]
+        - model: "open-mistral-nemo"
+          providers: ["mistral"]
+        - model: "codestral-latest"
+          providers: ["mistral"]
+        - model: "mistral-small-latest"
+          providers: ["mistral"]
+        - model: "mistral-medium-latest"
+          providers: ["mistral"]
+        - model: "mistral-large-latest"
+          providers: ["mistral"]
+        - model: "gpt://b1ggb5ebrubb9a4gbp2o/yandexgpt/latest"
+          providers: ["yandex"]
+
+shield:
+  action_on_suspicious: mask
+  tenant_model_mapping:
+    default:
+      "gemma3:4b": "pii-protect"
+
+debug:
+  enabled: true
+  admin_token: "admin-token"
+
+analytics:
+  batch_interval: 5s
+  retention_days: 7
+  cost_rates:
+    - model: "gemma3:4b"
+      input_price_per_1k: 0
+      output_price_per_1k: 0
+    - model: "mistral-small-latest"
+      input_price_per_1k: 0.001
+      output_price_per_1k: 0.003
+    - model: "mistral-medium-latest"
+      input_price_per_1k: 0.002
+      output_price_per_1k: 0.006
+    - model: "mistral-large-latest"
+      input_price_per_1k: 0.004
+      output_price_per_1k: 0.012
+    - model: "gpt://b1ggb5ebrubb9a4gbp2o/yandexgpt/latest"
+      input_price_per_1k: 0.004
+      output_price_per_1k: 0.004
+
+tenants:
+  default:
+    name: "Default Tenant"
+    auth_header: "Authorization"
+    api_keys:
+      - "sk-test-default"
+    pii_config:
+      enabled: true
+      default_action: mask
+      rules:
+        - label: email
+          type: regex
+          pattern: EMAIL
+          action: block
+        - label: phone
+          type: regex
+          pattern: PHONE
+          action: block
+        - label: ssn
+          type: regex
+          pattern: SSN
+          action: block

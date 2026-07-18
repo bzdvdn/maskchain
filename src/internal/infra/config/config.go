@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap/zapcore"
+	"gopkg.in/yaml.v3"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 )
@@ -62,18 +65,18 @@ type MaskConfig struct {
 
 // @sk-task sessions#T1.3: Add SessionConfig section (AC-001, AC-002, AC-005, AC-007, AC-010)
 type SessionConfig struct {
-	DefaultTTL       time.Duration `mapstructure:"default_ttl" yaml:"default_ttl"`
-	MaxTTL           time.Duration `mapstructure:"max_ttl" yaml:"max_ttl"`
-	CleanupInterval  time.Duration `mapstructure:"cleanup_interval" yaml:"cleanup_interval"`
-	CleanupEnabled   bool          `mapstructure:"cleanup_enabled" yaml:"cleanup_enabled"`
-	CacheTTL         time.Duration `mapstructure:"cache_ttl" yaml:"cache_ttl"`
+	DefaultTTL      time.Duration `mapstructure:"default_ttl" yaml:"default_ttl"`
+	MaxTTL          time.Duration `mapstructure:"max_ttl" yaml:"max_ttl"`
+	CleanupInterval time.Duration `mapstructure:"cleanup_interval" yaml:"cleanup_interval"`
+	CleanupEnabled  bool          `mapstructure:"cleanup_enabled" yaml:"cleanup_enabled"`
+	CacheTTL        time.Duration `mapstructure:"cache_ttl" yaml:"cache_ttl"`
 }
 
 // @sk-task 51-shield-gateway-integration#T1.1: Add ShieldConfig section (AC-001, AC-002)
 // @sk-task 13-shield-middleware-wiring#T2.2: Remove ProfileMapping and DefaultAction (AC-005)
 type ShieldConfig struct {
 	ActionOnSuspicious string                       `mapstructure:"action_on_suspicious" yaml:"action_on_suspicious"`
-	TenantModelMapping map[string]map[string]string  `mapstructure:"tenant_model_mapping" yaml:"tenant_model_mapping"`
+	TenantModelMapping map[string]map[string]string `mapstructure:"tenant_model_mapping" yaml:"tenant_model_mapping"`
 }
 
 // @sk-task 70-routing-engine#T1.2: Add routing config structs (AC-001, AC-002, AC-005)
@@ -126,11 +129,11 @@ type AdminConfig struct {
 
 // @sk-task 80-tenant-isolation#T1.2: Add TenantConfig struct (AC-001, AC-003, AC-004)
 type TenantConfig struct {
-	Name       string              `mapstructure:"name" yaml:"name"`
-	AuthHeader string              `mapstructure:"auth_header" yaml:"auth_header"`
-	AuthScheme string              `mapstructure:"auth_scheme" yaml:"auth_scheme"`
-	APIKeys    []string            `mapstructure:"api_keys" yaml:"api_keys" validate:"required"`
-	PIIConfig  *entity.PIIConfig   `mapstructure:"pii_config" yaml:"pii_config"`
+	Name       string            `mapstructure:"name" yaml:"name"`
+	AuthHeader string            `mapstructure:"auth_header" yaml:"auth_header"`
+	AuthScheme string            `mapstructure:"auth_scheme" yaml:"auth_scheme"`
+	APIKeys    []string          `mapstructure:"api_keys" yaml:"api_keys" validate:"required"`
+	PIIConfig  *entity.PIIConfig `mapstructure:"pii_config" yaml:"pii_config"`
 }
 
 // @sk-task rate-limiting-budgets#T1.1: Add RateLimitConfig with defaults (AC-006)
@@ -142,24 +145,24 @@ type RateLimitConfig struct {
 }
 
 type RateLimitOverride struct {
-	RatePerWindow *int              `mapstructure:"rate_per_window" yaml:"rate_per_window"`
-	WindowSec     *int              `mapstructure:"window_sec" yaml:"window_sec"`
-	TokenBudget   map[string]int64  `mapstructure:"token_budget" yaml:"token_budget"`
+	RatePerWindow *int             `mapstructure:"rate_per_window" yaml:"rate_per_window"`
+	WindowSec     *int             `mapstructure:"window_sec" yaml:"window_sec"`
+	TokenBudget   map[string]int64 `mapstructure:"token_budget" yaml:"token_budget"`
 }
 
 // @sk-task 71-egress-streaming#T1.2: Add EgressConfig section (AC-002, AC-004, AC-006, AC-007)
 // @sk-task 90-production-hardening#T1.2: Add MaxIdleConnsPerHost and DisableKeepAlives (<AC-002>)
 // @sk-task 116-connection-pool-fixes#T1.1: Add TLS and CircuitBreaker to EgressConfig (AC-003, AC-004, AC-005, AC-006, AC-007)
 type EgressConfig struct {
-	MaxIdleConns        int                    `mapstructure:"max_idle_conns" yaml:"max_idle_conns"`
-	IdleTimeout         time.Duration          `mapstructure:"idle_timeout" yaml:"idle_timeout"`
-	MaxRetries          int                    `mapstructure:"max_retries" yaml:"max_retries"`
-	BaseBackoff         time.Duration          `mapstructure:"base_backoff" yaml:"base_backoff"`
-	RetryOn5xx          bool                   `mapstructure:"retry_on_5xx" yaml:"retry_on_5xx"`
-	MaxIdleConnsPerHost int                    `mapstructure:"max_idle_conns_per_host" yaml:"max_idle_conns_per_host"`
-	DisableKeepAlives   bool                   `mapstructure:"disable_keep_alives" yaml:"disable_keep_alives"`
-	TLS                 *EgressTLSConfig       `mapstructure:"tls" yaml:"tls"`
-	CircuitBreaker      *CircuitBreakerConfig  `mapstructure:"circuit_breaker" yaml:"circuit_breaker"`
+	MaxIdleConns        int                   `mapstructure:"max_idle_conns" yaml:"max_idle_conns"`
+	IdleTimeout         time.Duration         `mapstructure:"idle_timeout" yaml:"idle_timeout"`
+	MaxRetries          int                   `mapstructure:"max_retries" yaml:"max_retries"`
+	BaseBackoff         time.Duration         `mapstructure:"base_backoff" yaml:"base_backoff"`
+	RetryOn5xx          bool                  `mapstructure:"retry_on_5xx" yaml:"retry_on_5xx"`
+	MaxIdleConnsPerHost int                   `mapstructure:"max_idle_conns_per_host" yaml:"max_idle_conns_per_host"`
+	DisableKeepAlives   bool                  `mapstructure:"disable_keep_alives" yaml:"disable_keep_alives"`
+	TLS                 *EgressTLSConfig      `mapstructure:"tls" yaml:"tls"`
+	CircuitBreaker      *CircuitBreakerConfig `mapstructure:"circuit_breaker" yaml:"circuit_breaker"`
 }
 
 // @sk-task 116-connection-pool-fixes#T1.1: Add EgressTLSConfig struct (AC-003, AC-004, AC-005)
@@ -207,20 +210,20 @@ type AnalyticsConfig struct {
 // @sk-task 80-tenant-isolation#T1.2: Add Tenants map to Config struct (AC-001, AC-003, AC-004, AC-005)
 // @sk-task 90-production-hardening#T1.1: Wire Debug into Config (<AC-001>)
 type Config struct {
-	Log    *LogConfig    `mapstructure:"log" yaml:"log"`
-	Server *ServerConfig `mapstructure:"server" yaml:"server"`
-	DB     *DatabaseConfig `mapstructure:"database" yaml:"database"`
-	Valkey *ValkeyConfig   `mapstructure:"valkey" yaml:"valkey"`
-	Mask   *MaskConfig     `mapstructure:"mask" yaml:"mask"`
-	Shield *ShieldConfig   `mapstructure:"shield" yaml:"shield"`
-	Routing *RoutingConfig `mapstructure:"routing" yaml:"routing"`
-	OTel   *OtelConfig     `mapstructure:"otel" yaml:"otel"`
-	RateLimit *RateLimitConfig `mapstructure:"ratelimit" yaml:"ratelimit"`
-	Egress    *EgressConfig    `mapstructure:"egress" yaml:"egress"`
-	Debug     *DebugConfig     `mapstructure:"debug" yaml:"debug"`
-	Session         *SessionConfig         `mapstructure:"session" yaml:"session"`
-	DictionaryCache *DictionaryCacheConfig `mapstructure:"dictionary_cache" yaml:"dictionary_cache"`
-	Analytics       *AnalyticsConfig       `mapstructure:"analytics" yaml:"analytics"`
+	Log             *LogConfig               `mClaudeapstructure:"log" yaml:"log"`
+	Server          *ServerConfig            `mapstructure:"server" yaml:"server"`
+	DB              *DatabaseConfig          `mapstructure:"database" yaml:"database"`
+	Valkey          *ValkeyConfig            `mapstructure:"valkey" yaml:"valkey"`
+	Mask            *MaskConfig              `mapstructure:"mask" yaml:"mask"`
+	Shield          *ShieldConfig            `mapstructure:"shield" yaml:"shield"`
+	Routing         *RoutingConfig           `mapstructure:"routing" yaml:"routing"`
+	OTel            *OtelConfig              `mapstructure:"otel" yaml:"otel"`
+	RateLimit       *RateLimitConfig         `mapstructure:"ratelimit" yaml:"ratelimit"`
+	Egress          *EgressConfig            `mapstructure:"egress" yaml:"egress"`
+	Debug           *DebugConfig             `mapstructure:"debug" yaml:"debug"`
+	Session         *SessionConfig           `mapstructure:"session" yaml:"session"`
+	DictionaryCache *DictionaryCacheConfig   `mapstructure:"dictionary_cache" yaml:"dictionary_cache"`
+	Analytics       *AnalyticsConfig         `mapstructure:"analytics" yaml:"analytics"`
 	Tenants         map[string]*TenantConfig `mapstructure:"tenants" yaml:"tenants"`
 	Admin           *AdminConfig             `mapstructure:"admin" yaml:"admin"`
 }
@@ -287,6 +290,80 @@ func providerLogEntryFromConfig(p ProviderConfig) providerLogEntry {
 		AuthScheme: p.AuthScheme,
 		AuthPrefix: p.AuthPrefix,
 	}
+}
+
+// deepMergeMaps recursively merges src into dst. For nested maps, it recurses.
+// For all other types (including slices), src overwrites dst.
+func deepMergeMaps(dst, src map[string]interface{}) {
+	for k, sv := range src {
+		dv, exists := dst[k]
+		if !exists {
+			dst[k] = sv
+			continue
+		}
+		srcMap, srcIsMap := sv.(map[string]interface{})
+		dstMap, dstIsMap := dv.(map[string]interface{})
+		if srcIsMap && dstIsMap {
+			deepMergeMaps(dstMap, srcMap)
+		} else {
+			dst[k] = sv
+		}
+	}
+}
+
+// LoadConfigFromDir reads all *.yaml files from dir, deep-merges them in
+// alphabetical order (last file wins), unmarshals into a Config, and applies
+// defaults + normalisation + validation.
+func LoadConfigFromDir(dir string) (*Config, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("read config dir %q: %w", dir, err)
+	}
+	var files []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if ext := filepath.Ext(e.Name()); ext == ".yaml" || ext == ".yml" {
+			files = append(files, filepath.Join(dir, e.Name()))
+		}
+	}
+	sort.Strings(files)
+
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no yaml files found in config dir %q", dir)
+	}
+
+	merged := make(map[string]interface{})
+	for _, f := range files {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			return nil, fmt.Errorf("read config file %q: %w", f, err)
+		}
+		expanded := os.ExpandEnv(string(data))
+		var m map[string]interface{}
+		if err := yaml.Unmarshal([]byte(expanded), &m); err != nil {
+			return nil, fmt.Errorf("parse config file %q: %w", f, err)
+		}
+		deepMergeMaps(merged, m)
+	}
+
+	cfg := DefaultConfig()
+	v := viper.New()
+	if err := v.MergeConfigMap(merged); err != nil {
+		return nil, fmt.Errorf("merge config map: %w", err)
+	}
+	if err := v.Unmarshal(cfg); err != nil {
+		return nil, fmt.Errorf("unmarshal config: %w", err)
+	}
+
+	normalizeProviderConfig(cfg, v)
+
+	if err := validateConfig(cfg, v); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
 }
 
 const defaultLogLevel = "info"
@@ -387,11 +464,11 @@ func DefaultConfig() *Config {
 			AdminToken: defaultDebugAdminToken,
 		},
 		Session: &SessionConfig{
-			DefaultTTL:       defaultSessionTTL,
-			MaxTTL:           defaultSessionMaxTTL,
-			CleanupInterval:  defaultSessionCleanupInterval,
-			CleanupEnabled:   defaultSessionCleanupEnabled,
-			CacheTTL:         defaultSessionCacheTTL,
+			DefaultTTL:      defaultSessionTTL,
+			MaxTTL:          defaultSessionMaxTTL,
+			CleanupInterval: defaultSessionCleanupInterval,
+			CleanupEnabled:  defaultSessionCleanupEnabled,
+			CacheTTL:        defaultSessionCacheTTL,
 		},
 		DictionaryCache: &DictionaryCacheConfig{
 			ValkeyTTLSec:    defaultDictionaryCacheValkeyTTL,
@@ -411,6 +488,9 @@ func DefaultConfig() *Config {
 }
 
 // @sk-task 01-config-bootstrap#T2.1: Implement LoadConfig with cobra root command, viper YAML/ENV/flags binding, required validation (AC-001, AC-002, AC-003, AC-005)
+// NewRootCmd creates the cobra root command with config-related flags.
+// Supports --config (single file), --config-dir (directory of YAML files),
+// and the corresponding env var overrides CONFIG_FILE_PATH / CONFIG_DIR.
 func NewRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "gateway",
@@ -420,12 +500,31 @@ func NewRootCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("config", "config.yaml", "path to config file")
+	cmd.Flags().String("config-dir", "", "path to config directory (overrides --config)")
 	cmd.Flags().String("log-level", "", "log level (debug, info, warn, error)")
 	return cmd
 }
 
+// LoadConfig reads configuration from a single file, a directory of YAML files,
+// or env vars. Precedence: --config-dir > CONFIG_DIR > --config > CONFIG_FILE_PATH > default (config.yaml).
 func LoadConfig(cmd *cobra.Command) (*Config, error) {
+	cfgDir, _ := cmd.Flags().GetString("config-dir")
 	cfgPath, _ := cmd.Flags().GetString("config")
+
+	// --config-dir or CONFIG_DIR env var → directory mode
+	if cfgDir == "" {
+		cfgDir = os.Getenv("CONFIG_DIR")
+	}
+	if cfgDir != "" {
+		return LoadConfigFromDir(cfgDir)
+	}
+
+	// --config flag not explicitly changed → check CONFIG_FILE_PATH env var
+	if !cmd.Flags().Changed("config") {
+		if envPath := os.Getenv("CONFIG_FILE_PATH"); envPath != "" {
+			cfgPath = envPath
+		}
+	}
 
 	v := viper.New()
 

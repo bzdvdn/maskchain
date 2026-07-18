@@ -1,0 +1,21 @@
+# @sk-task helm-chart#T7.3: ConfigMap with runtime (business logic) config sections (AC-003, AC-005)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "maskchain.fullname" . }}-config-runtime
+  labels:
+    {{- include "maskchain.labels" . | nindent 4 }}
+data:
+  99-config-runtime.yaml: |
+    shield:
+{{ .Values.configRuntime.shield | toYaml | indent 6 }}
+    routing:
+{{ .Values.configRuntime.routing | toYaml | indent 6 }}
+    admin:
+{{ .Values.configRuntime.admin | toYaml | indent 6 }}
+    debug:
+{{ .Values.configRuntime.debug | toYaml | indent 6 }}
+    analytics:
+{{ .Values.configRuntime.analytics | toYaml | indent 6 }}
+    tenants:
+{{ .Values.configRuntime.tenants | toYaml | indent 6 }}

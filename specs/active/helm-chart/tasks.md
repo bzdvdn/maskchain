@@ -12,9 +12,10 @@ Stop if: нет.
 |---------|-------|
 | `deployments/helm/maskchain/Chart.yaml` | T1.1, T2.5, T7.1 |
 | `deployments/helm/maskchain/.helmignore` | T1.1 |
-| `deployments/helm/maskchain/values.yaml` | T1.1, T2.1, T2.2, T3.1, T4.1, T5.1, T5.5 |
+| `deployments/helm/maskchain/values.yaml` | T1.1, T2.1, T2.2, T3.1, T4.1, T5.1, T5.5, T7.3 |
 | `deployments/helm/maskchain/templates/_helpers.tpl` | T1.1 |
-| `deployments/helm/maskchain/templates/configmap.yaml` | T2.1 |
+| `deployments/helm/maskchain/templates/configmap-base.yaml` | T2.1, T7.3 |
+| `deployments/helm/maskchain/templates/configmap-runtime.yaml` | T2.1, T7.3 |
 | `deployments/helm/maskchain/templates/secret.yaml` | T2.2, T7.3 |
 | `deployments/helm/maskchain/templates/deployments/gateway.yaml` | T2.3 |
 | `deployments/helm/maskchain/templates/deployments/admin.yaml` | T4.1 |

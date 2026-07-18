@@ -2,7 +2,7 @@
 {{- if .Values.gatewayAPI.enabled }}
 {{- $gwSvc := ternary "all" "gateway" .Values.all.enabled }}
 {{- $adSvc := ternary "all" "admin" .Values.all.enabled }}
-{{- $adPort := ternary .Values.config.server.admin_port .Values.config.server.admin_port .Values.all.enabled }}
+{{- $adPort := ternary .Values.configBase.server.admin_port .Values.configBase.server.admin_port .Values.all.enabled }}
 {{- if or .Values.gateway.enabled .Values.all.enabled }}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -21,7 +21,7 @@ spec:
   rules:
     - backendRefs:
         - name: {{ include "maskchain.fullname" . }}-{{ $gwSvc }}
-          port: {{ .Values.config.server.port }}
+          port: {{ .Values.configBase.server.port }}
 {{- end }}
 {{- if or .Values.admin.enabled .Values.all.enabled }}
 ---
@@ -42,6 +42,6 @@ spec:
   rules:
     - backendRefs:
         - name: {{ include "maskchain.fullname" . }}-{{ $adSvc }}
-          port: {{ .Values.config.server.admin_port }}
+          port: {{ .Values.configBase.server.admin_port }}
 {{- end }}
 {{- end }}

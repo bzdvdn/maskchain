@@ -1,0 +1,61 @@
+# MaskChain base config — инфраструктурные секции (редко меняются).
+log:
+  level: info
+
+server:
+  port: 8080
+  admin_port: 9090
+  shutdown_timeout: 30
+  tenant_reload_interval: 15s
+  health_check:
+    critical_deps:
+      - database
+
+database:
+  dsn: "postgres://maskchain:maskchain@postgres:5432/maskchain?sslmode=disable"
+  max_conns: 25
+  min_conns: 5
+  max_conn_lifetime: 30m
+
+valkey:
+  addr: valkey:6379
+  password: ""
+  ttl_sec: 3600
+
+mask:
+  cache_ttl_sec: 3600
+
+egress:
+  max_idle_conns: 25
+  max_idle_conns_per_host: 4
+  idle_timeout: 60s
+  max_retries: 3
+  base_backoff: 200ms
+  retry_on_5xx: true
+  disable_keep_alives: false
+  circuit_breaker:
+    max_failures: 5
+    cooldown: 30s
+
+session:
+  default_ttl: 1h
+  max_ttl: 24h
+  cache_ttl: 5m
+  cleanup_interval: 15m
+  cleanup_enabled: true
+
+otel:
+  endpoint: "otel-collector:4317"
+  service_name: "maskchain"
+  environment: "production"
+  sampling_ratio: 0.1
+
+ratelimit:
+  default_rate_per_window: 100
+  default_window_sec: 60
+
+dictionary_cache:
+  valkey_ttl_sec: 300
+  lru_size: 10000
+  warm_on_startup: true
+  warm_concurrency: 5

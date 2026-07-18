@@ -38,6 +38,7 @@ services:
     ports:
       - "8080:8080"
     environment:
+      CONFIG_DIR: /etc/maskchain/conf.d
       CONFIG_LOG_LEVEL: debug
       CONFIG_SERVER_PORT: "8080"
       CONFIG_DATABASE_DSN: postgres://test:test@postgres:5432/maskchain?sslmode=disable
@@ -48,7 +49,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./config.yaml:/config.yaml:ro
+      - ./config-base.yaml:/etc/maskchain/conf.d/00-config-base.yaml:ro
+      - ./config-runtime.yaml:/etc/maskchain/conf.d/99-config-runtime.yaml:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,6 +65,7 @@ services:
     ports:
       - "8082:8081"
     environment:
+      CONFIG_DIR: /etc/maskchain/conf.d
       CONFIG_LOG_LEVEL: debug
       CONFIG_SERVER_PORT: "8081"
       CONFIG_DATABASE_DSN: postgres://test:test@postgres:5432/maskchain?sslmode=disable
@@ -73,7 +76,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./config.yaml:/config.yaml:ro
+      - ./config-base.yaml:/etc/maskchain/conf.d/00-config-base.yaml:ro
+      - ./config-runtime.yaml:/etc/maskchain/conf.d/99-config-runtime.yaml:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -91,6 +95,7 @@ services:
       - "8080:8080"
       - "9091:9090"
     environment:
+      CONFIG_DIR: /etc/maskchain/conf.d
       CONFIG_LOG_LEVEL: debug
       CONFIG_SERVER_PORT: "8080"
       CONFIG_SERVER_ADMIN_PORT: "9090"
@@ -104,7 +109,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./config.all.yaml:/config.yaml:ro
+      - ./config-base.yaml:/etc/maskchain/conf.d/00-config-base.yaml:ro
+      - ./config-runtime.yaml:/etc/maskchain/conf.d/99-config-runtime.yaml:ro
     depends_on:
       postgres:
         condition: service_healthy

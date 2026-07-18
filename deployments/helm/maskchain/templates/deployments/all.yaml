@@ -19,7 +19,8 @@ spec:
         {{- include "maskchain.labels" . | nindent 8 }}
         app.kubernetes.io/component: all
       annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/config-base: {{ include (print $.Template.BasePath "/configmap-base.yaml") . | sha256sum }}
+        checksum/config-runtime: {{ include (print $.Template.BasePath "/configmap-runtime.yaml") . | sha256sum }}
     spec:
       serviceAccountName: {{ include "maskchain.fullname" . }}
       securityContext:
@@ -39,22 +40,26 @@ spec:
         - name: maskchain
           image: "{{ .Values.all.image.repository }}:{{ .Values.all.image.tag }}"
           imagePullPolicy: {{ .Values.all.image.pullPolicy }}
+          args:
+            - --config-dir=/etc/maskchain/conf.d
           ports:
             - name: http
-              containerPort: {{ .Values.config.server.port }}
+              containerPort: {{ .Values.configBase.server.port }}
               protocol: TCP
             - name: admin-http
-              containerPort: {{ .Values.config.server.admin_port }}
+              containerPort: {{ .Values.configBase.server.admin_port }}
               protocol: TCP
           envFrom:
             - secretRef:
                 name: {{ include "maskchain.fullname" . }}-api-keys
-          env:
-            - name: CONFIG_FILE_PATH
-              value: /etc/maskchain/config.yaml
           volumeMounts:
-            - name: config
-              mountPath: /etc/maskchain
+            - name: config-base
+              mountPath: /etc/maskchain/conf.d/00-config-base.yaml
+              subPath: 00-config-base.yaml
+              readOnly: true
+            - name: config-runtime
+              mountPath: /etc/maskchain/conf.d/99-config-runtime.yaml
+              subPath: 99-config-runtime.yaml
               readOnly: true
           livenessProbe:
             httpGet:
@@ -77,7 +82,10 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
-        - name: config
+        - name: config-base
           configMap:
-            name: {{ include "maskchain.fullname" . }}-config
+            name: {{ include "maskchain.fullname" . }}-config-base
+        - name: config-runtime
+          configMap:
+            name: {{ include "maskchain.fullname" . }}-config-runtime
 {{- end }}

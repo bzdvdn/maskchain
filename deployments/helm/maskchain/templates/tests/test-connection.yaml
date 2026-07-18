@@ -16,8 +16,8 @@ spec:
         - -c
         - |
           {{- if or .Values.gateway.enabled .Values.all.enabled }}
-          curl -sS http://{{ include "maskchain.fullname" . }}-gateway:{{ .Values.config.server.port }}/health
+          curl -sS http://{{ include "maskchain.fullname" . }}-gateway:{{ .Values.configBase.server.port }}/health
           {{- else }}
-          curl -sS http://{{ include "maskchain.fullname" . }}-admin:{{ .Values.config.server.admin_port }}/health
+          curl -sS http://{{ include "maskchain.fullname" . }}-admin:{{ .Values.configBase.server.admin_port }}/health
           {{- end }}
   restartPolicy: Never

@@ -1,0 +1,33 @@
+# MaskChain example base config — инфраструктурные секции.
+log:
+  level: debug
+
+server:
+  port: 8080
+  shutdown_timeout: 10
+  tenant_reload_interval: 15s
+
+database:
+  dsn: "postgres://test:test@postgres:5432/maskchain?sslmode=disable"
+  max_conns: 10
+  min_conns: 2
+  max_conn_lifetime: 30m
+
+valkey:
+  addr: valkey:6379
+  password: ""
+  ttl_sec: 3600
+
+egress:
+  max_idle_conns: 10
+  idle_timeout: 30s
+  max_retries: 0
+  circuit_breaker:
+    max_failures: 5
+    cooldown: 30s
+
+session:
+  default_ttl: 30m
+  max_ttl: 24h
+  cleanup_interval: 5m
+  cleanup_enabled: true

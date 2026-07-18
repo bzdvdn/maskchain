@@ -1,0 +1,45 @@
+# MaskChain runtime config — бизнес-логика (меняется чаще).
+shield:
+  action_on_suspicious: mask
+  tenant_model_mapping:
+    default:
+      "gpt-4o": "strict"
+
+routing:
+  providers:
+    - name: openai
+      api_type: openai
+      base_url: "https://api.openai.com"
+      api_keys:
+        - "${OPENAI_KEY}"
+      timeout: 120s
+      priority: 1
+
+  rules:
+    - tenant: default
+      routes:
+        - model: "gpt-4o"
+          providers: ["openai"]
+        - model: "gpt-4o-mini"
+          providers: ["openai"]
+
+admin:
+  username: admin
+  password: "${ADMIN_PASSWORD}"
+  session_ttl: 30m
+  dashboard_poll_interval: 5s
+
+debug:
+  enabled: false
+  admin_token: ""
+
+analytics:
+  batch_interval: 5s
+  retention_days: 90
+
+tenants:
+  default:
+    name: "Default Tenant"
+    auth_header: "Authorization"
+    api_keys:
+      - "${DEFAULT_API_KEY}"

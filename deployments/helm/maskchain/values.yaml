@@ -5,6 +5,10 @@ nameOverride: ""
 # -- Override the full name
 fullnameOverride: ""
 
+global:
+  security:
+    allowInsecureImages: true
+
 # -- Component flags. all.enabled=true конфликтует с gateway.enabled и admin.enabled.
 gateway:
   enabled: true
@@ -40,9 +44,9 @@ resources:
     cpu: 500m
     memory: 256Mi
 
-# -- All config sections mapped to ConfigMap.data["config.yaml"].
+# -- Base config — infrastructure sections (rarely change).
 # Sensitive values use ${VAR} placeholders resolved from apiKeys secret.
-config:
+configBase:
   log:
     level: info
 
@@ -69,6 +73,43 @@ config:
   mask:
     cache_ttl_sec: 3600
 
+  egress:
+    max_idle_conns: 25
+    max_idle_conns_per_host: 4
+    idle_timeout: 60s
+    max_retries: 3
+    base_backoff: 200ms
+    retry_on_5xx: true
+    disable_keep_alives: false
+    circuit_breaker:
+      max_failures: 5
+      cooldown: 30s
+
+  session:
+    default_ttl: 1h
+    max_ttl: 24h
+    cache_ttl: 5m
+    cleanup_interval: 15m
+    cleanup_enabled: true
+
+  otel:
+    endpoint: ""
+    service_name: "maskchain"
+    environment: "production"
+    sampling_ratio: 0.1
+
+  ratelimit:
+    default_rate_per_window: 100
+    default_window_sec: 60
+
+  dictionary_cache:
+    valkey_ttl_sec: 300
+    lru_size: 10000
+    warm_on_startup: true
+    warm_concurrency: 5
+
+# -- Runtime config — business-logic sections (change more often).
+configRuntime:
   shield:
     action_on_suspicious: mask
     tenant_model_mapping:
@@ -92,40 +133,11 @@ config:
           - model: "gpt-4o-mini"
             providers: ["openai"]
 
-  egress:
-    max_idle_conns: 25
-    max_idle_conns_per_host: 4
-    idle_timeout: 60s
-    max_retries: 3
-    base_backoff: 200ms
-    retry_on_5xx: true
-    disable_keep_alives: false
-    circuit_breaker:
-      max_failures: 5
-      cooldown: 30s
-
-  session:
-    default_ttl: 1h
-    max_ttl: 24h
-    cache_ttl: 5m
-    cleanup_interval: 15m
-    cleanup_enabled: true
-
   admin:
     username: admin
     password: "${ADMIN_PASSWORD}"
     session_ttl: 30m
     dashboard_poll_interval: 5s
-
-  otel:
-    endpoint: ""
-    service_name: "maskchain"
-    environment: "production"
-    sampling_ratio: 0.1
-
-  ratelimit:
-    default_rate_per_window: 100
-    default_window_sec: 60
 
   debug:
     enabled: false
@@ -134,12 +146,6 @@ config:
   analytics:
     batch_interval: 5s
     retention_days: 90
-
-  dictionary_cache:
-    valkey_ttl_sec: 300
-    lru_size: 10000
-    warm_on_startup: true
-    warm_concurrency: 5
 
   tenants:
     default:

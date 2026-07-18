@@ -1,0 +1,29 @@
+# @sk-task helm-chart#T7.3: ConfigMap with base (infrastructure) config sections (AC-003, AC-005)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "maskchain.fullname" . }}-config-base
+  labels:
+    {{- include "maskchain.labels" . | nindent 4 }}
+data:
+  00-config-base.yaml: |
+    log:
+{{ .Values.configBase.log | toYaml | indent 6 }}
+    server:
+{{ .Values.configBase.server | toYaml | indent 6 }}
+    database:
+{{ .Values.configBase.database | toYaml | indent 6 }}
+    valkey:
+{{ .Values.configBase.valkey | toYaml | indent 6 }}
+    mask:
+{{ .Values.configBase.mask | toYaml | indent 6 }}
+    egress:
+{{ .Values.configBase.egress | toYaml | indent 6 }}
+    session:
+{{ .Values.configBase.session | toYaml | indent 6 }}
+    otel:
+{{ .Values.configBase.otel | toYaml | indent 6 }}
+    ratelimit:
+{{ .Values.configBase.ratelimit | toYaml | indent 6 }}
+    dictionary_cache:
+{{ .Values.configBase.dictionary_cache | toYaml | indent 6 }}

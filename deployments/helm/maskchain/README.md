@@ -41,24 +41,25 @@ The chart renders **separate** Kubernetes resources per component, organised int
 
 ```
 templates/
-├── configmap.yaml          # Shared config
-├── secret.yaml             # Shared API keys + auto-generated DB secrets
-├── deployments/            # Component Deployments
-│   ├── gateway.yaml        (gateway.enabled)
-│   ├── admin.yaml          (admin.enabled)
-│   └── all.yaml            (all.enabled)
-├── services/               # Component Services
+├── configmap-base.yaml      # Infrastructure config (base, редко меняется)
+├── configmap-runtime.yaml   # Business-logic config (runtime, меняется чаще)
+├── secret.yaml              # Shared API keys + auto-generated DB secrets
+├── deployments/             # Component Deployments
+│   ├── gateway.yaml         (gateway.enabled)
+│   ├── admin.yaml           (admin.enabled)
+│   └── all.yaml             (all.enabled)
+├── services/                # Component Services
 │   ├── gateway.yaml
 │   ├── admin.yaml
 │   └── all.yaml
-├── ingresses/              # Component Ingresses
+├── ingresses/               # Component Ingresses
 │   ├── gateway.yaml
 │   ├── admin.yaml
 │   └── all.yaml
-├── httproute.yaml          # Gateway API HTTPRoute
-├── servicemonitor.yaml     # Prometheus ServiceMonitor
-├── pdb.yaml                # PodDisruptionBudget
-├── networkpolicy.yaml      # NetworkPolicy
+├── httproute.yaml           # Gateway API HTTPRoute
+├── servicemonitor.yaml      # Prometheus ServiceMonitor
+├── pdb.yaml                 # PodDisruptionBudget
+├── networkpolicy.yaml       # NetworkPolicy
 └── tests/test-connection.yaml
 ```
 
@@ -146,10 +147,17 @@ all:
 
 ### Application Config
 
-The `config` section maps directly to MaskChain's `config.yaml`. Every field from `src/internal/infra/config/config.go` is supported:
+Config is split into two layers in `values.yaml` — `configBase` (infrastructure) and `configRuntime` (business logic). Each maps to its own ConfigMap in Kubernetes.
+
+| Values section | ConfigMap | Contents | Change frequency |
+|----------------|-----------|----------|-----------------|
+| `configBase` | `config-base` | `log`, `server`, `database`, `valkey`, `mask`, `egress`, `session`, `otel`, `ratelimit`, `dictionary_cache` | Rarely (infrastructure) |
+| `configRuntime` | `config-runtime` | `shield`, `routing`, `admin`, `debug`, `analytics`, `tenants` | More often (business logic) |
+
+Both are mounted to `/etc/maskchain/conf.d/` in the container. The binary reads all `*.yaml` files from this directory and deep-merges them (last file wins — `99-config-runtime.yaml` overrides `00-config-base.yaml`). This means changing routing or analytics does **not** trigger a Pod restart (the filesystem syncs automatically via ConfigMap volume).
 
 ```yaml
-config:
+configBase:
   log:
     level: info
 
@@ -176,6 +184,42 @@ config:
   mask:
     cache_ttl_sec: 3600
 
+  egress:
+    max_idle_conns: 25
+    max_idle_conns_per_host: 4
+    idle_timeout: 60s
+    max_retries: 3
+    base_backoff: 200ms
+    retry_on_5xx: true
+    disable_keep_alives: false
+    circuit_breaker:
+      max_failures: 5
+      cooldown: 30s
+
+  session:
+    default_ttl: 1h
+    max_ttl: 24h
+    cache_ttl: 5m
+    cleanup_interval: 15m
+    cleanup_enabled: true
+
+  otel:
+    endpoint: ""
+    service_name: maskchain
+    environment: production
+    sampling_ratio: 0.1
+
+  ratelimit:
+    default_rate_per_window: 100
+    default_window_sec: 60
+
+  dictionary_cache:
+    valkey_ttl_sec: 300
+    lru_size: 10000
+    warm_on_startup: true
+    warm_concurrency: 5
+
+configRuntime:
   shield:
     action_on_suspicious: mask
     tenant_model_mapping:
@@ -199,40 +243,11 @@ config:
           - model: gpt-4o-mini
             providers: [openai]
 
-  egress:
-    max_idle_conns: 25
-    max_idle_conns_per_host: 4
-    idle_timeout: 60s
-    max_retries: 3
-    base_backoff: 200ms
-    retry_on_5xx: true
-    disable_keep_alives: false
-    circuit_breaker:
-      max_failures: 5
-      cooldown: 30s
-
-  session:
-    default_ttl: 1h
-    max_ttl: 24h
-    cache_ttl: 5m
-    cleanup_interval: 15m
-    cleanup_enabled: true
-
   admin:
     username: admin
     password: ${ADMIN_PASSWORD}
     session_ttl: 30m
     dashboard_poll_interval: 5s
-
-  otel:
-    endpoint: ""
-    service_name: maskchain
-    environment: production
-    sampling_ratio: 0.1
-
-  ratelimit:
-    default_rate_per_window: 100
-    default_window_sec: 60
 
   debug:
     enabled: false
@@ -241,12 +256,6 @@ config:
   analytics:
     batch_interval: 5s
     retention_days: 90
-
-  dictionary_cache:
-    valkey_ttl_sec: 300
-    lru_size: 10000
-    warm_on_startup: true
-    warm_concurrency: 5
 
   tenants:
     default:
@@ -527,7 +536,7 @@ kubectl logs -l app.kubernetes.io/component=gateway -c wait-postgres
 
 ### Config changes not applied
 
-The Deployment annotation `checksum/config` triggers a rollout when ConfigMap changes. If you edit the ConfigMap manually, restart the pods:
+The Deployment annotation `checksum/config-base` and `checksum/config-runtime` trigger a rollout when corresponding ConfigMaps change. If you edit the ConfigMap manually, restart the pods:
 
 ```bash
 kubectl rollout restart deployment -l app.kubernetes.io/instance=maskchain

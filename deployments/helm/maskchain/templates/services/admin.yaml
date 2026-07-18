@@ -10,7 +10,7 @@ metadata:
 spec:
   type: {{ .Values.service.type | default "ClusterIP" }}
   ports:
-    - port: {{ .Values.config.server.admin_port }}
+    - port: {{ .Values.configBase.server.admin_port }}
       targetPort: admin-http
       protocol: TCP
       name: admin-http

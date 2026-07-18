@@ -22,7 +22,7 @@ spec:
               service:
                 name: {{ include "maskchain.fullname" . }}-gateway
                 port:
-                  number: {{ .Values.config.server.port }}
+                  number: {{ .Values.configBase.server.port }}
   {{- with .Values.ingress.tls }}
   tls:
     {{- toYaml . | nindent 4 }}

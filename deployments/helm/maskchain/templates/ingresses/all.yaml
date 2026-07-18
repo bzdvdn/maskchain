@@ -22,7 +22,7 @@ spec:
               service:
                 name: {{ include "maskchain.fullname" . }}-all
                 port:
-                  number: {{ .Values.config.server.port }}
+                  number: {{ .Values.configBase.server.port }}
   {{- with .Values.ingress.tls }}
   tls:
     {{- toYaml . | nindent 4 }}
@@ -50,7 +50,7 @@ spec:
               service:
                 name: {{ include "maskchain.fullname" . }}-all
                 port:
-                  number: {{ .Values.config.server.admin_port }}
+                  number: {{ .Values.configBase.server.admin_port }}
   {{- with .Values.ingress.tls }}
   tls:
     {{- toYaml . | nindent 4 }}
