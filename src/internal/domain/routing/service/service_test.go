@@ -395,6 +395,130 @@ func TestFallbackHandlerStream_AllFailed(t *testing.T) {
 	}
 }
 
+// @sk-test config-hot-reload#T4.1: TestProviderRegistry_UpdateConfig (AC-001, AC-005)
+func TestProviderRegistry_UpdateConfig(t *testing.T) {
+	reg, _ := NewProviderRegistry(&routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
+			{Name: "p1", BaseURL: "http://old"},
+		},
+	})
+	if p := reg.Get("p1"); p == nil || p.BaseURL != "http://old" {
+		t.Errorf("expected p1 with http://old, got %v", p)
+	}
+
+	err := reg.UpdateConfig(&routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
+			{Name: "p2", BaseURL: "http://new"},
+			{Name: "p3", BaseURL: "http://another"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateConfig failed: %v", err)
+	}
+
+	if p := reg.Get("p1"); p != nil {
+		t.Error("p1 should not exist after update")
+	}
+	if p := reg.Get("p2"); p == nil || p.BaseURL != "http://new" {
+		t.Errorf("expected p2 with http://new, got %v", p)
+	}
+	if len(reg.List()) != 2 {
+		t.Errorf("expected 2 providers after update, got %d", len(reg.List()))
+	}
+}
+
+// @sk-test config-hot-reload#T4.1: TestProviderRegistry_UpdateConfigError (AC-003)
+func TestProviderRegistry_UpdateConfigError(t *testing.T) {
+	reg, _ := NewProviderRegistry(&routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
+			{Name: "p1", BaseURL: "http://old"},
+		},
+	})
+
+	err := reg.UpdateConfig(&routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
+			{Name: "", BaseURL: "http://nope"}, // empty name should fail
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for provider with empty name")
+	}
+
+	if p := reg.Get("p1"); p == nil {
+		t.Error("original provider should still exist after failed update")
+	}
+}
+
+// @sk-test config-hot-reload#T4.1: TestFallbackHandler_UpdateClients (AC-005)
+func TestFallbackHandler_UpdateClients(t *testing.T) {
+	clients := map[string]ports.ProviderClient{
+		"old": &mockProviderClient{name: "old", statusCode: http.StatusOK},
+	}
+	fb := NewFallbackHandler(clients)
+
+	resp, name, err := fb.Call(context.Background(), []string{"old"}, &ports.ProviderRequest{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if name != "old" {
+		t.Errorf("expected old, got %s", name)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+
+	newClients := map[string]ports.ProviderClient{
+		"new": &mockProviderClient{name: "new", statusCode: http.StatusOK},
+	}
+	fb.UpdateClients(newClients)
+
+	_, _, err = fb.Call(context.Background(), []string{"old"}, &ports.ProviderRequest{})
+	if err == nil {
+		t.Error("expected error for removed provider 'old'")
+	}
+
+	resp2, name2, err2 := fb.Call(context.Background(), []string{"new"}, &ports.ProviderRequest{})
+	if err2 != nil {
+		t.Fatalf("unexpected error: %v", err2)
+	}
+	if name2 != "new" {
+		t.Errorf("expected new, got %s", name2)
+	}
+	if resp2.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp2.StatusCode)
+	}
+}
+
+// @sk-test config-hot-reload#T4.1: TestProviderRegistry_UpdateConfigConcurrentSafe (AC-005)
+func TestProviderRegistry_UpdateConfigConcurrentSafe(t *testing.T) {
+	reg, _ := NewProviderRegistry(&routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
+			{Name: "p1", BaseURL: "http://original"},
+		},
+	})
+
+	done := make(chan struct{})
+	go func() {
+		for i := 0; i < 100; i++ {
+			_ = reg.UpdateConfig(&routing.RoutingConfig{
+				Providers: []routing.ProviderConfig{
+					{Name: "p1", BaseURL: "http://updated"},
+				},
+			})
+		}
+		close(done)
+	}()
+
+	for i := 0; i < 1000; i++ {
+		p := reg.Get("p1")
+		if p != nil {
+			_ = p.BaseURL
+		}
+		_ = reg.List()
+	}
+	<-done
+}
+
 // @sk-test 70-routing-engine#T4.1: TestHealthCheckerNoEndpoint (AC-006)
 func TestHealthCheckerNoEndpoint(t *testing.T) {
 	cfg := &routing.RoutingConfig{

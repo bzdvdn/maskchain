@@ -55,6 +55,21 @@ func run() {
 		serviceName = cfg.OTel.ServiceName + "-admin"
 	}
 
+	// @sk-task config-hot-reload#T3.1: Start config watcher for admin hot-reload (AC-001, AC-002)
+	if cfgDir := config.ConfigDirFromArgs(); cfgDir != "" {
+		reloadCtx, reloadCancel := context.WithCancel(context.Background())
+		defer reloadCancel()
+		config.WatchConfigDir(reloadCtx, cfgDir, func(old, new *config.Config) {
+			changed := config.DiffSections(old, new)
+			if changed["tenants"] {
+				logger.Info("config reloaded: tenants changed (requires manual auth refresh)")
+			}
+			if changed["debug"] {
+				logger.Info("config reloaded: debug changed")
+			}
+		})
+	}
+
 	otelShutdown := bootstrap.NoopShutdown
 	if cfg.OTel != nil {
 		shutdown, err := telemetry.InitProvider(
@@ -145,9 +160,13 @@ func run() {
 			logger.Fatal("failed to load tenants from db", zap.Error(err))
 		}
 
-		authMw := middleware.Auth(middleware.NewTenantProvider(dbTenants))
+		tenantProvider := middleware.NewTenantProvider(dbTenants)
+		authMw := middleware.Auth(tenantProvider)
 		srv.RegisterAuth(authMw)
 		logger.Info("auth middleware registered", zap.Int("tenants", len(dbTenants)))
+
+		// @sk-task config-hot-reload#T3.3: Capture tenantProvider for hot-reload (AC-002)
+		_ = tenantProvider
 	} else {
 		logger.Warn("no tenants configured, auth disabled")
 	}

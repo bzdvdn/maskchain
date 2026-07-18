@@ -105,6 +105,50 @@ func run() {
 	fallbackHandler := routingSvc.NewFallbackHandler(clients)
 	routingHandler := api.NewRoutingProxyHandler(selector, fallbackHandler)
 
+	// @sk-task config-hot-reload#T2.1: Start config watcher for runtime hot-reload (AC-001)
+	if cfgDir := config.ConfigDirFromArgs(); cfgDir != "" {
+		reloadCtx, reloadCancel := context.WithCancel(context.Background())
+		defer reloadCancel()
+		config.WatchConfigDir(reloadCtx, cfgDir, func(old, new *config.Config) {
+			changed := config.DiffSections(old, new)
+			if changed["routing"] {
+				if updateErr := registry.UpdateConfig(toDomainRoutingConfig(new.Routing)); updateErr != nil {
+					logger.Error("config reload: routing registry update failed", zap.Error(updateErr))
+					return
+				}
+				newClients := make(map[string]ports.ProviderClient)
+				if new.Egress != nil && new.Routing != nil {
+					for i := range new.Routing.Providers {
+						pcfg := &new.Routing.Providers[i]
+						client, clientErr := provider.NewProviderClient(pcfg, new.Egress)
+						if clientErr != nil {
+							logger.Error("config reload: failed to create provider client", zap.String("provider", pcfg.Name), zap.Error(clientErr))
+							continue
+						}
+						newClients[pcfg.Name] = client
+					}
+				}
+				fallbackHandler.UpdateClients(newClients)
+				logger.Info("config reloaded: routing changed")
+			}
+			// @sk-task config-hot-reload#T3.3: Apply shield config changes through shared pointer (AC-006)
+			if changed["shield"] && cfg.Shield != nil && new.Shield != nil {
+				*cfg.Shield = *new.Shield
+				logger.Info("config reloaded: shield changed")
+			}
+			// @sk-task config-hot-reload#T3.4: Apply ratelimit config changes through shared pointer (AC-006)
+			if changed["ratelimit"] && cfg.RateLimit != nil && new.RateLimit != nil {
+				*cfg.RateLimit = *new.RateLimit
+				logger.Info("config reloaded: ratelimit changed")
+			}
+			// @sk-task config-hot-reload#T3.4: Apply debug config changes through shared pointer (AC-006)
+			if changed["debug"] && cfg.Debug != nil && new.Debug != nil {
+				*cfg.Debug = *new.Debug
+				logger.Info("config reloaded: debug changed")
+			}
+		})
+	}
+
 	healthCtx, healthCancel := context.WithCancel(context.Background())
 	defer healthCancel()
 	if cfg.Routing != nil {

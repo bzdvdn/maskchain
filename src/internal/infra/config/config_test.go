@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // @sk-test 01-config-bootstrap#T3.1: TestLoadConfig_EnvOverride (AC-001)
@@ -201,6 +202,121 @@ func TestProviderConfig_RedactAPIKeys(t *testing.T) {
 	// The masked value should appear
 	if !bytes.Contains(buf.Bytes(), []byte("****")) {
 		t.Errorf("expected masked value '****' in log output:\n%s", output)
+	}
+}
+
+// @sk-test config-hot-reload#T4.1: TestDiffSections_DetectsRoutingChange (AC-001)
+func TestDiffSections_DetectsRoutingChange(t *testing.T) {
+	old := DefaultConfig()
+	old.Routing = &RoutingConfig{
+		Providers: []ProviderConfig{{Name: "p1"}},
+	}
+	new := DefaultConfig()
+	new.Routing = &RoutingConfig{
+		Providers: []ProviderConfig{{Name: "p2"}},
+	}
+	changed := DiffSections(old, new)
+	if !changed["routing"] {
+		t.Error("expected routing to be changed")
+	}
+	if changed["tenants"] || changed["shield"] || changed["ratelimit"] || changed["debug"] {
+		t.Error("expected only routing to be changed")
+	}
+}
+
+// @sk-test config-hot-reload#T4.1: TestDiffSections_NoDiff (AC-006)
+func TestDiffSections_NoDiff(t *testing.T) {
+	old := DefaultConfig()
+	new := DefaultConfig()
+	changed := DiffSections(old, new)
+	for section, v := range changed {
+		if v {
+			t.Errorf("expected no changes, but %s is marked changed", section)
+		}
+	}
+}
+
+// @sk-test config-hot-reload#T4.1: TestDiffSections_BaseOnlyDiffIgnored (AC-006)
+func TestDiffSections_BaseOnlyDiffIgnored(t *testing.T) {
+	old := DefaultConfig()
+	new := DefaultConfig()
+	new.Server = &ServerConfig{Port: 9999}
+	new.DB = &DatabaseConfig{DSN: "postgres://changed"}
+	changed := DiffSections(old, new)
+	for section, v := range changed {
+		if v {
+			t.Errorf("expected no runtime sections changed, but %s is marked changed", section)
+		}
+	}
+}
+
+// @sk-test config-hot-reload#T4.1: TestWatchConfigDir_DebounceAndReload (AC-004)
+func TestWatchConfigDir_DebounceAndReload(t *testing.T) {
+	dir := t.TempDir()
+	// Write initial valid config
+	initial := []byte("log:\n  level: debug\nrouting:\n  providers:\n    - name: p1\n      base_url: http://initial\n      api_type: openai\n      api_keys:\n        - k1\n")
+	if err := os.WriteFile(filepath.Join(dir, "00-config-base.yaml"), []byte("log:\n  level: debug\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "99-config-runtime.yaml"), initial, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify LoadConfigFromDir works
+	_, err := LoadConfigFromDir(dir)
+	if err != nil {
+		t.Fatalf("initial load failed: %v", err)
+	}
+
+	reloaded := make(chan struct{}, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	WatchConfigDir(ctx, dir, func(old, new *Config) {
+		if new != nil && new.Routing != nil && len(new.Routing.Providers) > 0 &&
+			new.Routing.Providers[0].Name == "p2" {
+			select {
+			case reloaded <- struct{}{}:
+			default:
+			}
+		}
+	})
+
+	// Write updated config
+	updated := []byte("log:\n  level: debug\nrouting:\n  providers:\n    - name: p2\n      base_url: http://updated\n      api_type: openai\n      api_keys:\n        - k2\n")
+	if err := os.WriteFile(filepath.Join(dir, "99-config-runtime.yaml"), updated, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-reloaded:
+		// success
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for config reload")
+	}
+}
+
+// @sk-test config-hot-reload#T4.1: TestConfigDirFromArgs (AC-001)
+func TestConfigDirFromArgs(t *testing.T) {
+	// Test CONFIG_DIR env
+	t.Setenv("CONFIG_DIR", "/etc/maskchain/conf.d")
+	if d := ConfigDirFromArgs(); d != "/etc/maskchain/conf.d" {
+		t.Errorf("expected /etc/maskchain/conf.d from env, got %q", d)
+	}
+}
+
+// @sk-test config-hot-reload#T4.1: TestConfigDirFromArgs_Flag (AC-001)
+func TestConfigDirFromArgs_Flag(t *testing.T) {
+	// Save and restore os.Args
+	oldArgs := os.Args
+	defer func() { os.Args = oldArgs }()
+	os.Args = []string{"gateway", "--config-dir", "/custom/path"}
+
+	// Clear CONFIG_DIR env to avoid interference
+	t.Setenv("CONFIG_DIR", "")
+
+	if d := ConfigDirFromArgs(); d != "/custom/path" {
+		t.Errorf("expected /custom/path from flag, got %q", d)
 	}
 }
 

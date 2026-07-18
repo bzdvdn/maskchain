@@ -24,7 +24,7 @@ func (s *RouteSelector) Select(model string, tenantID string) (*routing.Provider
 	if tenantID == "" {
 		tenantID = "default"
 	}
-	for _, rule := range s.registry.rules {
+	for _, rule := range s.registry.Rules() {
 		if rule.TenantID != tenantID {
 			continue
 		}
@@ -51,7 +51,7 @@ func (s *RouteSelector) GetProviderList(model string, tenantID string) ([]string
 	if tenantID == "" {
 		tenantID = "default"
 	}
-	for _, rule := range s.registry.rules {
+	for _, rule := range s.registry.Rules() {
 		if rule.TenantID != tenantID {
 			continue
 		}
