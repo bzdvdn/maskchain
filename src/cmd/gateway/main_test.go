@@ -10,8 +10,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	budgetrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/budget"
+	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"

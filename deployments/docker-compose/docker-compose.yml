@@ -84,6 +84,49 @@ services:
       valkey:
         condition: service_healthy
 
+  all:
+    image: maskchain/combined:latest
+    build:
+      context: ../..
+      dockerfile: Dockerfile.combined
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    environment:
+      CONFIG_SERVER_PORT: "8080"
+      CONFIG_SERVER_ADMIN_PORT: "9090"
+      CONFIG_SERVER_SHUTDOWN_TIMEOUT: "30"
+      CONFIG_DATABASE_DSN: "postgres://maskchain:maskchain@postgres:5432/maskchain?sslmode=disable"
+      CONFIG_VALKEY_ADDR: "valkey:6379"
+      CONFIG_OTEL_ENDPOINT: "otel-collector:4317"
+      CONFIG_OTEL_ENVIRONMENT: "production"
+    volumes:
+      - ./config.yaml:/config.yaml:ro
+    profiles:
+      - production
+    deploy:
+      mode: replicated
+      replicas: 2
+      resources:
+        limits:
+          cpus: "2"
+          memory: "768M"
+        reservations:
+          cpus: "0.5"
+          memory: "256M"
+    healthcheck:
+      test: ["CMD", "/maskchain", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+
   postgres:
     image: postgres:16-alpine
     environment:

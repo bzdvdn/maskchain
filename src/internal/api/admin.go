@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.uber.org/zap"
 
-	"github.com/bzdvdn/maskchain/docs"
+	"github.com/bzdvdn/maskchain/src/internal/api/swagger"
 	"github.com/bzdvdn/maskchain/src/internal/api/dto"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/admin"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/analytics"
@@ -108,7 +108,7 @@ func (s *AdminServer) RegisterTenantHandler(h *admin.TenantHandler, mw gin.Handl
 
 // @sk-task 118-api-consistency#T3.4: Register Swagger UI at /api/v1/docs (AC-008, RQ-010)
 func (s *AdminServer) RegisterSwaggerUI() {
-	yamlData, err := docs.DocsFiles.ReadFile("openapi.yaml")
+	yamlData, err := swagger.DocsFiles.ReadFile("openapi.yaml")
 	if err != nil {
 		s.log.Fatal("failed to read embedded openapi.yaml", zap.Error(err))
 	}
@@ -116,7 +116,7 @@ func (s *AdminServer) RegisterSwaggerUI() {
 		c.Data(http.StatusOK, "application/x-yaml", yamlData)
 	})
 
-	swaggerFS := http.FS(docs.DocsFiles)
+	swaggerFS := http.FS(swagger.DocsFiles)
 	s.engine.GET("/api/v1/docs", func(c *gin.Context) {
 		c.Request.URL.Path = "/swagger-ui/index.html"
 		http.FileServer(swaggerFS).ServeHTTP(c.Writer, c.Request)

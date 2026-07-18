@@ -126,12 +126,11 @@ type AdminConfig struct {
 
 // @sk-task 80-tenant-isolation#T1.2: Add TenantConfig struct (AC-001, AC-003, AC-004)
 type TenantConfig struct {
-	Name        string                `mapstructure:"name" yaml:"name"`
-	ProfileSlug string                `mapstructure:"profile_slug" yaml:"profile_slug"`
-	AuthHeader  string                `mapstructure:"auth_header" yaml:"auth_header"`
-	AuthScheme  string                `mapstructure:"auth_scheme" yaml:"auth_scheme"`
-	APIKeys     []string              `mapstructure:"api_keys" yaml:"api_keys" validate:"required"`
-	PIIConfig   *entity.PIIConfig     `mapstructure:"pii_config" yaml:"pii_config"`
+	Name       string              `mapstructure:"name" yaml:"name"`
+	AuthHeader string              `mapstructure:"auth_header" yaml:"auth_header"`
+	AuthScheme string              `mapstructure:"auth_scheme" yaml:"auth_scheme"`
+	APIKeys    []string            `mapstructure:"api_keys" yaml:"api_keys" validate:"required"`
+	PIIConfig  *entity.PIIConfig   `mapstructure:"pii_config" yaml:"pii_config"`
 }
 
 // @sk-task rate-limiting-budgets#T1.1: Add RateLimitConfig with defaults (AC-006)
@@ -300,7 +299,7 @@ const defaultMaskCacheTTL = 3600
 const defaultMaxDBConns = 25
 const defaultMinDBConns = 1
 const defaultMaxDBConnLifetimeMinutes = 30
-const defaultShieldActionOnSuspicious = "block"
+const defaultShieldActionOnSuspicious = "mask"
 const defaultOtelEndpoint = "localhost:4317"
 const defaultOtelServiceName = "maskchain-gateway"
 const defaultOtelEnvironment = "development"
