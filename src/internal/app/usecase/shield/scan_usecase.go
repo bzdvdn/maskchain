@@ -43,6 +43,7 @@ func (uc *ScanUseCase) Scan(ctx context.Context, req ScanRequest) (*ScanResponse
 
 	blocked := false
 	var hits []scanHit
+	var findings []entity.Finding
 	for _, binding := range pipeline.Detectors {
 		results, err := binding.Interface.Scan(ctx, req.Text)
 		if err != nil {
@@ -55,6 +56,14 @@ func (uc *ScanUseCase) Scan(ctx context.Context, req ScanRequest) (*ScanResponse
 					fragment: r.Fragment,
 					startPos: r.StartPos,
 					endPos:   r.EndPos,
+				})
+				findings = append(findings, entity.Finding{
+					DetectorType: binding.Type,
+					Label:        binding.Label,
+					Fragment:     r.Fragment,
+					StartPos:     r.StartPos,
+					EndPos:       r.EndPos,
+					Severity:     binding.Severity,
 				})
 			}
 		}
@@ -88,7 +97,7 @@ func (uc *ScanUseCase) Scan(ctx context.Context, req ScanRequest) (*ScanResponse
 		}
 	}
 
-	scanResult := entity.NewScanResult(scanStatus)
+	scanResult := entity.NewScanResultWithFindings(scanStatus, findings)
 	return &ScanResponse{
 		ScanResult:    scanResult,
 		ProcessedText: processedText,

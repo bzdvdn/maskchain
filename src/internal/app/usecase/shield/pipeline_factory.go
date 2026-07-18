@@ -13,6 +13,7 @@ import (
 // @sk-task 50-shield-engine#T2.1: Implement ScanPipelineFactory (AC-001, AC-005)
 type DetectorBinding struct {
 	Interface detector.Detector
+	Type      entity.DetectorType
 	Label     string
 	Severity  value.Severity
 }
@@ -43,6 +44,7 @@ func (f *ScanPipelineFactory) BuildFromRules(ctx context.Context, rules []entity
 		}
 		detectors = append(detectors, DetectorBinding{
 			Interface: concrete,
+			Type:      entity.DetectorType(rule.Type),
 			Label:     rule.Label,
 			Severity:  value.SeverityMedium,
 		})

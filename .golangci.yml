@@ -9,6 +9,14 @@ linters:
     - errcheck
     - ineffassign
     - unused
+    - gosec
+    - gosimple
+    - bodyclose
+    - noctx
+    - thelper
+    - prealloc
+    - misspell
+    - exportloopref
 
 linters-settings:
   errcheck:

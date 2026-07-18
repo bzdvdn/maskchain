@@ -14,6 +14,22 @@ servers:
 security: []
 
 paths:
+  /version:
+    get:
+      operationId: getVersion
+      summary: Версия бинарника
+      responses:
+        '200':
+          description: Информация о версии
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: string
+                    example: 1.0.0-abc1234
+
   /chat/completions:
     post:
       operationId: createChatCompletion
@@ -338,6 +354,83 @@ paths:
           in: path
           required: true
           schema: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /sessions:
+    post:
+      operationId: createSession
+      summary: Создать сессию
+      responses:
+        '201':
+          $ref: '#/components/responses/SuccessResponse'
+    get:
+      operationId: listSessions
+      summary: Список сессий
+      responses:
+        '200':
+          $ref: '#/components/responses/PaginatedResponse'
+
+  /sessions/{id}:
+    get:
+      operationId: getSession
+      summary: Получить сессию
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+    delete:
+      operationId: closeSession
+      summary: Закрыть сессию
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Сессия закрыта
+
+  /sessions/{id}/extend:
+    patch:
+      operationId: extendSession
+      summary: Продлить TTL сессии
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /analytics/tokens:
+    get:
+      operationId: getTokenAnalytics
+      summary: Статистика токенов по тенанту/модели
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /analytics/cost:
+    get:
+      operationId: getCostAnalytics
+      summary: Стоимость по тенанту/модели
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /analytics/traffic:
+    get:
+      operationId: getTrafficAnalytics
+      summary: Количество запросов и латентность
       responses:
         '200':
           $ref: '#/components/responses/SuccessResponse'

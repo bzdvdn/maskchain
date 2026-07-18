@@ -7,12 +7,26 @@ import (
 	"net/url"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/valkey-io/valkey-go"
 	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
+	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
+	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
+	"github.com/bzdvdn/maskchain/src/internal/infra/telemetry"
 )
+
+type Bootstrap struct {
+	Cfg          *config.Config
+	Logger       *zap.Logger
+	PGPool       *pgxpool.Pool
+	ValkeyClient valkey.Client
+	PromRegistry *prometheus.Registry
+	OTelShutdown func(context.Context) error
+	HealthSvc    *health.HealthService
+}
 
 func HealthCheck(cfg *config.ServerConfig) int {
 	port := cfg.Port
@@ -57,28 +71,95 @@ func ExtractHostPort(rawURL string) string {
 	return u.Host
 }
 
-func InitPG(ctx context.Context, dbCfg *config.DatabaseConfig, log *zap.Logger) (*pgxpool.Pool, error) {
-	pool, err := postgres.NewPool(ctx, dbCfg)
-	if err != nil {
-		return nil, fmt.Errorf("init pool: %w", err)
+func InitBootstrap(ctx context.Context, cfg *config.Config, log *zap.Logger, serviceName string) (*Bootstrap, error) {
+	var pgPool *pgxpool.Pool
+	if cfg.DB != nil && cfg.DB.DSN != "" {
+		var err error
+		pgPool, err = postgres.NewPool(ctx, cfg.DB)
+		if err != nil {
+			return nil, fmt.Errorf("init PG pool: %w", err)
+		}
 	}
-	if pool == nil {
-		log.Warn("no database configured, persistence disabled")
+
+	var vkClient valkey.Client
+	if cfg.Valkey != nil && cfg.Valkey.Addr != "" {
+		var err error
+		vkClient, err = valkey.NewClient(valkey.ClientOption{
+			InitAddress: []string{cfg.Valkey.Addr},
+			Password:    cfg.Valkey.Password,
+		})
+		if err != nil {
+			log.Warn("Valkey init failed, continuing without cache", zap.Error(err))
+		}
 	}
-	return pool, nil
+
+	promRegistry := prometheus.NewRegistry()
+	metrics.RegisterMetrics(promRegistry)
+
+	otelShutdown := NoopShutdown
+	if cfg.OTel != nil {
+		shutdown, err := telemetry.InitProvider(ctx, cfg.OTel.Endpoint, serviceName, cfg.OTel.Environment, cfg.OTel.SamplingRatio, log)
+		if err != nil {
+			log.Warn("OTel init failed, continuing without telemetry", zap.Error(err))
+		} else {
+			otelShutdown = shutdown
+		}
+	}
+
+	if cfg.Server.HealthCheck == nil {
+		cfg.Server.HealthCheck = &config.HealthCheckConfig{CriticalDeps: []string{"database"}}
+	}
+	healthSvc := health.NewService(cfg.Server.HealthCheck.CriticalDeps)
+	healthSvc.Register(health.NewPGProbe(pgPool))
+	healthSvc.Register(health.NewValkeyProbe(vkClient))
+	if cfg.Routing != nil {
+		var targets []string
+		for _, p := range cfg.Routing.Providers {
+			if p.BaseURL != "" {
+				targets = append(targets, ExtractHostPort(p.BaseURL))
+			}
+		}
+		if len(targets) > 0 {
+			healthSvc.Register(health.NewEgressProbe(targets))
+		}
+	}
+
+	if pgPool != nil {
+		metrics.RegisterPGPoolCollector(promRegistry, pgPool)
+	}
+
+	return &Bootstrap{
+		Cfg:          cfg,
+		Logger:       log,
+		PGPool:       pgPool,
+		ValkeyClient: vkClient,
+		PromRegistry: promRegistry,
+		OTelShutdown: otelShutdown,
+		HealthSvc:    healthSvc,
+	}, nil
 }
 
+// InitPG — deprecated, use InitBootstrap.
+func InitPG(ctx context.Context, dbCfg *config.DatabaseConfig, log *zap.Logger) (*pgxpool.Pool, error) {
+	return postgres.NewPool(ctx, dbCfg)
+}
+
+// InitValkey — deprecated, use InitBootstrap.
 func InitValkey(vkCfg *config.ValkeyConfig, log *zap.Logger) (valkey.Client, error) {
 	if vkCfg == nil || vkCfg.Addr == "" {
-		log.Warn("no valkey configured, mask cache disabled")
 		return nil, nil
 	}
-	client, err := valkey.NewClient(valkey.ClientOption{
+	return valkey.NewClient(valkey.ClientOption{
 		InitAddress: []string{vkCfg.Addr},
 		Password:    vkCfg.Password,
 	})
-	if err != nil {
-		return nil, fmt.Errorf("valkey client: %w", err)
+}
+
+func (b *Bootstrap) Close() {
+	if b.PGPool != nil {
+		b.PGPool.Close()
 	}
-	return client, nil
+	if b.ValkeyClient != nil {
+		b.ValkeyClient.Close()
+	}
 }

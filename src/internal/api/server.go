@@ -151,6 +151,12 @@ func (s *Server) withSessionMiddleware(next gin.HandlerFunc) gin.HandlerFunc {
 	}
 }
 
+func (s *Server) RegisterVersionRoute(version string) {
+	s.engine.GET("/api/v1/version", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"version": version})
+	})
+}
+
 // @sk-task 101-gateway-diet#T1.1: Remove RegisterStaticFiles from Server (AC-001, AC-005)
 func (s *Server) Start() error {
 	addr := fmt.Sprintf(":%d", s.cfg.Port)

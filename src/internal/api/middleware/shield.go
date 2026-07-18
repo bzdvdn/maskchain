@@ -19,6 +19,7 @@ import (
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
 	"github.com/bzdvdn/maskchain/src/internal/domain/session"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/detector"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/mask"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
@@ -321,6 +322,8 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger,
 		)
 
 		scanStatus := string(respStatus(resp))
+		findings := shieldFindings(resp)
+		span.SetAttributes(attribute.Int("shield.findings_count", len(findings)))
 		metrics.ShieldScanDuration.WithLabelValues(tenantSlug, scanStatus).Observe(float64(duration.Milliseconds()))
 		metrics.ShieldProfilesEvaluated.WithLabelValues(tenantSlug).Inc()
 
@@ -335,6 +338,7 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger,
 			zap.String("model", chatReq.Model),
 			zap.Duration("latency", duration),
 			zap.Bool("unmasked", unmasked),
+			zap.Int("findings_count", len(findings)),
 		)
 
 		status := respStatus(resp)
@@ -439,6 +443,13 @@ func piiMaskedCount(resp *appshield.ScanResponse) int {
 		return 0
 	}
 	return len(resp.Replacements)
+}
+
+func shieldFindings(resp *appshield.ScanResponse) []entity.Finding {
+	if resp == nil || resp.ScanResult == nil {
+		return nil
+	}
+	return resp.Findings()
 }
 
 // sanitizeLabel converts a dictionary name to a safe uppercase label for placeholders.

@@ -5,7 +5,7 @@ FROM node:20-alpine AS ui-builder
 
 WORKDIR /app/ui
 COPY ui/package.json ui/package-lock.json ./
-RUN npm ci
+RUN npm ci --only=production
 COPY ui/ .
 RUN npm run build
 
@@ -13,13 +13,20 @@ RUN npm run build
 FROM golang:1.26-alpine AS go-builder
 
 WORKDIR /app
-COPY . .
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+COPY src/ ./src/
 COPY --from=ui-builder /app/ui/dist ./ui/dist
 RUN CGO_ENABLED=0 go build -tags admin -ldflags="-s -w" -o /admin ./src/cmd/admin/
 
 # Stage 3: Runtime
-FROM gcr.io/distroless/static-debian12
+FROM gcr.io/distroless/static-debian12:nonroot
+
+LABEL org.opencontainers.image.source="https://github.com/bzdvdn/maskchain" \
+      org.opencontainers.image.description="MaskChain Admin — management API + UI" \
+      org.opencontainers.image.licenses="MIT"
 
 COPY --from=go-builder /admin /admin
 
+EXPOSE 8081
 ENTRYPOINT ["/admin"]

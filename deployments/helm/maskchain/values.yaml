@@ -13,21 +13,21 @@ global:
 gateway:
   enabled: true
   image:
-    repository: maskchain/gateway
+    repository: bzdvdn/maskchain-gateway
     tag: latest
     pullPolicy: IfNotPresent
 
 admin:
   enabled: false
   image:
-    repository: maskchain/admin
+    repository: bzdvdn/maskchain-admin
     tag: latest
     pullPolicy: IfNotPresent
 
 all:
   enabled: false
   image:
-    repository: maskchain/all
+    repository: bzdvdn/maskchain
     tag: latest
     pullPolicy: IfNotPresent
 

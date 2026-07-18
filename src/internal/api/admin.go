@@ -69,6 +69,12 @@ func (s *AdminServer) RegisterAuth(mw gin.HandlerFunc) {
 	s.authMw = mw
 }
 
+func (s *AdminServer) RegisterVersionRoute(version string) {
+	s.engine.GET("/api/v1/version", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"version": version})
+	})
+}
+
 // @sk-task admin-ui-design#T2.3: Register admin session middleware for API protection (AC-001)
 func (s *AdminServer) RegisterAdminSessionMiddleware(mw gin.HandlerFunc) {
 	s.adminSessionMw = mw

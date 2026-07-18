@@ -1,10 +1,14 @@
 BINARY_GATEWAY := bin/gateway
 BINARY_ADMIN := bin/admin
-GOFLAGS := -ldflags="-s -w"
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
+DATE    := $(shell date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "unknown")
+LDFLAGS := -s -w -X github.com/bzdvdn/maskchain/src/pkg/version.Version=$(VERSION) -X github.com/bzdvdn/maskchain/src/pkg/version.Commit=$(COMMIT) -X github.com/bzdvdn/maskchain/src/pkg/version.Date=$(DATE)
+GOFLAGS := -ldflags="$(LDFLAGS)"
 GOCMD := go
 GOPATH := $(shell $(GOCMD) env GOPATH)
 
-.PHONY: build build-gateway build-admin build-combined test lint clean ui-build ui-dev docker-build docker-build-gateway docker-build-admin docker-build-combined check-structure security-check load-test
+.PHONY: build build-gateway build-admin build-combined test lint clean ui-build ui-dev docker-build docker-build-gateway docker-build-admin docker-build-combined check-structure security-check load-test helm-lint ci
 
 # @sk-task 100-admin-control-plane#T1.2: Add build-gateway, build-admin, docker-build-gateway, docker-build-admin targets (AC-008)
 build: build-gateway build-admin
@@ -28,14 +32,10 @@ build-combined: ui-build
 	@echo "built bin/maskchain"
 
 test:
-	@$(GOCMD) test ./...
+	@$(GOCMD) test -race -count=1 -coverprofile=coverage.out ./...
 
 lint:
-	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run ./...; \
-	else \
-		echo "golangci-lint not installed. Install: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
-	fi
+	@golangci-lint run ./...
 
 clean:
 	@rm -rf bin/ ui/dist/
@@ -55,7 +55,7 @@ docker-build: docker-build-gateway docker-build-admin
 
 docker-build-gateway:
 	@if command -v docker >/dev/null 2>&1; then \
-		docker build -f Dockerfile.gateway -t maskchain/gateway:latest .; \
+		docker build -f Dockerfile.gateway -t bzdvdn/maskchain-gateway:latest .; \
 	else \
 		echo "docker not found. Please install Docker first."; \
 		exit 1; \
@@ -63,7 +63,7 @@ docker-build-gateway:
 
 docker-build-admin:
 	@if command -v docker >/dev/null 2>&1; then \
-		docker build -f Dockerfile.admin -t maskchain/admin:latest .; \
+		docker build -f Dockerfile.admin -t bzdvdn/maskchain-admin:latest .; \
 	else \
 		echo "docker not found. Please install Docker first."; \
 		exit 1; \
@@ -72,7 +72,7 @@ docker-build-admin:
 # @sk-task combined-binary: Docker build for combined binary
 docker-build-combined:
 	@if command -v docker >/dev/null 2>&1; then \
-		docker build -f Dockerfile.combined -t maskchain/combined:latest .; \
+		docker build -f Dockerfile.combined -t bzdvdn/maskchain:latest .; \
 	else \
 		echo "docker not found. Please install Docker first."; \
 		exit 1; \
@@ -110,3 +110,14 @@ security-check:
 load-test:
 	@echo "--- load-test ---"
 	@python3 ./deployments/loadtest/chat_completion.py
+
+helm-lint:
+	@if command -v helm >/dev/null 2>&1; then \
+		helm lint deployments/helm/maskchain/; \
+	else \
+		echo "helm not installed. Install: https://helm.sh/docs/intro/install/"; \
+		exit 1; \
+	fi
+
+ci: lint test build docker-build-gateway docker-build-admin docker-build-combined helm-lint
+	@echo "CI pipeline complete"

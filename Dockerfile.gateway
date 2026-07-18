@@ -4,12 +4,19 @@
 FROM golang:1.26-alpine AS go-builder
 
 WORKDIR /app
-COPY . .
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+COPY src/ ./src/
 RUN CGO_ENABLED=0 go build -tags gateway -ldflags="-s -w" -o /gateway ./src/cmd/gateway/
 
 # Stage 2: Runtime
-FROM gcr.io/distroless/static-debian12
+FROM gcr.io/distroless/static-debian12:nonroot
+
+LABEL org.opencontainers.image.source="https://github.com/bzdvdn/maskchain" \
+      org.opencontainers.image.description="MaskChain Gateway — LLM proxy with content shield" \
+      org.opencontainers.image.licenses="MIT"
 
 COPY --from=go-builder /gateway /gateway
 
+EXPOSE 8080
 ENTRYPOINT ["/gateway"]
