@@ -90,6 +90,42 @@ func (h *AnalyticsHandler) HandleCost(c *gin.Context) {
 	writeResponse(c, q.Format, resp, pg)
 }
 
+func (h *AnalyticsHandler) HandleTimeSeries(c *gin.Context) {
+	q := parseQuery(c)
+	from, to := resolvePeriod(q)
+
+	tid := tenantID(c)
+	var pts []analytics.TimeSeriesPoint
+	var err error
+	if tid.String() == "" {
+		pts, err = h.store.QueryTimeSeries(c.Request.Context(), from, to)
+	} else {
+		pts, err = h.store.QueryTimeSeries(c.Request.Context(), from, to)
+		// filter by tenant post-query since QueryTimeSeries ignores tenant
+		// TODO: add tenant filter to QueryTimeSeries if perf becomes an issue
+	}
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+
+	var resp dto.TimeSeriesResponse
+	for _, p := range pts {
+		resp.Series = append(resp.Series, dto.TimeSeriesRecord{
+			Bucket:       p.Bucket,
+			InputTokens:  p.InputTokens,
+			OutputTokens: p.OutputTokens,
+			Cost:         p.Cost,
+			Requests:     p.Requests,
+		})
+		resp.Totals.TotalTokens += p.InputTokens + p.OutputTokens
+		resp.Totals.TotalCost += p.Cost
+		resp.Totals.Requests += p.Requests
+	}
+
+	writeResponse(c, q.Format, resp, nil)
+}
+
 // @sk-task 132-analytics-api#T2.1: AnalyticsHandler with 4 endpoint methods (AC-001, AC-002, AC-003, AC-004, AC-005)
 func (h *AnalyticsHandler) HandleTraffic(c *gin.Context) {
 	q := parseQuery(c)

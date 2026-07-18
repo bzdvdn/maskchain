@@ -232,6 +232,9 @@ func (m *mockUsageStore) QueryAll(_ context.Context, _, _ time.Time) ([]UsageRec
 func (m *mockUsageStore) AggregateByDay(_ context.Context, _ value.TenantID, _, _ time.Time) ([]Aggregation, error) {
 	return nil, nil
 }
+func (m *mockUsageStore) QueryTimeSeries(_ context.Context, _, _ time.Time) ([]TimeSeriesPoint, error) {
+	return nil, nil
+}
 
 func floatEqual(a, b float64) bool {
 	const epsilon = 1e-9

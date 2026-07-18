@@ -49,6 +49,10 @@ func (m *mockUsageStore) AggregateByDay(ctx context.Context, tenantID value.Tena
 	return m.aggregations, m.err
 }
 
+func (m *mockUsageStore) QueryTimeSeries(ctx context.Context, from, to time.Time) ([]analytics.TimeSeriesPoint, error) {
+	return nil, m.err
+}
+
 func setupTest(t *testing.T, store *mockUsageStore) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)

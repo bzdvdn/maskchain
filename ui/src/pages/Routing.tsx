@@ -10,7 +10,8 @@ interface Provider {
 }
 
 interface Rule {
-  tenant: string
+  model: string
+  tenants: string[]
   providers: string[]
 }
 
@@ -41,7 +42,7 @@ export function Routing() {
       .then((body) => {
         const d = body.data ?? body
         setProviders(Array.isArray(d.providers) ? d.providers : [])
-        setRules(Array.isArray(d.rules) ? d.rules : [])
+        setRules(Array.isArray(d.model_routes) ? d.model_routes : [])
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -77,17 +78,18 @@ export function Routing() {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Tenant</th><th>Providers</th></tr>
+              <tr><th>Model</th><th>Tenants</th><th>Providers</th></tr>
             </thead>
             <tbody>
               {rules.map((r, i) => (
                 <tr key={i}>
-                  <td>{r.tenant}</td>
+                  <td><code>{r.model}</code></td>
+                  <td>{r.tenants.join(', ')}</td>
                   <td><code>{r.providers.join(', ')}</code></td>
                 </tr>
               ))}
-              {!loading && rules.length === 0 && <tr><td colSpan={2} className="text-muted" style={{ padding: 12 }}>No routing rules</td></tr>}
-              {loading && <tr><td colSpan={2} className="text-muted" style={{ padding: 12 }}>Loading...</td></tr>}
+              {!loading && rules.length === 0 && <tr><td colSpan={3} className="text-muted" style={{ padding: 12 }}>No routing rules</td></tr>}
+              {loading && <tr><td colSpan={3} className="text-muted" style={{ padding: 12 }}>Loading...</td></tr>}
             </tbody>
           </table>
         </div>

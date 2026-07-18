@@ -2,6 +2,7 @@ package analyticsrepo
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -138,6 +139,41 @@ func (s *PgUsageStore) QueryByModel(ctx context.Context, model string, from, to 
 		records = append(records, r)
 	}
 	return records, rows.Err()
+}
+
+func (s *PgUsageStore) QueryTimeSeries(ctx context.Context, from, to time.Time) ([]analytics.TimeSeriesPoint, error) {
+	if s.pool == nil {
+		return nil, nil
+	}
+	bucket := resolveBucket(from, to)
+	rows, err := s.pool.Query(ctx,
+		fmt.Sprintf(`SELECT date_trunc('%s', recorded_at) AS bucket,
+		        SUM(input_tokens) AS input_tokens,
+		        SUM(output_tokens) AS output_tokens,
+		        SUM(cost) AS cost, COUNT(*) AS requests
+		 FROM usage_raw WHERE recorded_at >= $1 AND recorded_at <= $2
+		 GROUP BY date_trunc('%s', recorded_at)
+		 ORDER BY bucket`, bucket, bucket), from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var pts []analytics.TimeSeriesPoint
+	for rows.Next() {
+		var p analytics.TimeSeriesPoint
+		if err := rows.Scan(&p.Bucket, &p.InputTokens, &p.OutputTokens, &p.Cost, &p.Requests); err != nil {
+			return nil, err
+		}
+		pts = append(pts, p)
+	}
+	return pts, rows.Err()
+}
+
+func resolveBucket(from, to time.Time) string {
+	if to.Sub(from) < 48*time.Hour {
+		return "hour"
+	}
+	return "day"
 }
 
 func (s *PgUsageStore) AggregateByDay(ctx context.Context, tenantID value.TenantID, from, to time.Time) ([]analytics.Aggregation, error) {

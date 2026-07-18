@@ -52,6 +52,23 @@ type CostResponse struct {
 	Totals  CostTotals   `json:"totals"`
 }
 
+type TimeSeriesRecord struct {
+	Bucket       time.Time `json:"bucket"`
+	InputTokens  int64     `json:"input_tokens"`
+	OutputTokens int64     `json:"output_tokens"`
+	Cost         float64   `json:"cost"`
+	Requests     int64     `json:"requests"`
+}
+
+type TimeSeriesResponse struct {
+	Series []TimeSeriesRecord `json:"series"`
+	Totals struct {
+		TotalTokens int64   `json:"total_tokens"`
+		TotalCost   float64 `json:"total_cost"`
+		Requests    int64   `json:"requests"`
+	} `json:"totals"`
+}
+
 type TrafficResponse struct {
 	RequestCount  int64   `json:"request_count"`
 	AvgLatencyMs  *float64 `json:"avg_latency_ms"`

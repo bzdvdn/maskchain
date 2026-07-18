@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
+import { TimeRangePicker, useRange, defaultRange, type RangeValue } from '../components/TimeRangePicker'
+import { TimeSeriesChart } from '../components/TimeSeriesChart'
 
 interface TokenRecord {
   tenant_id: string
@@ -30,14 +32,24 @@ interface SessionsData {
   items: Session[]
 }
 
+interface SeriesPoint {
+  bucket: string
+  input_tokens: number
+  output_tokens: number
+}
+
 export function Dashboard() {
+  const [range, setRange] = useState<RangeValue>(defaultRange)
+  const { from, to } = useRange(range)
   const [records, setRecords] = useState<TokenRecord[]>([])
   const [totals, setTotals] = useState<TokenTotals>({ total_input_tokens: 0, total_output_tokens: 0 })
+  const [series, setSeries] = useState<SeriesPoint[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
   const [error, setError] = useState('')
+  const [refreshSec, setRefreshSec] = useState(10)
 
-  function fetchTokens() {
-    fetch('/api/v1/analytics/tokens', { credentials: 'include' })
+  const fetchTokens = useCallback(() => {
+    fetch(`/api/v1/analytics/tokens?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, { credentials: 'include' })
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load')
         return res.json()
@@ -49,7 +61,17 @@ export function Dashboard() {
         setError('')
       })
       .catch(() => setError('No data yet'))
-  }
+  }, [from, to])
+
+  const fetchSeries = useCallback(() => {
+    fetch(`/api/v1/analytics/timeseries?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((envelope) => {
+        const d = envelope.data?.data ?? envelope.data ?? envelope
+        setSeries(Array.isArray(d.series) ? d.series : [])
+      })
+      .catch(() => {})
+  }, [from, to])
 
   function fetchSessions() {
     fetch('/api/v1/sessions', { credentials: 'include' })
@@ -64,16 +86,19 @@ export function Dashboard() {
       .catch(() => {})
   }
 
-  function fetchAll() {
-    fetchTokens()
-    fetchSessions()
-  }
-
   useEffect(() => {
-    fetchAll()
-    const interval = setInterval(fetchAll, 5000)
-    return () => clearInterval(interval)
-  }, [])
+    fetchTokens()
+    fetchSeries()
+    fetchSessions()
+    if (refreshSec > 0) {
+      const interval = setInterval(() => {
+        fetchTokens()
+        fetchSeries()
+        fetchSessions()
+      }, refreshSec * 1000)
+      return () => clearInterval(interval)
+    }
+  }, [fetchTokens, fetchSeries, refreshSec])
 
   const tokensTotal = totals.total_input_tokens + totals.total_output_tokens
   const activeTenants = new Set(records.map((r) => r.tenant_id)).size
@@ -96,6 +121,27 @@ export function Dashboard() {
 
   return (
     <div>
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div className="card-header-row">
+          <h3>Token Usage Trend <span className="text-muted" style={{ fontSize: 12, fontWeight: 400 }}>{`${series.length} pts`}</span></h3>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span className="text-muted" style={{ fontSize: 12 }}>Refresh:</span>
+            {[0, 5, 10, 30].map((s) => (
+              <button
+                key={s}
+                className="btn btn-small"
+                onClick={() => setRefreshSec(s)}
+                style={refreshSec === s ? { borderColor: 'var(--accent)', color: 'var(--accent)' } : {}}
+              >
+                {s === 0 ? 'Off' : `${s}s`}
+              </button>
+            ))}
+            <TimeRangePicker value={range} onChange={setRange} />
+          </div>
+        </div>
+        <TimeSeriesChart data={series} />
+      </div>
+
       <div className="stats-grid">
         {cards.map((card) => (
           <div key={card.label} className="stat-card">

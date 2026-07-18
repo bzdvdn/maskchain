@@ -24,14 +24,9 @@ const navSections: { label: string; items: typeof navItems }[] = [
 ]
 
 const headerTimes: Record<string, string> = {
-  '/': 'Last 30 min \u00b7 Auto-refresh 10s',
-  '/analytics': 'Last 24h',
-  '/tenants': '',
   '/sessions': 'Live',
   '/routing': 'Last check: 2s ago',
   '/audit': 'All time',
-  '/settings': '',
-  '/swagger': '',
 }
 
 export function Layout({ children, onLogout }: Props) {

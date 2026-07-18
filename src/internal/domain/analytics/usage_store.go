@@ -17,4 +17,6 @@ type UsageStore interface {
 	QueryByModel(ctx context.Context, model string, from, to time.Time) ([]UsageRecord, error)
 	QueryAll(ctx context.Context, from, to time.Time) ([]UsageRecord, error)
 	AggregateByDay(ctx context.Context, tenantID value.TenantID, from, to time.Time) ([]Aggregation, error)
+	// @sk-task timeseries-grafana#T1.2: QueryTimeSeries returns bucketed aggregation
+	QueryTimeSeries(ctx context.Context, from, to time.Time) ([]TimeSeriesPoint, error)
 }

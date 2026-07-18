@@ -52,6 +52,10 @@ func (m *mockUsageStore) AggregateByDay(_ context.Context, _ value.TenantID, _, 
 	return nil, nil
 }
 
+func (m *mockUsageStore) QueryTimeSeries(_ context.Context, _, _ time.Time) ([]analytics.TimeSeriesPoint, error) {
+	return nil, nil
+}
+
 func testTokenUsage() analytics.TokenUsage {
 	tid, _ := value.NewTenantID("test-tenant")
 	return analytics.TokenUsage{

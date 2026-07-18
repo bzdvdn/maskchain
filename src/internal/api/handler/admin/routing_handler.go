@@ -2,6 +2,7 @@ package admin
 
 import (
 	"net/http"
+	"sort"
 
 	"github.com/gin-gonic/gin"
 
@@ -27,21 +28,21 @@ type providerResponse struct {
 	LastCheck int64  `json:"last_check,omitempty"`
 }
 
-type routeResponse struct {
-	Tenant    string   `json:"tenant"`
+type modelRouteResponse struct {
 	Model     string   `json:"model"`
+	Tenants   []string `json:"tenants"`
 	Providers []string `json:"providers"`
 }
 
 type routingResponse struct {
-	Providers []providerResponse `json:"providers"`
-	Rules     []routeResponse    `json:"rules"`
+	Providers   []providerResponse   `json:"providers"`
+	ModelRoutes []modelRouteResponse `json:"model_routes"`
 }
 
 // @sk-task admin-ui-design#T3.1: HandleRouting returns providers and routing rules (AC-006)
 func (h *RoutingHandler) HandleRouting(c *gin.Context) {
 	if h.cfg == nil {
-		c.JSON(http.StatusOK, routingResponse{Providers: []providerResponse{}, Rules: []routeResponse{}})
+		c.JSON(http.StatusOK, routingResponse{Providers: []providerResponse{}, ModelRoutes: []modelRouteResponse{}})
 		return
 	}
 
@@ -71,19 +72,50 @@ func (h *RoutingHandler) HandleRouting(c *gin.Context) {
 		providers[i] = pr
 	}
 
-	var rules []routeResponse
+	// group by model: collect unique tenants and providers per model
+	type modelGroup struct {
+		tenants   map[string]struct{}
+		providers map[string]struct{}
+	}
+	modelGroups := make(map[string]*modelGroup)
 	for _, r := range h.cfg.Rules {
 		for _, route := range r.Routes {
-			rules = append(rules, routeResponse{
-				Tenant:    r.Tenant,
-				Model:     route.Model,
-				Providers: route.Providers,
-			})
+			mg, ok := modelGroups[route.Model]
+			if !ok {
+				mg = &modelGroup{
+					tenants:   make(map[string]struct{}),
+					providers: make(map[string]struct{}),
+				}
+				modelGroups[route.Model] = mg
+			}
+			mg.tenants[r.Tenant] = struct{}{}
+			for _, p := range route.Providers {
+				mg.providers[p] = struct{}{}
+			}
 		}
 	}
-	if rules == nil {
-		rules = []routeResponse{}
-	}
 
-	c.JSON(http.StatusOK, routingResponse{Providers: providers, Rules: rules})
+	modelRoutes := make([]modelRouteResponse, 0, len(modelGroups))
+	for model, mg := range modelGroups {
+		tenants := make([]string, 0, len(mg.tenants))
+		for t := range mg.tenants {
+			tenants = append(tenants, t)
+		}
+		providers := make([]string, 0, len(mg.providers))
+		for p := range mg.providers {
+			providers = append(providers, p)
+		}
+		sort.Strings(tenants)
+		sort.Strings(providers)
+		modelRoutes = append(modelRoutes, modelRouteResponse{
+			Model:     model,
+			Tenants:   tenants,
+			Providers: providers,
+		})
+	}
+	sort.Slice(modelRoutes, func(i, j int) bool {
+		return modelRoutes[i].Model < modelRoutes[j].Model
+	})
+
+	c.JSON(http.StatusOK, routingResponse{Providers: providers, ModelRoutes: modelRoutes})
 }

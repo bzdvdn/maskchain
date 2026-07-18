@@ -166,6 +166,7 @@ func (s *AdminServer) RegisterAnalyticsHandler(h *analytics.AnalyticsHandler, de
 	group.GET("/tokens", h.HandleTokens)
 	group.GET("/cost", h.HandleCost)
 	group.GET("/traffic", h.HandleTraffic)
+	group.GET("/timeseries", h.HandleTimeSeries)
 	summary := group.Group("/tenants/:slug/summary")
 	summary.Use(middleware.AdminAuth(debugCfg))
 	summary.GET("", h.HandleTenantSummary)
