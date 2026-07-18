@@ -133,6 +133,25 @@ configRuntime:
         proxy_url: "http://corp-proxy:3128"   # per-provider egress proxy (HTTP/HTTPS/SOCKS5)
         timeout: 120s
         priority: 2
+      - name: gemini
+        api_type: gemini
+        base_url: "https://generativelanguage.googleapis.com"
+        api_keys:
+          - "${GEMINI_API_KEY}"
+        timeout: 120s
+        priority: 2
+      - name: bedrock
+        api_type: bedrock
+        aws_region: "us-east-1"                   # required; credentials from env/IAM
+        timeout: 120s
+        priority: 3
+      - name: groq
+        api_type: proxy                       # generic OpenAI-compatible passthrough
+        base_url: "https://api.groq.com/openai/v1"
+        api_keys:
+          - "${GROQ_API_KEY}"
+        timeout: 60s
+        priority: 4
     rules:
       - tenant: default
         routes:
@@ -142,6 +161,10 @@ configRuntime:
             providers: ["openai"]
           - model: "claude-sonnet-4"
             providers: ["anthropic"]
+          - model: "gemini-2.0-flash"
+            providers: ["gemini"]
+          - model: "llama-3.3-70b"
+            providers: ["groq"]
 
   admin:
     username: admin
@@ -169,6 +192,8 @@ configRuntime:
 apiKeys: {}
   # OPENAI_API_KEY: "sk-..."
   # ANTHROPIC_API_KEY: "sk-ant-..."   # required if anthropic provider is configured
+  # GEMINI_API_KEY: "..."             # required if gemini provider is configured
+  # GROQ_API_KEY: "gsk-..."           # required if groq (proxy) provider is configured
   # ADMIN_PASSWORD: "admin-secret"
   # DEFAULT_API_KEY: "dk-..."
   # POSTGRES_DSN: "postgres://user:pass@host:5432/db?sslmode=disable"

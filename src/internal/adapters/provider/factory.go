@@ -38,6 +38,13 @@ func NewProviderClient(pcfg *config.ProviderConfig, egressCfg *config.EgressConf
 	// @sk-task ollama-provider#T2.2: Register ollama in factory (AC-001)
 	case "ollama":
 		return newOllamaClient(pcfg, ec), nil
+	// @sk-task provider-adapters-expansion#T5.1: Wire proxy, gemini, and bedrock adapters (AC-001, AC-004, AC-007)
+	case "proxy":
+		return newProxyClient(pcfg, ec), nil
+	case "gemini":
+		return newGeminiClient(pcfg, ec), nil
+	case "bedrock":
+		return newBedrockClient(pcfg)
 	default:
 		return nil, fmt.Errorf("provider %q: unsupported api_type %q", pcfg.Name, pcfg.APIType)
 	}

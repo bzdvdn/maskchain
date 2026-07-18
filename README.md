@@ -123,6 +123,7 @@ Images are tagged with `latest` (main branch), commit SHA, and SemVer tags on re
 - Automatic fallback + circuit breaker
 - Provider health checking
 - Per-provider egress proxy (HTTP/HTTPS/SOCKS5) with `proxy_url` config
+- Supported `api_type`: `openai`, `anthropic`, `gemini`, `bedrock` (AWS Bedrock), `proxy` (OpenAI-compatible), `ollama`
 
 ### Observability
 - OpenTelemetry tracing (gRPC exporter)
@@ -157,6 +158,17 @@ routing:
       api_type: openai
       base_url: https://api.openai.com
       api_keys: ["sk-..."]
+    - name: gemini
+      api_type: gemini
+      api_keys: ["${GEMINI_API_KEY}"]
+    - name: groq
+      api_type: proxy                            # generic OpenAI-compatible
+      base_url: https://api.groq.com/openai/v1
+      api_keys: ["${GROQ_API_KEY}"]
+    - name: bedrock
+      api_type: bedrock
+      aws_region: "us-east-1"                    # required; credentials via env/IAM
+      timeout: 120s
     - name: anthropic-via-corp
       api_type: anthropic
       api_keys: ["sk-ant-..."]

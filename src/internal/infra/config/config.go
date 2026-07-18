@@ -80,6 +80,7 @@ type ShieldConfig struct {
 // @sk-task 70-routing-engine#T1.2: Add routing config structs (AC-001, AC-002, AC-005)
 // @sk-task 110-provider-adapters#T1.1: Add APIType and APIKey fields (AC-007, AC-008)
 // @sk-task 111-provider-auth-and-config#T1.1: Add APIKeys, AuthScheme, AuthHeader, AdditionalHeaders (AC-003)
+// @sk-task provider-adapters-expansion#T1.1: Add AWS Bedrock config fields (AC-004)
 type ProviderConfig struct {
 	Name              string            `mapstructure:"name" yaml:"name"`
 	BaseURL           string            `mapstructure:"base_url" yaml:"base_url"`
@@ -93,6 +94,9 @@ type ProviderConfig struct {
 	AuthPrefix        string            `mapstructure:"auth_prefix" yaml:"auth_prefix"`
 	AdditionalHeaders map[string]string `mapstructure:"additional_headers" yaml:"additional_headers"`
 	ProxyURL          string            `mapstructure:"proxy_url" yaml:"proxy_url"`
+	AWSRegion         string            `mapstructure:"aws_region" yaml:"aws_region"`
+	AWSAccessKeyID    string            `mapstructure:"aws_access_key_id" yaml:"aws_access_key_id"`
+	AWSSecretAccessKey string           `mapstructure:"aws_secret_access_key" yaml:"aws_secret_access_key"`
 }
 
 type RouteConfig struct {

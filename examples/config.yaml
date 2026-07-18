@@ -38,7 +38,31 @@ routing:
       proxy_url: "http://corp-proxy:3128"   # per-provider egress proxy (HTTP/HTTPS/SOCKS5)
       timeout: 60s
       priority: 2
+
+    - name: gemini
+      api_type: gemini
+      base_url: "https://generativelanguage.googleapis.com"
+      api_keys:
+        - "${GEMINI_API_KEY}"
+      timeout: 60s
+      priority: 2
+
+    - name: groq
+      api_type: proxy
+      base_url: "https://api.groq.com/openai/v1"
+      api_keys:
+        - "${GROQ_API_KEY}"
+      timeout: 60s
+      priority: 3
     
+    - name: bedrock
+      api_type: bedrock
+      aws_region: "us-east-1"
+      aws_access_key_id: "${AWS_ACCESS_KEY_ID}"      # optional; falls back to env/IAM
+      aws_secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
+      timeout: 120s
+      priority: 1
+
     - name: yandex
       api_type: openai
       base_url: "https://llm.api.cloud.yandex.net"

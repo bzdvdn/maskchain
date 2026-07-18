@@ -167,6 +167,7 @@ func TestAnthropicClient_Stream(t *testing.T) {
 }
 
 // @sk-test 110-provider-adapters#T5.1: TestProviderClient_Factory (AC-001)
+// @sk-test provider-adapters-expansion#T5.1: Add proxy, gemini, bedrock types (AC-001)
 func TestProviderClient_Factory(t *testing.T) {
 	egressCfg := &config.EgressConfig{
 		MaxIdleConns: 1,
@@ -200,6 +201,50 @@ func TestProviderClient_Factory(t *testing.T) {
 	if _, ok := client.(*AnthropicClient); !ok {
 		t.Errorf("expected *AnthropicClient, got %T", client)
 	}
+
+	client, err = NewProviderClient(&config.ProviderConfig{
+		Name:    "test-proxy",
+		APIType: "proxy",
+		BaseURL: "https://api.groq.com",
+		APIKeys: []string{"sk-groq"},
+	}, egressCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := client.(*ProxyClient); !ok {
+		t.Errorf("expected *ProxyClient, got %T", client)
+	}
+
+	client, err = NewProviderClient(&config.ProviderConfig{
+		Name:    "test-gemini",
+		APIType: "gemini",
+		BaseURL: "https://generativelanguage.googleapis.com",
+		APIKeys: []string{"sk-gemini"},
+	}, egressCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := client.(*GeminiClient); !ok {
+		t.Errorf("expected *GeminiClient, got %T", client)
+	}
+
+	t.Run("bedrock", func(t *testing.T) {
+		t.Setenv("AWS_REGION", "us-east-1")
+		t.Setenv("AWS_ACCESS_KEY_ID", "test-access-key")
+		t.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret-key")
+
+		client, err = NewProviderClient(&config.ProviderConfig{
+			Name:      "test-bedrock",
+			APIType:   "bedrock",
+			AWSRegion: "us-east-1",
+		}, egressCfg)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if _, ok := client.(*BedrockClient); !ok {
+			t.Errorf("expected *BedrockClient, got %T", client)
+		}
+	})
 }
 
 // @sk-test 110-provider-adapters#T5.1: TestProviderClient_FactoryUnknownType (AC-001)
