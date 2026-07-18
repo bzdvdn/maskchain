@@ -1,0 +1,10 @@
+# @sk-task helm-chart#T2.1: ConfigMap with all config sections and ${VAR} placeholders (AC-003, AC-005)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "maskchain.fullname" . }}-config
+  labels:
+    {{- include "maskchain.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+{{ toYaml .Values.config | indent 4 }}

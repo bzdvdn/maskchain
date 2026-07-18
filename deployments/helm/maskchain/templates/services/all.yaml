@@ -1,0 +1,24 @@
+# @sk-task helm-chart#T4.1: All combined Service (AC-002, AC-006)
+{{- if .Values.all.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "maskchain.fullname" . }}-all
+  labels:
+    {{- include "maskchain.labels" . | nindent 4 }}
+    app.kubernetes.io/component: all
+spec:
+  type: {{ .Values.service.type | default "ClusterIP" }}
+  ports:
+    - port: {{ .Values.config.server.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+    - port: {{ .Values.config.server.admin_port }}
+      targetPort: admin-http
+      protocol: TCP
+      name: admin-http
+  selector:
+    {{- include "maskchain.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: all
+{{- end }}

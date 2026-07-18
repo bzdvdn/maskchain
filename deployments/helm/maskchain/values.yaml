@@ -1,0 +1,235 @@
+# @sk-task helm-chart#T1.1: Default values for MaskChain Helm chart
+
+# -- Override the base name
+nameOverride: ""
+# -- Override the full name
+fullnameOverride: ""
+
+# -- Component flags. all.enabled=true конфликтует с gateway.enabled и admin.enabled.
+gateway:
+  enabled: true
+  image:
+    repository: maskchain/gateway
+    tag: latest
+    pullPolicy: IfNotPresent
+
+admin:
+  enabled: false
+  image:
+    repository: maskchain/admin
+    tag: latest
+    pullPolicy: IfNotPresent
+
+all:
+  enabled: false
+  image:
+    repository: maskchain/all
+    tag: latest
+    pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# -- All config sections mapped to ConfigMap.data["config.yaml"].
+# Sensitive values use ${VAR} placeholders resolved from apiKeys secret.
+config:
+  log:
+    level: info
+
+  server:
+    port: 8080
+    admin_port: 9090
+    shutdown_timeout: 30
+    tenant_reload_interval: 15s
+    health_check:
+      critical_deps:
+        - database
+
+  database:
+    dsn: "${POSTGRES_DSN}"
+    max_conns: 25
+    min_conns: 5
+    max_conn_lifetime: 30m
+
+  valkey:
+    addr: "${VALKEY_ADDR}"
+    password: "${VALKEY_PASSWORD}"
+    ttl_sec: 3600
+
+  mask:
+    cache_ttl_sec: 3600
+
+  shield:
+    action_on_suspicious: mask
+    tenant_model_mapping:
+      default:
+        "gpt-4o": "strict"
+
+  routing:
+    providers:
+      - name: openai
+        api_type: openai
+        base_url: "https://api.openai.com"
+        api_keys:
+          - "${OPENAI_API_KEY}"
+        timeout: 120s
+        priority: 1
+    rules:
+      - tenant: default
+        routes:
+          - model: "gpt-4o"
+            providers: ["openai"]
+          - model: "gpt-4o-mini"
+            providers: ["openai"]
+
+  egress:
+    max_idle_conns: 25
+    max_idle_conns_per_host: 4
+    idle_timeout: 60s
+    max_retries: 3
+    base_backoff: 200ms
+    retry_on_5xx: true
+    disable_keep_alives: false
+    circuit_breaker:
+      max_failures: 5
+      cooldown: 30s
+
+  session:
+    default_ttl: 1h
+    max_ttl: 24h
+    cache_ttl: 5m
+    cleanup_interval: 15m
+    cleanup_enabled: true
+
+  admin:
+    username: admin
+    password: "${ADMIN_PASSWORD}"
+    session_ttl: 30m
+    dashboard_poll_interval: 5s
+
+  otel:
+    endpoint: ""
+    service_name: "maskchain"
+    environment: "production"
+    sampling_ratio: 0.1
+
+  ratelimit:
+    default_rate_per_window: 100
+    default_window_sec: 60
+
+  debug:
+    enabled: false
+    admin_token: ""
+
+  analytics:
+    batch_interval: 5s
+    retention_days: 90
+
+  dictionary_cache:
+    valkey_ttl_sec: 300
+    lru_size: 10000
+    warm_on_startup: true
+    warm_concurrency: 5
+
+  tenants:
+    default:
+      name: "Default Tenant"
+      auth_header: "Authorization"
+      api_keys:
+        - "${DEFAULT_API_KEY}"
+
+# -- API keys and secrets injected as env vars for ${VAR} substitution in config.
+# Each key becomes an environment variable in the Deployment.
+apiKeys: {}
+  # OPENAI_API_KEY: "sk-..."
+  # ADMIN_PASSWORD: "admin-secret"
+  # DEFAULT_API_KEY: "dk-..."
+  # POSTGRES_DSN: "postgres://user:pass@host:5432/db?sslmode=disable"
+  # VALKEY_ADDR: "host:6379"
+  # VALKEY_PASSWORD: ""
+
+# -- Bitnami PostgreSQL subchart settings
+postgresql:
+  enabled: true
+  image:
+    registry: docker.io/bitnamilegacy
+  auth:
+    username: maskchain
+    password: ""
+    database: maskchain
+  primary:
+    persistence:
+      size: 10Gi
+  # -- External PostgreSQL mode
+  external:
+    enabled: false
+    dsn: ""
+
+# -- Bitnami Valkey subchart settings
+valkey:
+  enabled: true
+  image:
+    registry: docker.io/bitnamilegacy
+  auth:
+    password: ""
+  architecture: standalone
+  master:
+    persistence:
+      size: 5Gi
+  # -- External Valkey mode
+  external:
+    enabled: false
+    addr: ""
+
+# -- Kubernetes Ingress settings
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  tls: []
+  gateway:
+    host: api.maskchain.local
+    path: /
+  admin:
+    host: admin.maskchain.local
+    path: /
+
+# -- Gateway API (HTTPRoute) settings
+gatewayAPI:
+  enabled: false
+  gatewayName: maskchain-gateway
+  gatewayNamespace: ""
+  hostname: api.maskchain.local
+  adminHostname: admin.maskchain.local
+  tls:
+    enabled: false
+    certificateRef:
+      name: ""
+
+# -- Prometheus ServiceMonitor
+servicemonitor:
+  enabled: false
+  interval: 15s
+  scrapeTimeout: 10s
+  labels: {}
+
+# -- PodDisruptionBudget
+pdb:
+  enabled: false
+  minAvailable: 1
+
+# -- NetworkPolicy
+networkPolicy:
+  enabled: false
+  ingressControllerNamespace: ingress-nginx
+  externalCIDRs: []

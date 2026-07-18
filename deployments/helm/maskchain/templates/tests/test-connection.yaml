@@ -1,0 +1,23 @@
+# @sk-task helm-chart#T6.1: Test pod for connectivity check (AC-006)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "maskchain.fullname" . }}-test-connection"
+  labels:
+    {{- include "maskchain.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: curl
+      image: curlimages/curl:latest
+      command:
+        - sh
+        - -c
+        - |
+          {{- if or .Values.gateway.enabled .Values.all.enabled }}
+          curl -sS http://{{ include "maskchain.fullname" . }}-gateway:{{ .Values.config.server.port }}/health
+          {{- else }}
+          curl -sS http://{{ include "maskchain.fullname" . }}-admin:{{ .Values.config.server.admin_port }}/health
+          {{- end }}
+  restartPolicy: Never

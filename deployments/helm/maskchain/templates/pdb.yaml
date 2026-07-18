@@ -1,0 +1,50 @@
+# @sk-task helm-chart#T5.2: Optional PodDisruptionBudget per component (AC-008)
+{{- if .Values.pdb.enabled }}
+{{- if .Values.gateway.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "maskchain.fullname" . }}-gateway
+  labels:
+    {{- include "maskchain.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "maskchain.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: gateway
+{{- end }}
+{{- if .Values.admin.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "maskchain.fullname" . }}-admin
+  labels:
+    {{- include "maskchain.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admin
+spec:
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "maskchain.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: admin
+{{- end }}
+{{- if .Values.all.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "maskchain.fullname" . }}-all
+  labels:
+    {{- include "maskchain.labels" . | nindent 4 }}
+    app.kubernetes.io/component: all
+spec:
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "maskchain.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: all
+{{- end }}
+{{- end }}

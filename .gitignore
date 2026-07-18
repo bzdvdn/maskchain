@@ -7,3 +7,5 @@ coverage.out
 ui/dist/
 ui/node_modules/
 .env
+.opencode/git
+.opencode/server.lock.json

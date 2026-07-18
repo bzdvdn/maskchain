@@ -1,0 +1,12 @@
+# Patterns to ignore when building packages.
+# This file supports Helm ignore syntax (similar to .gitignore).
+.git/
+.gitignore
+*.md
+*.tgz
+*.bak
+*.orig
+*.swp
+.helmignore
+.gitkeep
+tests/

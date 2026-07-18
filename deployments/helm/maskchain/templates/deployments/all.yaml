@@ -1,0 +1,83 @@
+# @sk-task helm-chart#T4.1: All combined Deployment (AC-002, AC-006)
+{{- if .Values.all.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "maskchain.fullname" . }}-all
+  labels:
+    {{- include "maskchain.labels" . | nindent 4 }}
+    app.kubernetes.io/component: all
+spec:
+  replicas: {{ .Values.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "maskchain.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: all
+  template:
+    metadata:
+      labels:
+        {{- include "maskchain.labels" . | nindent 8 }}
+        app.kubernetes.io/component: all
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "maskchain.fullname" . }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      {{- if and (not .Values.postgresql.external.enabled) .Values.postgresql.enabled }}
+      initContainers:
+        - name: wait-postgres
+          image: bitnami/kubectl:latest
+          command:
+            - sh
+            - -c
+            - until nc -z {{ .Release.Name }}-postgresql 5432; do echo waiting for postgres; sleep 2; done
+      {{- end }}
+      containers:
+        - name: maskchain
+          image: "{{ .Values.all.image.repository }}:{{ .Values.all.image.tag }}"
+          imagePullPolicy: {{ .Values.all.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.config.server.port }}
+              protocol: TCP
+            - name: admin-http
+              containerPort: {{ .Values.config.server.admin_port }}
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: {{ include "maskchain.fullname" . }}-api-keys
+          env:
+            - name: CONFIG_FILE_PATH
+              value: /etc/maskchain/config.yaml
+          volumeMounts:
+            - name: config
+              mountPath: /etc/maskchain
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "maskchain.fullname" . }}-config
+{{- end }}

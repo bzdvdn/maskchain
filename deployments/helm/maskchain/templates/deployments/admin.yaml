@@ -1,0 +1,71 @@
+# @sk-task helm-chart#T4.1: Admin Deployment (AC-002, AC-006)
+{{- if .Values.admin.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "maskchain.fullname" . }}-admin
+  labels:
+    {{- include "maskchain.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admin
+spec:
+  replicas: {{ .Values.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "maskchain.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: admin
+  template:
+    metadata:
+      labels:
+        {{- include "maskchain.labels" . | nindent 8 }}
+        app.kubernetes.io/component: admin
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "maskchain.fullname" . }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+        - name: admin
+          image: "{{ .Values.admin.image.repository }}:{{ .Values.admin.image.tag }}"
+          imagePullPolicy: {{ .Values.admin.image.pullPolicy }}
+          ports:
+            - name: admin-http
+              containerPort: {{ .Values.config.server.admin_port }}
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: {{ include "maskchain.fullname" . }}-api-keys
+          env:
+            - name: CONFIG_FILE_PATH
+              value: /etc/maskchain/config.yaml
+          volumeMounts:
+            - name: config
+              mountPath: /etc/maskchain
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: admin-http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: admin-http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "maskchain.fullname" . }}-config
+{{- end }}

@@ -1,0 +1,30 @@
+# @sk-task helm-chart#T5.1: Gateway Ingress (AC-007)
+{{- if and .Values.ingress.enabled .Values.gateway.enabled (not .Values.all.enabled) }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "maskchain.fullname" . }}-gateway
+  labels:
+    {{- include "maskchain.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.gateway.host }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.gateway.path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "maskchain.fullname" . }}-gateway
+                port:
+                  number: {{ .Values.config.server.port }}
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

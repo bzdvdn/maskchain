@@ -1,0 +1,20 @@
+# @sk-task helm-chart#T4.1: Admin Service (AC-002, AC-006)
+{{- if .Values.admin.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "maskchain.fullname" . }}-admin
+  labels:
+    {{- include "maskchain.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admin
+spec:
+  type: {{ .Values.service.type | default "ClusterIP" }}
+  ports:
+    - port: {{ .Values.config.server.admin_port }}
+      targetPort: admin-http
+      protocol: TCP
+      name: admin-http
+  selector:
+    {{- include "maskchain.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: admin
+{{- end }}

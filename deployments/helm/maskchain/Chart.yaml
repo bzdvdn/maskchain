@@ -1,0 +1,33 @@
+apiVersion: v2
+name: maskchain
+description: Helm chart for MaskChain — AI Gateway with Content Shield
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+# Requires Helm 3+
+kubeVersion: ">= 1.28"
+
+home: https://github.com/bzdvdn/maskchain
+sources:
+  - https://github.com/bzdvdn/maskchain
+
+annotations:
+  artifacthub.io/changes: |
+    - kind: added
+      description: Initial Helm chart for MaskChain deployment
+
+# @sk-task helm-chart#T1.2: Bitnami dependencies with conditional rendering and bitnamilegacy registry
+dependencies:
+  - name: postgresql
+    version: "~18.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+    tags:
+      - maskchain-database
+  - name: valkey
+    version: "~6.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: valkey.enabled
+    tags:
+      - maskchain-cache

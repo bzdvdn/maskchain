@@ -1,0 +1,29 @@
+# @sk-task helm-chart#T5.3: Optional ServiceMonitor for prometheus-operator (AC-008)
+{{- if .Values.servicemonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "maskchain.fullname" . }}
+  labels:
+    {{- include "maskchain.labels" . | nindent 4 }}
+    {{- with .Values.servicemonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "maskchain.selectorLabels" . | nindent 6 }}
+  endpoints:
+    {{- if or .Values.gateway.enabled .Values.all.enabled }}
+    - port: http
+      interval: {{ .Values.servicemonitor.interval }}
+      scrapeTimeout: {{ .Values.servicemonitor.scrapeTimeout }}
+      path: /metrics
+    {{- end }}
+    {{- if or .Values.admin.enabled .Values.all.enabled }}
+    - port: admin-http
+      interval: {{ .Values.servicemonitor.interval }}
+      scrapeTimeout: {{ .Values.servicemonitor.scrapeTimeout }}
+      path: /metrics
+    {{- end }}
+{{- end }}

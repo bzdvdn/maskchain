@@ -1,0 +1,71 @@
+# @sk-task helm-chart#T5.4: Optional NetworkPolicy (AC-009)
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "maskchain.fullname" . }}
+  labels:
+    {{- include "maskchain.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "maskchain.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressControllerNamespace }}
+      ports:
+        - port: {{ .Values.config.server.port }}
+        {{- if or .Values.admin.enabled .Values.all.enabled }}
+        - port: {{ .Values.config.server.admin_port }}
+        {{- end }}
+    - from:
+        - podSelector: {}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: primary
+          {{- if .Values.postgresql.enabled }}
+          namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: primary
+          {{- end }}
+      ports:
+        - port: 5432
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: master
+          {{- if .Values.valkey.enabled }}
+          namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: master
+          {{- end }}
+      ports:
+        - port: 6379
+          protocol: TCP
+    {{- with .Values.networkPolicy.externalCIDRs }}
+    - to:
+        - ipBlock:
+            cidr: {{ . }}
+    {{- end }}
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+{{- end }}
