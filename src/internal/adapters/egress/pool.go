@@ -7,23 +7,30 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 )
 
+// @sk-task provider-egress-proxy#T3.1: NewTransport accepts proxyURL for per-provider proxy
 // @sk-task 71-egress-streaming#T2.1: Implement connection pool with configurable params (AC-002)
 // @sk-task 116-connection-pool-fixes#T2.1: Fix MaxIdleConnsPerHost and wire DisableKeepAlives (AC-001)
 // @sk-task 116-connection-pool-fixes#T2.3: Export NewTransport for per-provider usage in factory (AC-008)
 // @sk-task 116-connection-pool-fixes#T3.2: Integrate buildTLSConfig into NewTransport (AC-003, AC-004, AC-005)
-func NewTransport(cfg *config.EgressConfig) (*http.Transport, error) {
+func NewTransport(cfg *config.EgressConfig, proxyURL string) (*http.Transport, error) {
 	dialer := &net.Dialer{
 		Timeout:   defaultDialTimeout,
 		KeepAlive: 30 * time.Second,
 	}
 
+	pf, err := proxyFuncFromURL(proxyURL)
+	if err != nil {
+		return nil, fmt.Errorf("egress: invalid proxy url: %w", err)
+	}
+
 	tp := &http.Transport{
-		Proxy:               proxyFunc(),
+		Proxy:               pf,
 		DialContext:         dialer.DialContext,
 		MaxIdleConns:        cfg.MaxIdleConns,
 		MaxIdleConnsPerHost: cfg.MaxIdleConnsPerHost,
@@ -38,6 +45,14 @@ func NewTransport(cfg *config.EgressConfig) (*http.Transport, error) {
 			return nil, fmt.Errorf("egress: build TLS config: %w", err)
 		}
 		tp.TLSClientConfig = tlsCfg
+	}
+
+	if strings.HasPrefix(proxyURL, "socks5://") {
+		dialCtx, err := socks5DialContext(proxyURL)
+		if err != nil {
+			return nil, fmt.Errorf("egress: socks5 dialer: %w", err)
+		}
+		tp.DialContext = dialCtx
 	}
 
 	return tp, nil

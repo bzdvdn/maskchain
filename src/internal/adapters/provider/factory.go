@@ -10,6 +10,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/ports"
 )
 
+// @sk-task provider-egress-proxy#T4.1: Pass pcfg.ProxyURL to egress.NewTransport
 // @sk-task 110-provider-adapters#T2.2: Implement NewProviderClient factory (AC-001)
 // @sk-task 116-connection-pool-fixes#T2.3: Create per-provider transport with timeout (AC-002, AC-008)
 // @sk-task 116-connection-pool-fixes#T3.4: Wire CircuitBreaker into provider client (AC-006, AC-007)
@@ -18,7 +19,7 @@ func NewProviderClient(pcfg *config.ProviderConfig, egressCfg *config.EgressConf
 		return nil, fmt.Errorf("provider %q: api_type is required", pcfg.Name)
 	}
 
-	tp, err := egress.NewTransport(egressCfg)
+	tp, err := egress.NewTransport(egressCfg, pcfg.ProxyURL)
 	if err != nil {
 		return nil, fmt.Errorf("provider %q: failed to create transport: %w", pcfg.Name, err)
 	}

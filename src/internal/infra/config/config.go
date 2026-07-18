@@ -92,6 +92,7 @@ type ProviderConfig struct {
 	AuthHeader        string            `mapstructure:"auth_header" yaml:"auth_header"`
 	AuthPrefix        string            `mapstructure:"auth_prefix" yaml:"auth_prefix"`
 	AdditionalHeaders map[string]string `mapstructure:"additional_headers" yaml:"additional_headers"`
+	ProxyURL          string            `mapstructure:"proxy_url" yaml:"proxy_url"`
 }
 
 type RouteConfig struct {

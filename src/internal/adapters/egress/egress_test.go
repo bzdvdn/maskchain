@@ -130,7 +130,7 @@ func TestMaxIdleConnsPerHost(t *testing.T) {
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 5,
 	}
-	tp, err := NewTransport(cfg)
+	tp, err := NewTransport(cfg, "")
 	if err != nil {
 		t.Fatalf("NewTransport: %s", err)
 	}
@@ -150,7 +150,7 @@ func TestPerProviderTimeoutFromClient(t *testing.T) {
 	}))
 	defer slow.Close()
 
-	tp, err := NewTransport(testConfig())
+	tp, err := NewTransport(testConfig(), "")
 	if err != nil {
 		t.Fatalf("NewTransport: %s", err)
 	}
@@ -171,11 +171,11 @@ func TestPerProviderTimeoutFromClient(t *testing.T) {
 
 // @sk-test 116-connection-pool-fixes#T2.4: TestPerProviderTransportIsolation verifies per-provider transport (AC-008)
 func TestPerProviderTransportIsolation(t *testing.T) {
-	tp1, err := NewTransport(&config.EgressConfig{MaxIdleConns: 10, MaxIdleConnsPerHost: 2})
+	tp1, err := NewTransport(&config.EgressConfig{MaxIdleConns: 10, MaxIdleConnsPerHost: 2}, "")
 	if err != nil {
 		t.Fatalf("NewTransport: %s", err)
 	}
-	tp2, err := NewTransport(&config.EgressConfig{MaxIdleConns: 20, MaxIdleConnsPerHost: 5})
+	tp2, err := NewTransport(&config.EgressConfig{MaxIdleConns: 20, MaxIdleConnsPerHost: 5}, "")
 	if err != nil {
 		t.Fatalf("NewTransport: %s", err)
 	}
