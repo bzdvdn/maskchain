@@ -68,3 +68,24 @@ func TestRegistry_Types(t *testing.T) {
 		t.Fatalf("expected 2 types, got %d", len(types))
 	}
 }
+
+// @sk-test prompt-injection-shield#T2.2: TestRegisterPromptInjection type (AC-001)
+func TestRegistry_RegisterPromptInjection(t *testing.T) {
+	r := NewDetectorRegistry()
+	d := NewPromptInjectionDetector()
+	err := r.Register(entity.DetectorTypePromptInjection, d)
+	if err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+	types := r.Types()
+	found := false
+	for _, typ := range types {
+		if typ == entity.DetectorTypePromptInjection {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("DetectorTypePromptInjection not found in Types()")
+	}
+}

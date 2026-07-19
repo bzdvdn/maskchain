@@ -383,5 +383,9 @@ func initDetectors(log *zap.Logger) *detector.DetectorRegistry {
 	if err := registry.Register(entity.DetectorTypeDictionary, placeholder); err != nil {
 		log.Fatal("register dictionary detector", zap.Error(err))
 	}
+	promptInjection := detector.NewPromptInjectionDetector()
+	if err := registry.Register(entity.DetectorTypePromptInjection, promptInjection); err != nil {
+		log.Fatal("register prompt injection detector", zap.Error(err))
+	}
 	return registry
 }
