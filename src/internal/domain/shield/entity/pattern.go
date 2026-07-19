@@ -23,6 +23,6 @@ func NewPattern(id value.PatternID, expression string, description string) (*Pat
 	}, nil
 }
 
-func (p *Pattern) ID() value.PatternID  { return p.id }
-func (p *Pattern) Expression() string   { return p.expression }
-func (p *Pattern) Description() string  { return p.description }
+func (p *Pattern) ID() value.PatternID { return p.id }
+func (p *Pattern) Expression() string  { return p.expression }
+func (p *Pattern) Description() string { return p.description }

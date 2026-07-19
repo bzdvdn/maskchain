@@ -2,7 +2,9 @@ package telemetry
 
 import (
 	"context"
+	"log/slog"
 	"net"
+	"os"
 	"testing"
 	"time"
 
@@ -11,17 +13,16 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
-	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
-	coll "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	metriccoll "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
+	coll "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 )
 
 // @sk-test 61-observability#T4.1: TestInitProvider_EmptyEndpoint returns noop shutdown (AC-007)
 func TestInitProvider_EmptyEndpoint(t *testing.T) {
-	log := zap.NewNop()
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 	shutdown, err := InitProvider(context.Background(), "", "test-service", "test", 1.0, log)
 	if err != nil {
 		t.Fatalf("InitProvider failed: %v", err)
@@ -39,7 +40,7 @@ func TestInitProvider_Shutdown(t *testing.T) {
 	_, srv, addr := startMockOTLPServer(t)
 	defer srv.Stop()
 
-	log := zap.NewNop()
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 	shutdown, err := InitProvider(context.Background(), addr, "test-service", "test", 1.0, log)
 	if err != nil {
 		t.Fatalf("InitProvider failed: %v", err)
@@ -61,7 +62,7 @@ func TestInitProvider_Shutdown(t *testing.T) {
 
 // @sk-test 61-observability#T4.1: TestInitProvider_UnreachableEndpoint noops gracefully when endpoint unreachable (AC-007)
 func TestInitProvider_UnreachableEndpoint(t *testing.T) {
-	log := zap.NewNop()
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 	shutdown, err := InitProvider(context.Background(), "localhost:1", "test-service", "test", 1.0, log)
 	if err != nil {
 		t.Fatalf("InitProvider should not error on unreachable endpoint: %v", err)
@@ -79,7 +80,7 @@ func TestInitProvider_WithMockExporter(t *testing.T) {
 	mock, srv, addr := startMockOTLPServer(t)
 	defer srv.Stop()
 
-	log := zap.NewNop()
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 	shutdown, err := InitProvider(context.Background(), addr, "test-service", "test", 1.0, log)
 	if err != nil {
 		t.Fatalf("InitProvider failed: %v", err)
@@ -122,7 +123,7 @@ func TestInitProvider_EndpointConfig(t *testing.T) {
 	_, srv, addr := startMockOTLPServer(t)
 	defer srv.Stop()
 
-	log := zap.NewNop()
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 	shutdown, err := InitProvider(context.Background(), addr, "test-service", "test", 1.0, log)
 	if err != nil {
 		t.Fatalf("InitProvider should accept endpoint config: %v", err)

@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/cmd/internal/bootstrap"
 	analyticsrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/analytics"
@@ -34,7 +35,7 @@ import (
 // @sk-task combined-binary: Build and wire admin server
 func buildAdminServer(
 	cfg *config.Config,
-	logger *zap.Logger,
+	logger *slog.Logger,
 	serviceName string,
 	pgPool *pgxpool.Pool,
 	vkClient valkey.Client,
@@ -70,7 +71,8 @@ func buildAdminServer(
 		for slugStr, tc := range cfg.Tenants {
 			slug, err := value.NewTenantSlug(slugStr)
 			if err != nil {
-				logger.Fatal("invalid tenant slug", zap.String("tenant", slugStr), zap.Error(err))
+				logger.Error("invalid tenant slug", slog.String("tenant", slugStr), slog.String("error", err.Error()))
+				os.Exit(1)
 			}
 			opts := []entity.TenantOption{entity.WithTenantDictionaries(nil)}
 			if tc.PIIConfig != nil {
@@ -83,7 +85,8 @@ func buildAdminServer(
 		syncCtx, syncCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		if err := tenantResolver.SyncConfig(syncCtx, cfgTenants); err != nil {
 			syncCancel()
-			logger.Fatal("failed to sync tenants from config", zap.Error(err))
+			logger.Error("failed to sync tenants from config", slog.String("error", err.Error()))
+			os.Exit(1)
 		}
 		syncCancel()
 
@@ -91,23 +94,30 @@ func buildAdminServer(
 		dbTenants, err := tenantResolver.List(loadCtx)
 		loadCancel()
 		if err != nil {
-			logger.Fatal("failed to load tenants from db", zap.Error(err))
+			logger.Error("failed to load tenants from db", slog.String("error", err.Error()))
+			os.Exit(1)
 		}
 
 		authMw := middleware.Auth(middleware.NewTenantProvider(dbTenants))
 		srv.RegisterAuth(authMw)
-		logger.Info("auth middleware registered", zap.Int("tenants", len(dbTenants)))
+		logger.Info("auth middleware registered", slog.Int("tenants", len(dbTenants)))
 	} else {
 		logger.Warn("no tenants configured, auth disabled")
 	}
 
 	srv.RegisterMetricsRoute(metricsHandler)
-	srv.RegisterStaticFiles(ui.DistFiles)
+	if err := srv.RegisterStaticFiles(ui.DistFiles); err != nil {
+		logger.Error("register static files", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
 
 	adminMw := middleware.AdminAuth(cfg.Debug)
 	srv.RegisterDebugRoutes(adminMw)
 
-	srv.RegisterSwaggerUI()
+	if err := srv.RegisterSwaggerUI(); err != nil {
+		logger.Error("register swagger ui", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
 
 	if pgPool != nil {
 		txMgr := postgres.NewPGXTransactionManager(pgPool)
@@ -117,7 +127,7 @@ func buildAdminServer(
 		adminAuthHandler := adminhandler.NewAdminAuthHandler(adminSessionUC, cfg.Admin)
 		srv.RegisterAdminSessionMiddleware(middleware.AdminSessionAuth(adminSessionUC))
 		srv.RegisterAdminAuthRoutes(adminAuthHandler)
-		logger.Info("admin auth registered", zap.String("username", cfg.Admin.Username))
+		logger.Info("admin auth registered", slog.String("username", cfg.Admin.Username))
 
 		auditLogStore := postgres.NewAuditLogStore(pgPool, 100)
 		defer auditLogStore.Shutdown()
@@ -129,7 +139,7 @@ func buildAdminServer(
 		tenantMw := middleware.AdminSessionOrTokenAuth(adminSessionUC, cfg.Debug, func(ctx context.Context, apiKey string) bool {
 			tenants, err := pgTenantRepo.List(ctx)
 			if err != nil {
-				logger.Warn("tenant list for API key check", zap.Error(err))
+				logger.Warn("tenant list for API key check", slog.String("error", err.Error()))
 				return false
 			}
 			for _, t := range tenants {
@@ -176,7 +186,7 @@ func buildAdminServer(
 			cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
 			go cleanupWorker.Run(cleanupCtx)
 			logger.Info("session cleanup worker registered",
-				zap.Duration("interval", cfg.Session.CleanupInterval),
+				slog.Duration("interval", cfg.Session.CleanupInterval),
 			)
 			defer cleanupCancel()
 		} else {

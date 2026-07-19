@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/cmd/internal/bootstrap"
 	analyticsrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/analytics"
@@ -38,7 +39,7 @@ import (
 // @sk-task combined-binary: Build and wire gateway server
 func buildGatewayServer(
 	cfg *config.Config,
-	logger *zap.Logger,
+	logger *slog.Logger,
 	serviceName string,
 	pgPool *pgxpool.Pool,
 	vkClient valkey.Client,
@@ -114,7 +115,8 @@ func buildGatewayServer(
 		for slugStr, tc := range cfg.Tenants {
 			slug, err := value.NewTenantSlug(slugStr)
 			if err != nil {
-				logger.Fatal("invalid tenant slug", zap.String("tenant", slugStr), zap.Error(err))
+				logger.Error("invalid tenant slug", slog.String("tenant", slugStr), slog.String("error", err.Error()))
+				os.Exit(1)
 			}
 			opts := []entity.TenantOption{entity.WithTenantDictionaries(nil)}
 			if tc.PIIConfig != nil {
@@ -127,7 +129,8 @@ func buildGatewayServer(
 		syncCtx, syncCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		if err := tenantResolver.SyncConfig(syncCtx, cfgTenants); err != nil {
 			syncCancel()
-			logger.Fatal("failed to sync tenants from config", zap.Error(err))
+			logger.Error("failed to sync tenants from config", slog.String("error", err.Error()))
+			os.Exit(1)
 		}
 		syncCancel()
 
@@ -135,14 +138,15 @@ func buildGatewayServer(
 		dbTenants, err := tenantResolver.List(loadCtx)
 		loadCancel()
 		if err != nil {
-			logger.Fatal("failed to load tenants from db", zap.Error(err))
+			logger.Error("failed to load tenants from db", slog.String("error", err.Error()))
+			os.Exit(1)
 		}
 
 		for _, t := range dbTenants {
 			slug := t.Slug().String()
 			if dicts := t.Dictionaries(); len(dicts) > 0 {
 				if err := dictCache.Set(context.Background(), slug, dicts); err != nil {
-					logger.Warn("failed to warm dict cache at startup", zap.String("tenant", slug), zap.Error(err))
+					logger.Warn("failed to warm dict cache at startup", slog.String("tenant", slug), slog.String("error", err.Error()))
 				}
 			}
 		}
@@ -150,7 +154,7 @@ func buildGatewayServer(
 		tenantProvider := middleware.NewTenantProvider(dbTenants)
 		authMw := middleware.Auth(tenantProvider)
 		srv.RegisterAuth(authMw)
-		logger.Info("auth middleware registered", zap.Int("tenants", len(dbTenants)))
+		logger.Info("auth middleware registered", slog.Int("tenants", len(dbTenants)))
 
 		reloadCtx, reloadCancel := context.WithCancel(context.Background())
 		defer reloadCancel()
@@ -166,7 +170,7 @@ func buildGatewayServer(
 					newTenants, err := tenantResolver.List(reloadCtx2)
 					reloadCancel2()
 					if err != nil {
-						logger.Warn("tenant reload failed", zap.Error(err))
+						logger.Warn("tenant reload failed", slog.String("error", err.Error()))
 						continue
 					}
 					if len(newTenants) > 0 {
@@ -177,12 +181,12 @@ func buildGatewayServer(
 								t.SetDictionaries(cachedDicts)
 							} else if dicts := t.Dictionaries(); len(dicts) > 0 {
 								if setErr := dictCache.Set(context.Background(), slug, dicts); setErr != nil {
-									logger.Warn("failed to warm dict cache on reload", zap.String("tenant", slug), zap.Error(setErr))
+									logger.Warn("failed to warm dict cache on reload", slog.String("tenant", slug), slog.String("error", setErr.Error()))
 								}
 							}
 						}
 						tenantProvider.Update(newTenants)
-						logger.Debug("tenants hot-reloaded", zap.Int("count", len(newTenants)))
+						logger.Debug("tenants hot-reloaded", slog.Int("count", len(newTenants)))
 					}
 				}
 			}
@@ -216,7 +220,7 @@ func buildGatewayServer(
 		cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
 		go cleanupWorker.Run(cleanupCtx)
 		logger.Info("session cleanup worker registered",
-			zap.Duration("interval", cfg.Session.CleanupInterval),
+			slog.Duration("interval", cfg.Session.CleanupInterval),
 		)
 		defer cleanupCancel()
 	} else {
@@ -230,13 +234,13 @@ func buildGatewayServer(
 		for _, cr := range cfg.Analytics.CostRates {
 			rate, err := analytics.NewCostRate(cr.Model, cr.InputPricePer1K, cr.OutputPricePer1K)
 			if err != nil {
-				logger.Warn("analytics: invalid cost rate, skipping", zap.String("model", cr.Model), zap.Error(err))
+				logger.Warn("analytics: invalid cost rate, skipping", slog.String("model", cr.Model), slog.String("error", err.Error()))
 				continue
 			}
 			costRates = append(costRates, rate)
 		}
 		costRegistry := analytics.NewCostRateRegistry(costRates)
-		logger.Info("cost rate registry created", zap.Int("rates", len(costRates)))
+		logger.Info("cost rate registry created", slog.Int("rates", len(costRates)))
 
 		pgUsageStore := analyticsrepo.NewPgUsageStore(pgPool)
 		batchInterval, _ := time.ParseDuration(cfg.Analytics.BatchInterval)
@@ -245,7 +249,7 @@ func buildGatewayServer(
 		}
 		asyncWorker := analyticsapp.NewAsyncWorker(pgUsageStore, 1000, batchInterval, logger)
 		go asyncWorker.Run(analyticsCtx)
-		logger.Info("analytics async worker started", zap.Duration("batch_interval", batchInterval))
+		logger.Info("analytics async worker started", slog.Duration("batch_interval", batchInterval))
 
 		usageMw := middleware.NewUsageMiddleware(costRegistry, asyncWorker.Buffer(), logger)
 		srv.RegisterUsageMiddleware(usageMw.Handler())
@@ -259,7 +263,7 @@ func buildGatewayServer(
 
 		cleanupWorker := analyticsapp.NewCleanupWorker(pgUsageStore, cleanupInterval, retention, logger)
 		go cleanupWorker.Run(analyticsCtx)
-		logger.Info("analytics cleanup worker started", zap.Duration("retention", retention))
+		logger.Info("analytics cleanup worker started", slog.Duration("retention", retention))
 	} else {
 		logger.Debug("analytics pipeline disabled — no analytics config or no db pool")
 	}
@@ -271,35 +275,41 @@ func buildGatewayServer(
 }
 
 // @sk-task combined-binary: Init detectors with CompositeDetector
-func initDetectors(log *zap.Logger) *detector.DetectorRegistry {
+func initDetectors(log *slog.Logger) *detector.DetectorRegistry {
 	registry := detector.NewDetectorRegistry()
 
 	pii, err := detector.NewPIIDetector()
 	if err != nil {
-		log.Fatal("failed to create PII detector", zap.Error(err))
+		log.Error("failed to create PII detector", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 	secrets, err := detector.NewSecretsDetector()
 	if err != nil {
-		log.Fatal("failed to create secrets detector", zap.Error(err))
+		log.Error("failed to create secrets detector", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 	financial, err := detector.NewFinancialDetector()
 	if err != nil {
-		log.Fatal("failed to create financial detector", zap.Error(err))
+		log.Error("failed to create financial detector", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 
 	combined := detector.NewCompositeDetector(pii, secrets, financial)
 	if err := registry.Register(entity.DetectorTypeRegex, combined); err != nil {
-		log.Fatal("register composite regex detector", zap.Error(err))
+		log.Error("register composite regex detector", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 
 	placeholder := detector.NewDictionaryDetector(nil)
 	if err := registry.Register(entity.DetectorTypeDictionary, placeholder); err != nil {
-		log.Fatal("register dictionary detector", zap.Error(err))
+		log.Error("register dictionary detector", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 
 	promptInjection := detector.NewPromptInjectionDetector()
 	if err := registry.Register(entity.DetectorTypePromptInjection, promptInjection); err != nil {
-		log.Fatal("register prompt injection detector", zap.Error(err))
+		log.Error("register prompt injection detector", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 
 	return registry

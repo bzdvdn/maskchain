@@ -2,9 +2,9 @@ package reaction
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"testing"
-
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
@@ -12,7 +12,7 @@ import (
 
 // @sk-test remove-audit-incidents#T4.2: Test RedactReaction returns text unchanged (AC-002)
 func TestRedactReaction_ReturnsTextUnchanged(t *testing.T) {
-	log := zap.NewNop()
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 	r := NewRedactReaction(log)
 	result := entity.NewScanResult(value.ScanStatusSuspicious)
 
@@ -27,7 +27,7 @@ func TestRedactReaction_ReturnsTextUnchanged(t *testing.T) {
 
 // @sk-test remove-audit-incidents#T4.2: Test RedactReaction with nil result
 func TestRedactReaction_NilResult(t *testing.T) {
-	log := zap.NewNop()
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 	r := NewRedactReaction(log)
 	out, err := r.Execute(context.Background(), nil, "some text")
 	if err != nil {
@@ -40,7 +40,7 @@ func TestRedactReaction_NilResult(t *testing.T) {
 
 // @sk-test remove-audit-incidents#T4.2: Test RedactReaction with clean status
 func TestRedactReaction_CleanStatus(t *testing.T) {
-	log := zap.NewNop()
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 	r := NewRedactReaction(log)
 	result := entity.NewScanResult(value.ScanStatusClean)
 

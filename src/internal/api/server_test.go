@@ -3,15 +3,16 @@ package api
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
@@ -77,7 +78,7 @@ func TestRequestIDHeader(t *testing.T) {
 func TestPanicRecovery(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	log, _ := zap.NewProduction()
+	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	engine.Use(middleware.Recovery(log))
 	engine.GET("/panic", func(c *gin.Context) {
 		panic("test panic")
@@ -231,6 +232,6 @@ func newTestServer() *Server {
 		Port:        0,
 		HealthCheck: &config.HealthCheckConfig{CriticalDeps: []string{"database"}},
 	}
-	log, _ := zap.NewProduction()
+	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	return New(cfg, log, "", health.NewService(nil))
 }

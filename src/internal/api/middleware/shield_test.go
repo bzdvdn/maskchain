@@ -6,15 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"go.uber.org/zap/zaptest/observer"
 
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/dictionary"
@@ -239,8 +237,7 @@ func TestShieldMissingTenant(t *testing.T) {
 
 // @sk-test 51-shield-gateway-integration#T2.2: TestShieldLogging checks log fields (AC-008)
 func TestShieldLogging(t *testing.T) {
-	core, recorded := observer.New(zapcore.InfoLevel)
-	log := zap.New(core)
+	rec, log := newTestLogger(t)
 
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
@@ -268,14 +265,14 @@ func TestShieldLogging(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	if recorded.Len() == 0 {
+	if rec.Len() == 0 {
 		t.Fatal("expected log entry")
 	}
 
 	var hasStatus, hasSlug, hasPIIEnabled, hasRulesCount, hasModel, hasLatency, hasUnmasked bool
-	for _, entry := range recorded.All() {
-		for _, f := range entry.Context {
-			switch f.Key {
+	for _, entry := range rec.All() {
+		entry.Attrs(func(a slog.Attr) bool {
+			switch a.Key {
 			case "shield_status":
 				hasStatus = true
 			case "tenant_slug":
@@ -291,7 +288,8 @@ func TestShieldLogging(t *testing.T) {
 			case "unmasked":
 				hasUnmasked = true
 			}
-		}
+			return true
+		})
 	}
 
 	if !hasStatus {
@@ -778,7 +776,7 @@ func TestShieldContextCancel(t *testing.T) {
 func TestShieldNilEngine(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	log, _ := zap.NewProduction()
+	_, log := newTestLogger(t)
 
 	var handlerCalled bool
 	engine.Use(func(c *gin.Context) {

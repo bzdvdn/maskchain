@@ -2,9 +2,8 @@ package analytics
 
 import (
 	"context"
+	"log/slog"
 	"time"
-
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/analytics"
 )
@@ -14,11 +13,11 @@ type AsyncWorker struct {
 	store    analytics.UsageStore
 	buffer   chan analytics.TokenUsage
 	interval time.Duration
-	log      *zap.Logger
+	log      *slog.Logger
 }
 
 // @sk-task 131-analytics-pipeline#T3.2: NewAsyncWorker creates a new async worker (AC-002)
-func NewAsyncWorker(store analytics.UsageStore, bufferSize int, interval time.Duration, log *zap.Logger) *AsyncWorker {
+func NewAsyncWorker(store analytics.UsageStore, bufferSize int, interval time.Duration, log *slog.Logger) *AsyncWorker {
 	return &AsyncWorker{
 		store:    store,
 		buffer:   make(chan analytics.TokenUsage, bufferSize),
@@ -29,7 +28,7 @@ func NewAsyncWorker(store analytics.UsageStore, bufferSize int, interval time.Du
 
 // @sk-task 131-analytics-pipeline#T3.2: Run starts the worker loop with ticker-based flush and context shutdown (AC-002)
 func (w *AsyncWorker) Run(ctx context.Context) {
-	w.log.Info("async worker started", zap.Duration("interval", w.interval))
+	w.log.Info("async worker started", slog.Duration("interval", w.interval))
 
 	ticker := time.NewTicker(w.interval)
 	defer ticker.Stop()
@@ -43,7 +42,7 @@ func (w *AsyncWorker) Run(ctx context.Context) {
 		flushCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := w.store.RecordBatch(flushCtx, batch); err != nil {
-			w.log.Warn("async worker: batch insert failed", zap.Error(err), zap.Int("size", len(batch)))
+			w.log.Warn("async worker: batch insert failed", slog.String("error", err.Error()), slog.Int("size", len(batch)))
 		}
 		batch = batch[:0]
 	}

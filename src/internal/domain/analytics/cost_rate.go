@@ -52,4 +52,3 @@ func (r *CostRateRegistry) Lookup(model string) *CostRate {
 	}
 	return cr
 }
-

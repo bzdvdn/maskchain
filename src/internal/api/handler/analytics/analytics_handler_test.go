@@ -187,7 +187,7 @@ func TestAnalyticsHandler_Traffic(t *testing.T) {
 
 	var resp struct {
 		Data struct {
-			RequestCount int64   `json:"request_count"`
+			RequestCount int64    `json:"request_count"`
 			AvgLatencyMs *float64 `json:"avg_latency_ms"`
 			P50LatencyMs *float64 `json:"p50_latency_ms"`
 			P95LatencyMs *float64 `json:"p95_latency_ms"`

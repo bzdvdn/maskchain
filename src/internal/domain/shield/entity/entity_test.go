@@ -87,5 +87,3 @@ func TestReaction_Constants(t *testing.T) {
 		t.Errorf("expected allow, got %q", ReactionAllow)
 	}
 }
-
-

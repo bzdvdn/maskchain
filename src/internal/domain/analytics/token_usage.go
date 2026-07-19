@@ -9,12 +9,12 @@ import (
 
 // @sk-task 130-analytics-domain#T1.2: Implement TokenUsage entity (AC-001)
 type TokenUsage struct {
-	TenantID      value.TenantID
-	Model         string
-	InputTokens   int64
-	OutputTokens  int64
-	Cost          float64
-	Timestamp     time.Time
+	TenantID     value.TenantID
+	Model        string
+	InputTokens  int64
+	OutputTokens int64
+	Cost         float64
+	Timestamp    time.Time
 }
 
 func NewTokenUsage(tenantID value.TenantID, model string, inputTokens, outputTokens int64, cost float64, timestamp time.Time) (*TokenUsage, error) {

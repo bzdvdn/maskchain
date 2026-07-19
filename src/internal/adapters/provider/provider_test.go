@@ -75,7 +75,7 @@ func TestOpenAIClient_Stream(t *testing.T) {
 		t.Fatalf("Stream failed: %v", err)
 	}
 
-	var chunks []string
+	var chunks []string //nolint:prealloc // unknown size
 	for chunk := range ch {
 		if chunk.Err != nil {
 			t.Fatalf("unexpected error: %v", chunk.Err)
@@ -150,7 +150,7 @@ func TestAnthropicClient_Stream(t *testing.T) {
 		t.Fatalf("Stream failed: %v", err)
 	}
 
-	var chunks []string
+	var chunks []string //nolint:prealloc // unknown size
 	for chunk := range ch {
 		if chunk.Err != nil {
 			t.Fatalf("unexpected error: %v", chunk.Err)

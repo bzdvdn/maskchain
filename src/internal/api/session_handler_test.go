@@ -98,7 +98,7 @@ func (m *mockSessionStore) ListByTenant(ctx context.Context, tenantID string, pa
 }
 
 func (m *mockSessionStore) ListAll(ctx context.Context, page, limit int32) (*session.ListResult, error) {
-	var items []session.Session
+	items := make([]session.Session, 0, len(m.sessions))
 	for _, s := range m.sessions {
 		items = append(items, *s)
 	}

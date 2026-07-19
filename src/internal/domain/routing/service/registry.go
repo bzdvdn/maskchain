@@ -29,7 +29,7 @@ func NewProviderRegistry(cfg *routing.RoutingConfig) (*ProviderRegistry, error) 
 		prov.SetHealthStatus(routing.HealthHealthy)
 		providers[p.Name] = prov
 	}
-	var rules []routing.RoutingRule
+	rules := make([]routing.RoutingRule, 0, len(cfg.Rules))
 	for _, r := range cfg.Rules {
 		var routes []routing.Route
 		for _, rt := range r.Routes {

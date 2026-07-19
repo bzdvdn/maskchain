@@ -33,10 +33,10 @@ type auditEntryResponse struct {
 }
 
 type auditListResponse struct {
-	Items      []auditEntryResponse `json:"items"`
-	Total      int                  `json:"total"`
-	Limit      int                  `json:"limit"`
-	Offset     int                  `json:"offset"`
+	Items  []auditEntryResponse `json:"items"`
+	Total  int                  `json:"total"`
+	Limit  int                  `json:"limit"`
+	Offset int                  `json:"offset"`
 }
 
 func (h *AuditHandler) HandleList(c *gin.Context) {

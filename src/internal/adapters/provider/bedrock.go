@@ -72,10 +72,10 @@ func newBedrockClient(cfg *config.ProviderConfig) (*BedrockClient, error) {
 }
 
 type bedrockRequest struct {
-	AnthropicVersion string            `json:"anthropic_version"`
-	MaxTokens        int               `json:"max_tokens"`
-	System           string            `json:"system,omitempty"`
-	Messages         []bedrockMessage  `json:"messages"`
+	AnthropicVersion string           `json:"anthropic_version"`
+	MaxTokens        int              `json:"max_tokens"`
+	System           string           `json:"system,omitempty"`
+	Messages         []bedrockMessage `json:"messages"`
 }
 
 type bedrockMessage struct {
@@ -94,10 +94,10 @@ type bedrockContentBlock struct {
 }
 
 type bedrockStreamChunk struct {
-	Type         string                `json:"type"`
-	Index        *int                  `json:"index,omitempty"`
-	Delta        *bedrockStreamDelta   `json:"delta,omitempty"`
-	MessageDelta *bedrockMessageDelta  `json:"message_delta,omitempty"`
+	Type         string               `json:"type"`
+	Index        *int                 `json:"index,omitempty"`
+	Delta        *bedrockStreamDelta  `json:"delta,omitempty"`
+	MessageDelta *bedrockMessageDelta `json:"message_delta,omitempty"`
 }
 
 type bedrockStreamDelta struct {
@@ -203,7 +203,7 @@ func (c *BedrockClient) Stream(ctx context.Context, req *ports.ProviderRequest) 
 
 func convertToBedrock(openAIReq *openAIRequest) *bedrockRequest {
 	var system string
-	var messages []bedrockMessage
+	messages := make([]bedrockMessage, 0, len(openAIReq.Messages))
 
 	for _, msg := range openAIReq.Messages {
 		if msg.Role == "system" {
@@ -310,5 +310,3 @@ func bedrockFinishToOpenAI(finish string) *string {
 		return &s
 	}
 }
-
-

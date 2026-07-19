@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,7 +11,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/valkey-io/valkey-go"
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/cmd/internal/bootstrap"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/provider"
@@ -42,23 +41,25 @@ import (
 
 func run() {
 	cfg, logger := initConfigLog()
-	defer logger.Sync()
 
 	b, err := bootstrap.InitBootstrap(context.Background(), cfg, logger, serviceName(cfg))
 	if err != nil {
-		logger.Fatal("bootstrap failed", zap.Error(err))
+		logger.Error("bootstrap failed", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 	defer b.Close()
 
 	if cfg.DB != nil && cfg.DB.DSN != "" {
 		if err := postgres.RunMigrations(cfg.DB.DSN); err != nil {
-			logger.Fatal("failed to run migrations", zap.Error(err))
+			logger.Error("failed to run migrations", slog.String("error", err.Error()))
+			os.Exit(1)
 		}
 	}
 
 	provDeps, err := initProviders(cfg.Routing, cfg.Egress)
 	if err != nil {
-		logger.Fatal("failed to init providers", zap.Error(err))
+		logger.Error("failed to init providers", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 	routingHandler := api.NewRoutingProxyHandler(provDeps.selector, provDeps.fallbackHandler)
 	watchConfigReload(cfg, provDeps, logger)
@@ -118,14 +119,10 @@ func run() {
 	serve(cfg, logger, b, srv)
 }
 
-func initConfigLog() (*config.Config, *zap.Logger) {
+func initConfigLog() (*config.Config, *slog.Logger) {
 	cfg := config.MustLoadConfig()
-	logger, err := bootstrap.BuildLogger(cfg.Log.Level)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
-	logger.Debug("config loaded", zap.Object("config", cfg))
+	logger := bootstrap.BuildLogger(cfg.Log.Level)
+	logger.Debug("config loaded", slog.Any("config", cfg))
 	return cfg, logger
 }
 
@@ -136,7 +133,7 @@ func serviceName(cfg *config.Config) string {
 	return "maskchain-gateway"
 }
 
-func initSession(cfg *config.Config, pgPool *pgxpool.Pool, vkClient valkey.Client, logger *zap.Logger) *session.SessionUseCase {
+func initSession(cfg *config.Config, pgPool *pgxpool.Pool, vkClient valkey.Client, logger *slog.Logger) *session.SessionUseCase {
 	cacheTTL := cfg.Session.CacheTTL
 	if cacheTTL <= 0 {
 		cacheTTL = 5 * time.Minute
@@ -147,7 +144,7 @@ func initSession(cfg *config.Config, pgPool *pgxpool.Pool, vkClient valkey.Clien
 	return session.NewSessionUseCase(store)
 }
 
-func serve(cfg *config.Config, logger *zap.Logger, b *bootstrap.Bootstrap, srv *api.Server) {
+func serve(cfg *config.Config, logger *slog.Logger, b *bootstrap.Bootstrap, srv *api.Server) {
 	errCh := make(chan error, 1)
 	go func() {
 		if err := srv.Start(); err != nil && err != http.ErrServerClosed {
@@ -161,9 +158,9 @@ func serve(cfg *config.Config, logger *zap.Logger, b *bootstrap.Bootstrap, srv *
 	var sig os.Signal
 	select {
 	case sig = <-quit:
-		logger.Info("shutting down", zap.String("signal", sig.String()))
+		logger.Info("shutting down", slog.String("signal", sig.String()))
 	case err := <-errCh:
-		logger.Error("server error", zap.Error(err))
+		logger.Error("server error", slog.String("error", err.Error()))
 		return
 	}
 
@@ -171,15 +168,15 @@ func serve(cfg *config.Config, logger *zap.Logger, b *bootstrap.Bootstrap, srv *
 	defer shutdownCancel()
 
 	if err := b.OTelShutdown(shutdownCtx); err != nil {
-		logger.Error("otel shutdown error", zap.Error(err))
+		logger.Error("otel shutdown error", slog.String("error", err.Error()))
 	}
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		logger.Error("shutdown error", zap.Error(err))
+		logger.Error("shutdown error", slog.String("error", err.Error()))
 	}
 	logger.Info("server stopped")
 }
 
-func watchConfigReload(cfg *config.Config, pd *providerDeps, logger *zap.Logger) {
+func watchConfigReload(cfg *config.Config, pd *providerDeps, logger *slog.Logger) {
 	cfgDir := config.ConfigDirFromArgs()
 	if cfgDir == "" {
 		return
@@ -190,7 +187,7 @@ func watchConfigReload(cfg *config.Config, pd *providerDeps, logger *zap.Logger)
 		changed := config.DiffSections(old, new)
 		if changed["routing"] && pd.registry != nil {
 			if err := pd.registry.UpdateConfig(toDomainRoutingConfig(new.Routing)); err != nil {
-				logger.Error("config reload: routing registry update failed", zap.Error(err))
+				logger.Error("config reload: routing registry update failed", slog.String("error", err.Error()))
 				return
 			}
 			newClients := make(map[string]ports.ProviderClient)
@@ -199,7 +196,7 @@ func watchConfigReload(cfg *config.Config, pd *providerDeps, logger *zap.Logger)
 					pcfg := &new.Routing.Providers[i]
 					client, err := provider.NewProviderClient(pcfg, new.Egress)
 					if err != nil {
-						logger.Error("config reload: failed to create provider client", zap.String("provider", pcfg.Name), zap.Error(err))
+						logger.Error("config reload: failed to create provider client", slog.String("provider", pcfg.Name), slog.String("error", err.Error()))
 						continue
 					}
 					newClients[pcfg.Name] = client
@@ -220,7 +217,7 @@ func watchConfigReload(cfg *config.Config, pd *providerDeps, logger *zap.Logger)
 	})
 }
 
-func initTenants(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.Server, dictCache *dictionaryrepo.ValkeyDictionaryCache, logger *zap.Logger) {
+func initTenants(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.Server, dictCache *dictionaryrepo.ValkeyDictionaryCache, logger *slog.Logger) {
 	if cfg.Tenants == nil {
 		logger.Warn("no tenants configured, auth disabled")
 		return
@@ -233,7 +230,8 @@ func initTenants(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.Server, dict
 	for slugStr, tc := range cfg.Tenants {
 		slug, err := value.NewTenantSlug(slugStr)
 		if err != nil {
-			logger.Fatal("invalid tenant slug", zap.String("tenant", slugStr), zap.Error(err))
+			logger.Error("invalid tenant slug", slog.String("tenant", slugStr), slog.String("error", err.Error()))
+			os.Exit(1)
 		}
 		opts := []entity.TenantOption{entity.WithTenantDictionaries(nil)}
 		if tc.PIIConfig != nil {
@@ -246,7 +244,8 @@ func initTenants(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.Server, dict
 	syncCtx, syncCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	if err := tenantResolver.SyncConfig(syncCtx, cfgTenants); err != nil {
 		syncCancel()
-		logger.Fatal("failed to sync tenants from config", zap.Error(err))
+		logger.Error("failed to sync tenants from config", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 	syncCancel()
 
@@ -254,28 +253,29 @@ func initTenants(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.Server, dict
 	dbTenants, err := tenantResolver.List(loadCtx)
 	loadCancel()
 	if err != nil {
-		logger.Fatal("failed to load tenants from db", zap.Error(err))
+		logger.Error("failed to load tenants from db", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 
 	for _, t := range dbTenants {
 		slug := t.Slug().String()
 		if dicts := t.Dictionaries(); len(dicts) > 0 {
 			if err := dictCache.Set(context.Background(), slug, dicts); err != nil {
-				logger.Warn("failed to warm dict cache at startup", zap.String("tenant", slug), zap.Error(err))
+				logger.Warn("failed to warm dict cache at startup", slog.String("tenant", slug), slog.String("error", err.Error()))
 			}
 		}
 	}
 
 	tenantProvider := middleware.NewTenantProvider(dbTenants)
 	srv.RegisterAuth(middleware.Auth(tenantProvider))
-	logger.Info("auth middleware registered", zap.Int("tenants", len(dbTenants)))
+	logger.Info("auth middleware registered", slog.Int("tenants", len(dbTenants)))
 
 	reloadCtx, reloadCancel := context.WithCancel(context.Background())
 	_ = reloadCancel
 	go startTenantReload(reloadCtx, cfg, tenantResolver, dictCache, tenantProvider, logger)
 }
 
-func startTenantReload(ctx context.Context, cfg *config.Config, resolver *resolver.DBFirstTenantResolver, dictCache *dictionaryrepo.ValkeyDictionaryCache, tp *middleware.TenantProvider, logger *zap.Logger) {
+func startTenantReload(ctx context.Context, cfg *config.Config, resolver *resolver.DBFirstTenantResolver, dictCache *dictionaryrepo.ValkeyDictionaryCache, tp *middleware.TenantProvider, logger *slog.Logger) {
 	ticker := time.NewTicker(cfg.Server.TenantReloadInterval)
 	defer ticker.Stop()
 	for {
@@ -287,7 +287,7 @@ func startTenantReload(ctx context.Context, cfg *config.Config, resolver *resolv
 			newTenants, err := resolver.List(rCtx)
 			rCancel()
 			if err != nil {
-				logger.Warn("tenant reload failed", zap.Error(err))
+				logger.Warn("tenant reload failed", slog.String("error", err.Error()))
 				continue
 			}
 			if len(newTenants) == 0 {
@@ -300,17 +300,17 @@ func startTenantReload(ctx context.Context, cfg *config.Config, resolver *resolv
 					t.SetDictionaries(cachedDicts)
 				} else if dicts := t.Dictionaries(); len(dicts) > 0 {
 					if setErr := dictCache.Set(context.Background(), slug, dicts); setErr != nil {
-						logger.Warn("failed to warm dict cache on reload", zap.String("tenant", slug), zap.Error(setErr))
+						logger.Warn("failed to warm dict cache on reload", slog.String("tenant", slug), slog.String("error", setErr.Error()))
 					}
 				}
 			}
 			tp.Update(newTenants)
-			logger.Debug("tenants hot-reloaded", zap.Int("count", len(newTenants)))
+			logger.Debug("tenants hot-reloaded", slog.Int("count", len(newTenants)))
 		}
 	}
 }
 
-func runSessionCleanup(cfg *config.Config, sessionUseCase *session.SessionUseCase, logger *zap.Logger) {
+func runSessionCleanup(cfg *config.Config, sessionUseCase *session.SessionUseCase, logger *slog.Logger) {
 	if !cfg.Session.CleanupEnabled {
 		logger.Debug("session cleanup worker disabled")
 		return
@@ -319,10 +319,10 @@ func runSessionCleanup(cfg *config.Config, sessionUseCase *session.SessionUseCas
 	_ = cleanupCancel
 	w := worker.NewCleanupWorker(sessionUseCase, cfg.Session.CleanupInterval, logger)
 	go w.Run(cleanupCtx)
-	logger.Info("session cleanup worker registered", zap.Duration("interval", cfg.Session.CleanupInterval))
+	logger.Info("session cleanup worker registered", slog.Duration("interval", cfg.Session.CleanupInterval))
 }
 
-func runAnalytics(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.Server, logger *zap.Logger) {
+func runAnalytics(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.Server, logger *slog.Logger) {
 	if cfg.Analytics == nil || pgPool == nil {
 		logger.Debug("analytics pipeline disabled")
 		return
@@ -334,7 +334,7 @@ func runAnalytics(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.Server, log
 	for _, cr := range cfg.Analytics.CostRates {
 		rate, err := analytics.NewCostRate(cr.Model, cr.InputPricePer1K, cr.OutputPricePer1K)
 		if err != nil {
-			logger.Warn("analytics: invalid cost rate, skipping", zap.String("model", cr.Model), zap.Error(err))
+			logger.Warn("analytics: invalid cost rate, skipping", slog.String("model", cr.Model), slog.String("error", err.Error()))
 			continue
 		}
 		costRates = append(costRates, rate)
@@ -361,31 +361,37 @@ func runAnalytics(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.Server, log
 	logger.Info("analytics pipeline started")
 }
 
-func initDetectors(log *zap.Logger) *detector.DetectorRegistry {
+func initDetectors(log *slog.Logger) *detector.DetectorRegistry {
 	registry := detector.NewDetectorRegistry()
 	pii, err := detector.NewPIIDetector()
 	if err != nil {
-		log.Fatal("failed to create PII detector", zap.Error(err))
+		log.Error("failed to create PII detector", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 	secrets, err := detector.NewSecretsDetector()
 	if err != nil {
-		log.Fatal("failed to create secrets detector", zap.Error(err))
+		log.Error("failed to create secrets detector", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 	financial, err := detector.NewFinancialDetector()
 	if err != nil {
-		log.Fatal("failed to create financial detector", zap.Error(err))
+		log.Error("failed to create financial detector", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 	combined := detector.NewCompositeDetector(pii, secrets, financial)
 	if err := registry.Register(entity.DetectorTypeRegex, combined); err != nil {
-		log.Fatal("register composite regex detector", zap.Error(err))
+		log.Error("register composite regex detector", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 	placeholder := detector.NewDictionaryDetector(nil)
 	if err := registry.Register(entity.DetectorTypeDictionary, placeholder); err != nil {
-		log.Fatal("register dictionary detector", zap.Error(err))
+		log.Error("register dictionary detector", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 	promptInjection := detector.NewPromptInjectionDetector()
 	if err := registry.Register(entity.DetectorTypePromptInjection, promptInjection); err != nil {
-		log.Fatal("register prompt injection detector", zap.Error(err))
+		log.Error("register prompt injection detector", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 	return registry
 }

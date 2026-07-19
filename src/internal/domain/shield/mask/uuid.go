@@ -9,10 +9,10 @@ import (
 const base62Alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 // @sk-task 22-shield-mask-storage#T1.1: Implement UUIDv7 generator (AC-007)
-func NewUUIDv7() string {
+func NewUUIDv7() (string, error) {
 	var buf [16]byte
 	if _, err := rand.Read(buf[:]); err != nil {
-		panic("mask: uuidv7: " + err.Error())
+		return "", err
 	}
 
 	ms := uint64(time.Now().UnixMilli())
@@ -37,10 +37,10 @@ func NewUUIDv7() string {
 	hex.Encode(dst[19:23], buf[8:10])
 	dst[23] = '-'
 	hex.Encode(dst[24:36], buf[10:16])
-	return string(dst)
+	return string(dst), nil
 }
 
-func NewShortID() string {
+func NewShortID() (string, error) {
 	var buf [8]byte
 	ms := uint64(time.Now().UnixMilli())
 	buf[0] = byte(ms >> 40)
@@ -50,9 +50,9 @@ func NewShortID() string {
 	buf[4] = byte(ms >> 8)
 	buf[5] = byte(ms)
 	if _, err := rand.Read(buf[6:8]); err != nil {
-		panic("mask: shortid: " + err.Error())
+		return "", err
 	}
-	return base62Encode(buf[:])
+	return base62Encode(buf[:]), nil
 }
 
 func base62Encode(src []byte) string {

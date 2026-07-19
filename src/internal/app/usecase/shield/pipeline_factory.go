@@ -36,7 +36,7 @@ func NewScanPipelineFactory(registry *detector.DetectorRegistry) *ScanPipelineFa
 
 // @sk-task 13-shield-middleware-wiring#T1.3: BuildFromRules creates detectors from tenant rules (AC-001)
 func (f *ScanPipelineFactory) BuildFromRules(ctx context.Context, rules []entity.PIARule) (*Pipeline, error) {
-	var detectors []DetectorBinding
+	detectors := make([]DetectorBinding, 0, len(rules))
 	for _, rule := range rules {
 		concrete := f.registry.Get(entity.DetectorType(rule.Type))
 		if concrete == nil {

@@ -83,7 +83,10 @@ func TestMaskFromResults_NoResults(t *testing.T) {
 
 // @sk-test 22-shield-mask-storage#T2.2: UUIDv7 format, version and variant
 func TestNewUUIDv7_Format(t *testing.T) {
-	id := NewUUIDv7()
+	id, err := NewUUIDv7()
+	if err != nil {
+		t.Fatalf("NewUUIDv7 failed: %v", err)
+	}
 	if len(id) != 36 {
 		t.Errorf("expected 36 chars, got %d: %q", len(id), id)
 	}
@@ -133,7 +136,7 @@ func TestMaskFromResults_SingleReplacement(t *testing.T) {
 func TestUnmaskText_Single(t *testing.T) {
 	store := newMemStorage()
 	store.data["abc"] = &MaskEntry{
-		MaskID: "abc",
+		MaskID:         "abc",
 		DocumentMaskID: "abc",
 		Replacements: map[string]string{
 			"[MASK_abc.1]": "test@example.com",
@@ -180,14 +183,14 @@ func TestMaskUnmask_RoundTrip(t *testing.T) {
 func TestMaskText_MultipleMaskIDs(t *testing.T) {
 	store := newMemStorage()
 	store.data["a"] = &MaskEntry{
-		MaskID: "a",
+		MaskID:         "a",
 		DocumentMaskID: "a",
 		Replacements: map[string]string{
 			"[MASK_a.1]": "alice@example.com",
 		},
 	}
 	store.data["b"] = &MaskEntry{
-		MaskID: "b",
+		MaskID:         "b",
 		DocumentMaskID: "b",
 		Replacements: map[string]string{
 			"[MASK_b.1]": "+1-555-0000",

@@ -217,9 +217,11 @@ func TestUsageStoreInterface(t *testing.T) {
 
 type mockUsageStore struct{}
 
-func (m *mockUsageStore) Record(_ context.Context, _ TokenUsage) error { return nil }
+func (m *mockUsageStore) Record(_ context.Context, _ TokenUsage) error        { return nil }
 func (m *mockUsageStore) RecordBatch(_ context.Context, _ []TokenUsage) error { return nil }
-func (m *mockUsageStore) DeleteOlderThan(_ context.Context, _ time.Time) (int64, error) { return 0, nil }
+func (m *mockUsageStore) DeleteOlderThan(_ context.Context, _ time.Time) (int64, error) {
+	return 0, nil
+}
 func (m *mockUsageStore) QueryByTenant(_ context.Context, _ value.TenantID, _, _ time.Time) ([]UsageRecord, error) {
 	return nil, nil
 }

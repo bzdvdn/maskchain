@@ -3,9 +3,9 @@ package reaction
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"os"
 	"testing"
-
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	shielderrors "github.com/bzdvdn/maskchain/src/internal/domain/shield/errors"
@@ -14,7 +14,7 @@ import (
 
 // @sk-test remove-audit-incidents#T4.2: Test ReactionPipeline routes ReactionBlock to BlockReaction (AC-005)
 func TestReactionPipeline_RoutesBlock(t *testing.T) {
-	log := zap.NewNop()
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 	p := NewDefaultReactionPipeline(NewBlockReaction(), NewRedactReaction(log), NewAlertReaction(log))
 
 	result := entity.NewScanResult(value.ScanStatusBlocked)
@@ -30,7 +30,7 @@ func TestReactionPipeline_RoutesBlock(t *testing.T) {
 
 // @sk-test remove-audit-incidents#T4.2: Test ReactionPipeline routes ReactionLog to RedactReaction (AC-005)
 func TestReactionPipeline_RoutesLog(t *testing.T) {
-	log := zap.NewNop()
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 	p := NewDefaultReactionPipeline(NewBlockReaction(), NewRedactReaction(log), NewAlertReaction(log))
 
 	result := entity.NewScanResult(value.ScanStatusSuspicious)
@@ -46,7 +46,7 @@ func TestReactionPipeline_RoutesLog(t *testing.T) {
 
 // @sk-test remove-audit-incidents#T4.2: Test ReactionPipeline routes ReactionReview to AlertReaction (AC-005)
 func TestReactionPipeline_RoutesReview(t *testing.T) {
-	log := zap.NewNop()
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 	p := NewDefaultReactionPipeline(NewBlockReaction(), NewRedactReaction(log), NewAlertReaction(log))
 
 	result := entity.NewScanResult(value.ScanStatusSuspicious)
@@ -62,7 +62,7 @@ func TestReactionPipeline_RoutesReview(t *testing.T) {
 
 // @sk-test 23-shield-reactions#T2.5: Test ReactionPipeline returns text unchanged for ReactionAllow (AC-005)
 func TestReactionPipeline_RoutesAllow(t *testing.T) {
-	log := zap.NewNop()
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 	p := NewDefaultReactionPipeline(NewBlockReaction(), NewRedactReaction(log), NewAlertReaction(log))
 
 	out, err := p.Execute(context.Background(), entity.ReactionAllow, nil, "content")

@@ -117,11 +117,11 @@ func TestAdminSessionUseCaseDeleteExpired(t *testing.T) {
 // -- mocks --
 
 type mockAdminSessionStore struct {
-	saved              *AdminSession
-	saveErr            error
-	getByHashResult    *AdminSession
-	getByHashErr       error
-	deletedID          string
+	saved               *AdminSession
+	saveErr             error
+	getByHashResult     *AdminSession
+	getByHashErr        error
+	deletedID           string
 	deleteExpiredResult int64
 }
 

@@ -2,8 +2,7 @@ package reaction
 
 import (
 	"context"
-
-	"go.uber.org/zap"
+	"log/slog"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/mask"
@@ -13,11 +12,11 @@ import (
 // @sk-task remove-audit-incidents#T2.1: Remove Incident dependency, log instead (AC-007)
 type MaskReaction struct {
 	useCase *mask.MaskUseCase
-	log     *zap.Logger
+	log     *slog.Logger
 }
 
 // @sk-task remove-audit-incidents#T2.1: Constructor without incidents (AC-007)
-func NewMaskReaction(useCase *mask.MaskUseCase, log *zap.Logger) *MaskReaction {
+func NewMaskReaction(useCase *mask.MaskUseCase, log *slog.Logger) *MaskReaction {
 	return &MaskReaction{useCase: useCase, log: log}
 }
 
@@ -27,9 +26,9 @@ func (r *MaskReaction) Execute(ctx context.Context, result *entity.ScanResult, t
 		return text, nil
 	}
 
-	r.log.Info("shield mask reaction triggered",
-		zap.String("status", string(result.Status())),
-		zap.String("action", "mask"),
+	r.log.InfoContext(ctx, "shield mask reaction triggered",
+		slog.String("status", string(result.Status())),
+		slog.String("action", "mask"),
 	)
 	return text, nil
 }

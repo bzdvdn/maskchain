@@ -2,9 +2,9 @@ package reaction
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"testing"
-
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
@@ -12,7 +12,7 @@ import (
 
 // @sk-test remove-audit-incidents#T4.2: Test MaskReaction returns text unchanged (AC-003)
 func TestMaskReaction_ReturnsTextUnchanged(t *testing.T) {
-	log := zap.NewNop()
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 	mr := NewMaskReaction(nil, log)
 
 	result := entity.NewScanResult(value.ScanStatusSuspicious)
@@ -28,7 +28,7 @@ func TestMaskReaction_ReturnsTextUnchanged(t *testing.T) {
 
 // @sk-test remove-audit-incidents#T4.2: Test MaskReaction with nil result
 func TestMaskReaction_NilResult(t *testing.T) {
-	log := zap.NewNop()
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 	mr := NewMaskReaction(nil, log)
 
 	out, err := mr.Execute(context.Background(), nil, "text")
@@ -42,7 +42,7 @@ func TestMaskReaction_NilResult(t *testing.T) {
 
 // @sk-test remove-audit-incidents#T4.2: Test MaskReaction with clean status
 func TestMaskReaction_CleanStatus(t *testing.T) {
-	log := zap.NewNop()
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 	mr := NewMaskReaction(nil, log)
 
 	result := entity.NewScanResult(value.ScanStatusClean)

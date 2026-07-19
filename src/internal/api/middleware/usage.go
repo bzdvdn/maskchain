@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/analytics"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
@@ -19,10 +19,10 @@ import (
 type UsageMiddleware struct {
 	registry *analytics.CostRateRegistry
 	usageCh  chan<- analytics.TokenUsage
-	log      *zap.Logger
+	log      *slog.Logger
 }
 
-func NewUsageMiddleware(registry *analytics.CostRateRegistry, usageCh chan<- analytics.TokenUsage, log *zap.Logger) *UsageMiddleware {
+func NewUsageMiddleware(registry *analytics.CostRateRegistry, usageCh chan<- analytics.TokenUsage, log *slog.Logger) *UsageMiddleware {
 	return &UsageMiddleware{
 		registry: registry,
 		usageCh:  usageCh,
@@ -63,12 +63,12 @@ func (m *UsageMiddleware) Handler() gin.HandlerFunc {
 			} `json:"usage"`
 		}
 		if err := json.Unmarshal(w.body.Bytes(), &resp); err != nil {
-			m.log.Warn("usage middleware: failed to parse response body", zap.Error(err))
+			m.log.WarnContext(c.Request.Context(), "usage middleware: failed to parse response body", slog.String("error", err.Error()))
 			return
 		}
 
 		if resp.Usage == nil {
-			m.log.Warn("usage middleware: no usage field in response", zap.String("path", c.Request.URL.Path))
+			m.log.WarnContext(c.Request.Context(), "usage middleware: no usage field in response", slog.String("path", c.Request.URL.Path))
 			return
 		}
 
@@ -91,7 +91,7 @@ func (m *UsageMiddleware) Handler() gin.HandlerFunc {
 		select {
 		case m.usageCh <- usage:
 		default:
-			m.log.Warn("usage middleware: usage channel full, dropping record")
+			m.log.WarnContext(c.Request.Context(), "usage middleware: usage channel full, dropping record")
 		}
 	}
 }

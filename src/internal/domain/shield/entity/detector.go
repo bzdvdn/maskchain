@@ -37,8 +37,8 @@ func NewDetector(id string, typ DetectorType, patterns []Pattern, severity value
 	return d, nil
 }
 
-func (d *Detector) ID() string                 { return d.id }
-func (d *Detector) Type() DetectorType         { return d.typ }
-func (d *Detector) Patterns() []Pattern        { return d.patterns }
-func (d *Detector) Severity() value.Severity   { return d.severity }
-func (d *Detector) Enabled() bool              { return d.enabled }
+func (d *Detector) ID() string               { return d.id }
+func (d *Detector) Type() DetectorType       { return d.typ }
+func (d *Detector) Patterns() []Pattern      { return d.patterns }
+func (d *Detector) Severity() value.Severity { return d.severity }
+func (d *Detector) Enabled() bool            { return d.enabled }

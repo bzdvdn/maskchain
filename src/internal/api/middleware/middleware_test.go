@@ -3,16 +3,15 @@ package middleware
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"go.uber.org/zap/zaptest/observer"
 
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
@@ -30,17 +29,56 @@ func (m *mockEngine) Scan(_ context.Context, _ appshield.ScanRequest) (*appshiel
 	return m.resp, m.err
 }
 
+type testRecordHandler struct {
+	mu      sync.Mutex
+	records []slog.Record
+	level   slog.Level
+}
+
+func (h *testRecordHandler) Enabled(_ context.Context, l slog.Level) bool {
+	return l >= h.level
+}
+
+func (h *testRecordHandler) Handle(_ context.Context, r slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.records = append(h.records, r)
+	return nil
+}
+
+func (h *testRecordHandler) WithAttrs(_ []slog.Attr) slog.Handler { return h }
+func (h *testRecordHandler) WithGroup(_ string) slog.Handler      { return h }
+
+func (h *testRecordHandler) All() []slog.Record {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	out := make([]slog.Record, len(h.records))
+	copy(out, h.records)
+	return out
+}
+
+func (h *testRecordHandler) Len() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return len(h.records)
+}
+
+func newTestLogger(_ *testing.T) (*testRecordHandler, *slog.Logger) {
+	h := &testRecordHandler{level: slog.LevelInfo}
+	return h, slog.New(h)
+}
+
 func newTestTenant(slug string) *entity.Tenant {
 	s, _ := value.NewTenantSlug(slug)
 	return entity.NewTenant(s, "test-"+slug, "Authorization", nil)
 }
 
-func setupTest(t *testing.T) (*gin.Engine, *mockEngine, *zap.Logger) {
+func setupTest(t *testing.T) (*gin.Engine, *mockEngine, *slog.Logger) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	mockEng := &mockEngine{}
-	log, _ := zap.NewProduction()
+	_, log := newTestLogger(t)
 	return engine, mockEng, log
 }
 
@@ -103,7 +141,7 @@ func TestRequestID_PreservesExisting(t *testing.T) {
 func TestRecovery(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	log, _ := zap.NewProduction()
+	_, log := newTestLogger(t)
 	engine.Use(Recovery(log))
 	engine.GET("/panic", func(c *gin.Context) {
 		panic("boom")
@@ -121,8 +159,7 @@ func TestRecovery(t *testing.T) {
 // @sk-test 10-gateway-skeleton#T4.2: TestLogger writes all fields (AC-007)
 func TestLogger(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	core, recorded := observer.New(zapcore.InfoLevel)
-	log := zap.New(core)
+	rec, log := newTestLogger(t)
 
 	engine := gin.New()
 	engine.Use(RequestID())
@@ -135,28 +172,29 @@ func TestLogger(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 	engine.ServeHTTP(w, req)
 
-	if recorded.Len() == 0 {
+	if rec.Len() == 0 {
 		t.Fatal("expected log entry")
 	}
-	entry := recorded.All()[0]
+	entry := rec.All()[0]
 
 	var method, path, rid string
 	var status int
 	var hasDuration bool
-	for _, f := range entry.Context {
-		switch f.Key {
+	entry.Attrs(func(a slog.Attr) bool {
+		switch a.Key {
 		case "method":
-			method = f.String
+			method = a.Value.String()
 		case "path":
-			path = f.String
+			path = a.Value.String()
 		case "status":
-			status = int(f.Integer)
+			status = int(a.Value.Int64())
 		case "duration":
 			hasDuration = true
 		case "request_id":
-			rid = f.String
+			rid = a.Value.String()
 		}
-	}
+		return true
+	})
 
 	if method != "GET" {
 		t.Errorf("expected method GET, got %q", method)
@@ -178,8 +216,7 @@ func TestLogger(t *testing.T) {
 // @sk-test 80-tenant-isolation#T4.7: TestLoggerWithTenant verifies tenant_id attribute (AC-008)
 func TestLoggerWithTenant(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	core, recorded := observer.New(zapcore.InfoLevel)
-	log := zap.New(core)
+	rec, log := newTestLogger(t)
 
 	engine := gin.New()
 	engine.Use(RequestID())
@@ -194,18 +231,19 @@ func TestLoggerWithTenant(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 	engine.ServeHTTP(w, req)
 
-	if recorded.Len() == 0 {
+	if rec.Len() == 0 {
 		t.Fatal("expected log entry")
 	}
-	entry := recorded.All()[0]
+	entry := rec.All()[0]
 
 	var hasTenantID bool
-	for _, f := range entry.Context {
-		if f.Key == "tenant_id" && f.String == "test-tenant" {
+	entry.Attrs(func(a slog.Attr) bool {
+		if a.Key == "tenant_id" && a.Value.String() == "test-tenant" {
 			hasTenantID = true
-			break
+			return false
 		}
-	}
+		return true
+	})
 	if !hasTenantID {
 		t.Error("expected tenant_id field in log entry")
 	}
@@ -272,7 +310,7 @@ func TestCORS_Wildcard(t *testing.T) {
 // @sk-test 13-shield-middleware-wiring#T4.2: Updated to use newPIITenant with PIIConfig
 func TestShieldIntegration(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	log, _ := zap.NewProduction()
+	_, log := newTestLogger(t)
 
 	mockEng := &mockEngine{}
 
@@ -391,7 +429,8 @@ func TestMetricsMiddleware(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	engine.Use(RequestID())
-	engine.Use(Logger(zap.NewNop()))
+	_, noopLog := newTestLogger(t)
+	engine.Use(Logger(noopLog))
 	engine.Use(metrics.Middleware())
 	engine.GET("/test", func(c *gin.Context) {
 		c.Status(http.StatusOK)
@@ -415,7 +454,7 @@ func TestShieldMiddleware_Metrics(t *testing.T) {
 			ScanResult: entity.NewScanResult(value.ScanStatusClean),
 		},
 	}
-	log := zap.NewNop()
+	_, log := newTestLogger(t)
 
 	promReg := prometheus.NewRegistry()
 	metrics.RegisterMetrics(promReg)

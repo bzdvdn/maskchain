@@ -12,7 +12,7 @@ import (
 
 // @sk-task tenant-profile-sync#T1.4: Implement DBFirstTenantResolver (AC-002, AC-003, AC-004)
 type DBFirstTenantResolver struct {
-	repo      shield.TenantRepository
+	repo       shield.TenantRepository
 	cfgTenants map[string]*entity.Tenant
 }
 

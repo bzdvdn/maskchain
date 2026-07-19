@@ -2,9 +2,9 @@ package reaction
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"testing"
-
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
@@ -12,7 +12,7 @@ import (
 
 // @sk-test remove-audit-incidents#T4.1: Test AlertReaction logs result info without persisting (AC-014)
 func TestAlertReaction_LogsResult(t *testing.T) {
-	log := zap.NewNop()
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 	ar := NewAlertReaction(log)
 	result := entity.NewScanResult(value.ScanStatusSuspicious)
 
@@ -27,7 +27,7 @@ func TestAlertReaction_LogsResult(t *testing.T) {
 
 // @sk-test remove-audit-incidents#T4.1: Test AlertReaction with nil result
 func TestAlertReaction_NilResult(t *testing.T) {
-	log := zap.NewNop()
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 	ar := NewAlertReaction(log)
 
 	out, err := ar.Execute(context.Background(), nil, "text")

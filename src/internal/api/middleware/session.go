@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/session"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
@@ -30,7 +30,7 @@ type sessionChatBody struct {
 }
 
 // @sk-task sessions#T4.1: Implement SessionMiddleware (AC-010)
-func SessionMiddleware(useCase *session.SessionUseCase, cfg *config.SessionConfig, log *zap.Logger) gin.HandlerFunc {
+func SessionMiddleware(useCase *session.SessionUseCase, cfg *config.SessionConfig, log *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		sessionID := c.GetHeader("X-Session-ID")
 		if sessionID == "" {

@@ -102,10 +102,10 @@ func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
 	if firstProvider != nil {
 		// @sk-task 80-tenant-isolation#T3.1: Propagate X-Tenant-ID to upstream (AC-007)
 		providerReq := &ports.ProviderRequest{
-			Method:  http.MethodPost,
-			URL:     upstreamPath,
-			Body:    body,
-			Path:    c.Request.URL.Path,
+			Method: http.MethodPost,
+			URL:    upstreamPath,
+			Body:   body,
+			Path:   c.Request.URL.Path,
 			Headers: map[string]string{
 				"X-Tenant-ID": tenantID,
 			},

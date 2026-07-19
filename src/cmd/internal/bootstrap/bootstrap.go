@@ -3,24 +3,26 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/valkey-io/valkey-go"
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
+	"github.com/bzdvdn/maskchain/src/internal/infra/logging"
 	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
 	"github.com/bzdvdn/maskchain/src/internal/infra/telemetry"
 )
 
 type Bootstrap struct {
 	Cfg          *config.Config
-	Logger       *zap.Logger
+	Logger       *slog.Logger
 	PGPool       *pgxpool.Pool
 	ValkeyClient valkey.Client
 	PromRegistry *prometheus.Registry
@@ -46,21 +48,21 @@ func HealthCheck(cfg *config.ServerConfig) int {
 
 func NoopShutdown(_ context.Context) error { return nil }
 
-func BuildLogger(level string) (*zap.Logger, error) {
-	zapCfg := zap.NewProductionConfig()
+func BuildLogger(level string) *slog.Logger {
+	var l slog.Level
 	switch level {
 	case "debug":
-		zapCfg.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+		l = slog.LevelDebug
 	case "info":
-		zapCfg.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+		l = slog.LevelInfo
 	case "warn":
-		zapCfg.Level = zap.NewAtomicLevelAt(zap.WarnLevel)
+		l = slog.LevelWarn
 	case "error":
-		zapCfg.Level = zap.NewAtomicLevelAt(zap.ErrorLevel)
+		l = slog.LevelError
 	default:
-		zapCfg.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+		l = slog.LevelInfo
 	}
-	return zapCfg.Build()
+	return logging.NewLogger(os.Stdout, l)
 }
 
 func ExtractHostPort(rawURL string) string {
@@ -71,7 +73,7 @@ func ExtractHostPort(rawURL string) string {
 	return u.Host
 }
 
-func InitBootstrap(ctx context.Context, cfg *config.Config, log *zap.Logger, serviceName string) (*Bootstrap, error) {
+func InitBootstrap(ctx context.Context, cfg *config.Config, log *slog.Logger, serviceName string) (*Bootstrap, error) {
 	var pgPool *pgxpool.Pool
 	if cfg.DB != nil && cfg.DB.DSN != "" {
 		var err error
@@ -89,7 +91,7 @@ func InitBootstrap(ctx context.Context, cfg *config.Config, log *zap.Logger, ser
 			Password:    cfg.Valkey.Password,
 		})
 		if err != nil {
-			log.Warn("Valkey init failed, continuing without cache", zap.Error(err))
+			log.Warn("Valkey init failed, continuing without cache", slog.String("error", err.Error()))
 		}
 	}
 
@@ -100,7 +102,7 @@ func InitBootstrap(ctx context.Context, cfg *config.Config, log *zap.Logger, ser
 	if cfg.OTel != nil {
 		shutdown, err := telemetry.InitProvider(ctx, cfg.OTel.Endpoint, serviceName, cfg.OTel.Environment, cfg.OTel.SamplingRatio, log)
 		if err != nil {
-			log.Warn("OTel init failed, continuing without telemetry", zap.Error(err))
+			log.Warn("OTel init failed, continuing without telemetry", slog.String("error", err.Error()))
 		} else {
 			otelShutdown = shutdown
 		}
@@ -140,12 +142,12 @@ func InitBootstrap(ctx context.Context, cfg *config.Config, log *zap.Logger, ser
 }
 
 // InitPG — deprecated, use InitBootstrap.
-func InitPG(ctx context.Context, dbCfg *config.DatabaseConfig, log *zap.Logger) (*pgxpool.Pool, error) {
+func InitPG(ctx context.Context, dbCfg *config.DatabaseConfig, log *slog.Logger) (*pgxpool.Pool, error) {
 	return postgres.NewPool(ctx, dbCfg)
 }
 
 // InitValkey — deprecated, use InitBootstrap.
-func InitValkey(vkCfg *config.ValkeyConfig, log *zap.Logger) (valkey.Client, error) {
+func InitValkey(vkCfg *config.ValkeyConfig, log *slog.Logger) (valkey.Client, error) {
 	if vkCfg == nil || vkCfg.Addr == "" {
 		return nil, nil
 	}

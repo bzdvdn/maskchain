@@ -14,7 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"go.uber.org/zap"
+	"log/slog"
 
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
 	"github.com/bzdvdn/maskchain/src/internal/domain/session"
@@ -117,7 +117,7 @@ type Scanner interface {
 // @sk-task tenant-profile-sync#T3.1: ShieldMiddleware reads dictionaries from tenant (AC-006, AC-007)
 // @sk-task remove-audit-incidents#T2.3: Remove incident creation, X-Shield-Incident-ID, and ShieldIncidentsBySeverity (AC-008, AC-011)
 // @sk-task sessions#T4.2: Integrate session increment counters after scan (AC-002)
-func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger, sessionUC ...*session.SessionUseCase) gin.HandlerFunc {
+func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *slog.Logger, sessionUC ...*session.SessionUseCase) gin.HandlerFunc {
 	var sessUC *session.SessionUseCase
 	if len(sessionUC) > 0 {
 		sessUC = sessionUC[0]
@@ -127,7 +127,7 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger,
 
 		body, err := c.GetRawData()
 		if err != nil {
-			log.Error("failed to read request body", zap.Error(err))
+			log.ErrorContext(c.Request.Context(), "failed to read request body", slog.String("error", err.Error()))
 			abortWithShieldError(c, http.StatusInternalServerError, "failed to read body", "")
 			return
 		}
@@ -172,9 +172,9 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger,
 		piiCfg := tenant.PIIConfig()
 
 		tenantDicts := tenant.Dictionaries()
-		log.Debug("shield dict",
-			zap.Int("dict_count", len(tenantDicts)),
-			zap.String("tenant_slug", tenantSlug),
+		log.DebugContext(c.Request.Context(), "shield dict",
+			slog.Int("dict_count", len(tenantDicts)),
+			slog.String("tenant_slug", tenantSlug),
 		)
 		dictDetectors := make([]*detector.DictionaryDetector, 0, len(tenantDicts))
 		for _, dict := range tenantDicts {
@@ -182,10 +182,10 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger,
 				continue
 			}
 			vals := dict.AllValues()
-			log.Debug("shield dict detector",
-				zap.String("dict_name", dict.Name()),
-				zap.String("match_mode", string(dict.MatchMode())),
-				zap.Int("entry_count", len(vals)),
+			log.DebugContext(c.Request.Context(), "shield dict detector",
+				slog.String("dict_name", dict.Name()),
+				slog.String("match_mode", string(dict.MatchMode())),
+				slog.Int("entry_count", len(vals)),
 			)
 			dictDetectors = append(dictDetectors, detector.NewDictionaryDetector(dict))
 		}
@@ -200,15 +200,20 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger,
 			hasDictHits = true
 			totalDictMatches += len(results)
 		}
-		log.Debug("shield dict scan",
-			zap.Bool("has_hits", hasDictHits),
-			zap.Int("total_matches", totalDictMatches),
+		log.DebugContext(c.Request.Context(), "shield dict scan",
+			slog.Bool("has_hits", hasDictHits),
+			slog.Int("total_matches", totalDictMatches),
 		)
 
 		// @sk-task 13-shield-middleware-wiring#T2.2: Store dict mask mapping per-request for later unmask (AC-006)
 		dictMaskMapping := make(map[string]string)
 		if hasDictHits {
-			dictMaskID := mask.NewShortID()
+			dictMaskID, err := mask.NewShortID()
+			if err != nil {
+				log.ErrorContext(c.Request.Context(), "failed to generate dict mask ID", slog.String("error", err.Error()))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+				return
+			}
 			phCounter := 0
 			for mi, msg := range chatReq.Messages {
 				if msg.Content == "" {
@@ -233,9 +238,9 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger,
 					chatReq.Messages[mi].Content = chatReq.Messages[mi].Content[:r.StartPos] + ph + chatReq.Messages[mi].Content[r.StartPos+len(r.Fragment):]
 				}
 			}
-			log.Debug("shield dict mask",
-				zap.String("mask_id", dictMaskID),
-				zap.Int("placeholder_count", phCounter),
+			log.DebugContext(c.Request.Context(), "shield dict mask",
+				slog.String("mask_id", dictMaskID),
+				slog.Int("placeholder_count", phCounter),
 			)
 			if phCounter > 0 {
 				newBody, _ := json.Marshal(chatReq)
@@ -251,9 +256,9 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger,
 		piiText := extractPromptText(chatReq.Messages)
 		if engine != nil && piiCfg.Enabled && len(piiCfg.Rules) > 0 {
 			resp, err = engine.Scan(c.Request.Context(), appshield.ScanRequest{
-				Text:  piiText,
+				Text: piiText,
 
-// @sk-task 13-shield-middleware-wiring#T4.2: After dict masking, re-extract text for PII scan
+				// @sk-task 13-shield-middleware-wiring#T4.2: After dict masking, re-extract text for PII scan
 				Rules: piiCfg.Rules,
 			})
 			// @sk-task 13-shield-middleware-wiring#T2.1: Graceful degradation on engine.Scan error (AC-004)
@@ -262,10 +267,10 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger,
 				if defaultAction == "" {
 					defaultAction = "block"
 				}
-				log.Warn("engine scan failed, applying default_action",
-					zap.Error(err),
-					zap.String("tenant_slug", tenantSlug),
-					zap.String("default_action", defaultAction),
+				log.WarnContext(c.Request.Context(), "engine scan failed, applying default_action",
+					slog.String("error", err.Error()),
+					slog.String("tenant_slug", tenantSlug),
+					slog.String("default_action", defaultAction),
 				)
 				if defaultAction == "block" {
 					c.Header("X-Shield-Status", "blocked")
@@ -299,8 +304,8 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger,
 				for ph, original := range resp.Replacements {
 					dictMaskMapping[ph] = original
 				}
-				log.Debug("shield pii mask",
-					zap.Int("pii_replacement_count", len(resp.Replacements)),
+				log.DebugContext(c.Request.Context(), "shield pii mask",
+					slog.Int("pii_replacement_count", len(resp.Replacements)),
 				)
 			}
 		}
@@ -331,16 +336,16 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger,
 
 		// @sk-task 13-shield-middleware-wiring#T3.3: Log pii_enabled, rules_count and unmasked fields
 		unmasked := len(dictMaskMapping) > 0
-		log.Info("shield scan",
-			zap.String("shield_status", scanStatus),
-			zap.String("tenant_slug", tenantSlug),
-			zap.Bool("pii_enabled", piiCfg.Enabled),
-			zap.Int("rules_count", len(piiCfg.Rules)),
-			zap.Int("pii_masked", piiMaskedCount(resp)),
-			zap.String("model", chatReq.Model),
-			zap.Duration("latency", duration),
-			zap.Bool("unmasked", unmasked),
-			zap.Int("findings_count", len(findings)),
+		log.InfoContext(c.Request.Context(), "shield scan",
+			slog.String("shield_status", scanStatus),
+			slog.String("tenant_slug", tenantSlug),
+			slog.Bool("pii_enabled", piiCfg.Enabled),
+			slog.Int("rules_count", len(piiCfg.Rules)),
+			slog.Int("pii_masked", piiMaskedCount(resp)),
+			slog.String("model", chatReq.Model),
+			slog.Duration("latency", duration),
+			slog.Bool("unmasked", unmasked),
+			slog.Int("findings_count", len(findings)),
 		)
 
 		status := respStatus(resp)
@@ -387,7 +392,7 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger,
 }
 
 // @sk-task sessions#T4.2: Increment session counters after shield scan (AC-002)
-func incrementSessionFromContext(c *gin.Context, sessUC *session.SessionUseCase, dictMaskMapping map[string]string, resp *appshield.ScanResponse, tenantSlug string, log *zap.Logger) {
+func incrementSessionFromContext(c *gin.Context, sessUC *session.SessionUseCase, dictMaskMapping map[string]string, resp *appshield.ScanResponse, tenantSlug string, log *slog.Logger) {
 	if sessUC == nil {
 		return
 	}
@@ -407,7 +412,7 @@ func incrementSessionFromContext(c *gin.Context, sessUC *session.SessionUseCase,
 	tokens := int64(len(body) / 4)
 
 	if err := sessUC.IncrementCounts(c.Request.Context(), tenantSlug, sess.SessionID, tokens, 1, totalMasks, dictMaskCount, piiMaskCount, 0); err != nil {
-		log.Warn("failed to increment session counters", zap.Error(err))
+		log.WarnContext(c.Request.Context(), "failed to increment session counters", slog.String("error", err.Error()))
 	}
 }
 
@@ -453,5 +458,3 @@ func shieldFindings(resp *appshield.ScanResponse) []entity.Finding {
 	}
 	return resp.Findings()
 }
-
-

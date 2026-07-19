@@ -2,9 +2,8 @@ package sessionrepo
 
 import (
 	"context"
+	"log/slog"
 	"time"
-
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/session"
 )
@@ -13,10 +12,10 @@ import (
 type CachedSessionStore struct {
 	primary   session.SessionStore
 	secondary session.SessionStore
-	log       *zap.Logger
+	log       *slog.Logger
 }
 
-func NewCachedSessionStore(primary, secondary session.SessionStore, log *zap.Logger) *CachedSessionStore {
+func NewCachedSessionStore(primary, secondary session.SessionStore, log *slog.Logger) *CachedSessionStore {
 	return &CachedSessionStore{
 		primary:   primary,
 		secondary: secondary,
@@ -26,7 +25,7 @@ func NewCachedSessionStore(primary, secondary session.SessionStore, log *zap.Log
 
 func (s *CachedSessionStore) secondaryOp(ctx context.Context, op string, fn func() error) {
 	if err := fn(); err != nil {
-		s.log.Warn("session cache secondary operation failed", zap.String("op", op), zap.Error(err))
+		s.log.Warn("session cache secondary operation failed", slog.String("op", op), slog.String("error", err.Error()))
 	}
 }
 

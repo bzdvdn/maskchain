@@ -18,10 +18,10 @@ func TestOTelHandler_TraceID(t *testing.T) {
 	spanID := trace.SpanID{1, 2, 3, 4, 5, 6, 7, 8}
 	traceID := trace.TraceID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 	sc := trace.NewSpanContext(trace.SpanContextConfig{
-		TraceID: traceID,
-		SpanID:  spanID,
+		TraceID:    traceID,
+		SpanID:     spanID,
 		TraceFlags: trace.TraceFlags(1),
-		Remote:  false,
+		Remote:     false,
 	})
 	ctx := trace.ContextWithSpanContext(context.Background(), sc)
 

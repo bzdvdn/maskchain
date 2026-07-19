@@ -12,7 +12,6 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/domain/session"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
-
 )
 
 type createSessionRequest struct {
@@ -53,7 +52,12 @@ func (h *SessionHandler) HandleCreate(c *gin.Context) {
 		ttl = 30 * time.Minute
 	}
 
-	sess, err := h.useCase.Create(c.Request.Context(), session.NewSessionID(), tenantID, req.Model, ttl)
+	sid, err := session.NewSessionID()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate session ID"})
+		return
+	}
+	sess, err := h.useCase.Create(c.Request.Context(), sid, tenantID, req.Model, ttl)
 	if err != nil {
 		if errors.Is(err, session.ErrSessionConflict) {
 			c.JSON(http.StatusConflict, gin.H{"error": "session ID already exists"})

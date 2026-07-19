@@ -2,14 +2,12 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-
-	"go.uber.org/zap"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -36,17 +34,18 @@ import (
 
 func run() {
 	cfg, logger := initConfigLog()
-	defer logger.Sync()
 
 	b, err := bootstrap.InitBootstrap(context.Background(), cfg, logger, adminServiceName(cfg))
 	if err != nil {
-		logger.Fatal("bootstrap failed", zap.Error(err))
+		logger.Error("bootstrap failed", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 	defer b.Close()
 
 	if cfg.DB != nil && cfg.DB.DSN != "" {
 		if err := postgres.RunMigrations(cfg.DB.DSN); err != nil {
-			logger.Fatal("failed to run migrations", zap.Error(err))
+			logger.Error("failed to run migrations", slog.String("error", err.Error()))
+			os.Exit(1)
 		}
 	}
 
@@ -54,7 +53,10 @@ func run() {
 	srv := api.NewAdminServer(cfg.Server, logger, adminServiceName(cfg), b.HealthSvc)
 	srv.RegisterMetricsRoute(metrics.Handler(b.PromRegistry))
 	srv.RegisterVersionRoute(version.Info())
-	srv.RegisterStaticFiles(ui.DistFiles)
+	if err := srv.RegisterStaticFiles(ui.DistFiles); err != nil {
+		logger.Error("register static files", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
 	srv.RegisterDebugRoutes(middleware.AdminAuth(cfg.Debug))
 
 	initAdminTenants(cfg, b.PGPool, srv, logger)
@@ -78,7 +80,7 @@ func run() {
 		tenantMw := middleware.AdminSessionOrTokenAuth(adminSessionUC, cfg.Debug, func(ctx context.Context, apiKey string) bool {
 			tenants, err := pgTenantRepo.List(ctx)
 			if err != nil {
-				logger.Warn("tenant list for API key check", zap.Error(err))
+				logger.Warn("tenant list for API key check", slog.String("error", err.Error()))
 				return false
 			}
 			for _, t := range tenants {
@@ -129,14 +131,10 @@ func run() {
 	adminServe(cfg, logger, b, srv)
 }
 
-func initConfigLog() (*config.Config, *zap.Logger) {
+func initConfigLog() (*config.Config, *slog.Logger) {
 	cfg := config.MustLoadConfig()
-	logger, err := bootstrap.BuildLogger(cfg.Log.Level)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
-	logger.Debug("config loaded", zap.Object("config", cfg))
+	logger := bootstrap.BuildLogger(cfg.Log.Level)
+	logger.Debug("config loaded", slog.Any("config", cfg))
 	return cfg, logger
 }
 
@@ -147,7 +145,7 @@ func adminServiceName(cfg *config.Config) string {
 	return "maskchain-admin"
 }
 
-func watchAdminConfigReload(cfg *config.Config, logger *zap.Logger) {
+func watchAdminConfigReload(cfg *config.Config, logger *slog.Logger) {
 	cfgDir := config.ConfigDirFromArgs()
 	if cfgDir == "" {
 		return
@@ -165,7 +163,7 @@ func watchAdminConfigReload(cfg *config.Config, logger *zap.Logger) {
 	})
 }
 
-func initAdminTenants(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.AdminServer, logger *zap.Logger) {
+func initAdminTenants(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.AdminServer, logger *slog.Logger) {
 	if cfg.Tenants == nil {
 		logger.Warn("no tenants configured, auth disabled")
 		return
@@ -178,7 +176,8 @@ func initAdminTenants(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.AdminSe
 	for slugStr, tc := range cfg.Tenants {
 		slug, err := shvalue.NewTenantSlug(slugStr)
 		if err != nil {
-			logger.Fatal("invalid tenant slug", zap.String("tenant", slugStr), zap.Error(err))
+			logger.Error("invalid tenant slug", slog.String("tenant", slugStr), slog.String("error", err.Error()))
+			os.Exit(1)
 		}
 		opts := []entity.TenantOption{entity.WithTenantDictionaries(nil)}
 		if tc.PIIConfig != nil {
@@ -191,7 +190,8 @@ func initAdminTenants(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.AdminSe
 	syncCtx, syncCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	if err := tenantResolver.SyncConfig(syncCtx, cfgTenants); err != nil {
 		syncCancel()
-		logger.Fatal("failed to sync tenants from config", zap.Error(err))
+		logger.Error("failed to sync tenants from config", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 	syncCancel()
 
@@ -199,14 +199,15 @@ func initAdminTenants(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.AdminSe
 	dbTenants, err := tenantResolver.List(loadCtx)
 	loadCancel()
 	if err != nil {
-		logger.Fatal("failed to load tenants from db", zap.Error(err))
+		logger.Error("failed to load tenants from db", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 
 	srv.RegisterAuth(middleware.Auth(middleware.NewTenantProvider(dbTenants)))
-	logger.Info("auth middleware registered", zap.Int("tenants", len(dbTenants)))
+	logger.Info("auth middleware registered", slog.Int("tenants", len(dbTenants)))
 }
 
-func adminServe(cfg *config.Config, logger *zap.Logger, b *bootstrap.Bootstrap, srv *api.AdminServer) {
+func adminServe(cfg *config.Config, logger *slog.Logger, b *bootstrap.Bootstrap, srv *api.AdminServer) {
 	errCh := make(chan error, 1)
 	go func() {
 		if err := srv.Start(); err != nil && err != http.ErrServerClosed {
@@ -220,9 +221,9 @@ func adminServe(cfg *config.Config, logger *zap.Logger, b *bootstrap.Bootstrap, 
 	var sig os.Signal
 	select {
 	case sig = <-quit:
-		logger.Info("shutting down", zap.String("signal", sig.String()))
+		logger.Info("shutting down", slog.String("signal", sig.String()))
 	case err := <-errCh:
-		logger.Error("server error", zap.Error(err))
+		logger.Error("server error", slog.String("error", err.Error()))
 		return
 	}
 
@@ -230,10 +231,10 @@ func adminServe(cfg *config.Config, logger *zap.Logger, b *bootstrap.Bootstrap, 
 	defer shutdownCancel()
 
 	if err := b.OTelShutdown(shutdownCtx); err != nil {
-		logger.Error("otel shutdown error", zap.Error(err))
+		logger.Error("otel shutdown error", slog.String("error", err.Error()))
 	}
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		logger.Error("shutdown error", zap.Error(err))
+		logger.Error("shutdown error", slog.String("error", err.Error()))
 	}
 	logger.Info("server stopped")
 }

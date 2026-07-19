@@ -31,6 +31,6 @@ const (
 	SessionStatusClosed  SessionStatus = "closed"
 )
 
-func NewSessionID() string {
+func NewSessionID() (string, error) {
 	return mask.NewUUIDv7()
 }

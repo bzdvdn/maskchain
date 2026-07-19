@@ -2,9 +2,8 @@ package analytics
 
 import (
 	"context"
+	"log/slog"
 	"time"
-
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/analytics"
 )
@@ -14,11 +13,11 @@ type CleanupWorker struct {
 	store     analytics.UsageStore
 	interval  time.Duration
 	retention time.Duration
-	log       *zap.Logger
+	log       *slog.Logger
 }
 
 // @sk-task 131-analytics-pipeline#T3.5: NewCleanupWorker creates a new cleanup worker (AC-008)
-func NewCleanupWorker(store analytics.UsageStore, interval time.Duration, retention time.Duration, log *zap.Logger) *CleanupWorker {
+func NewCleanupWorker(store analytics.UsageStore, interval time.Duration, retention time.Duration, log *slog.Logger) *CleanupWorker {
 	return &CleanupWorker{
 		store:     store,
 		interval:  interval,
@@ -35,8 +34,8 @@ func (w *CleanupWorker) Run(ctx context.Context) {
 	}
 
 	w.log.Info("cleanup worker started",
-		zap.Duration("interval", w.interval),
-		zap.Duration("retention", w.retention),
+		slog.Duration("interval", w.interval),
+		slog.Duration("retention", w.retention),
 	)
 
 	ticker := time.NewTicker(w.interval)
@@ -60,10 +59,10 @@ func (w *CleanupWorker) runOnce(ctx context.Context) {
 
 	deleted, err := w.store.DeleteOlderThan(cleanupCtx, cutoff)
 	if err != nil {
-		w.log.Warn("cleanup worker: delete failed", zap.Error(err))
+		w.log.Warn("cleanup worker: delete failed", slog.String("error", err.Error()))
 		return
 	}
 	if deleted > 0 {
-		w.log.Info("cleanup worker: old records deleted", zap.Int64("count", deleted))
+		w.log.Info("cleanup worker: old records deleted", slog.Int64("count", deleted))
 	}
 }

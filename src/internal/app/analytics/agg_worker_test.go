@@ -2,12 +2,12 @@ package analytics
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"go.uber.org/zap"
 )
 
 func getTestPool(t *testing.T) *pgxpool.Pool {
@@ -66,7 +66,7 @@ func TestAggregationWorkerHourly(t *testing.T) {
 		(gen_random_uuid(), 't1', 'gpt-4', 100, 50, 0.015, $1),
 		(gen_random_uuid(), 't1', 'gpt-4', 200, 100, 0.03, $1)`, hourBoundary)
 
-	worker := NewAggregationWorker(pool, time.Hour, zap.NewNop())
+	worker := NewAggregationWorker(pool, time.Hour, slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1})))
 	worker.materializeHourly(ctx, hourBoundary)
 
 	var rowCount int
@@ -108,7 +108,7 @@ func TestAggregationWorkerDaily(t *testing.T) {
 		(gen_random_uuid(), 't1', 'gpt-4', 500, 250, 0.075, $1),
 		(gen_random_uuid(), 't1', 'gpt-4', 300, 150, 0.045, $1)`, dayBoundary)
 
-	worker := NewAggregationWorker(pool, time.Hour, zap.NewNop())
+	worker := NewAggregationWorker(pool, time.Hour, slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1})))
 	worker.materializeDaily(ctx, dayBoundary)
 
 	var rowCount int
@@ -133,7 +133,7 @@ func TestAggregationWorkerDaily(t *testing.T) {
 
 // @sk-test 131-analytics-pipeline#T4.3: TestAggregationWorkerNilPool (AC-004)
 func TestAggregationWorkerNilPool(t *testing.T) {
-	worker := NewAggregationWorker(nil, time.Hour, zap.NewNop())
+	worker := NewAggregationWorker(nil, time.Hour, slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1})))
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	worker.Run(ctx)

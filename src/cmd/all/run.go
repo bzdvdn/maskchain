@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -10,7 +11,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/cmd/internal/bootstrap"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/provider"
@@ -31,34 +31,30 @@ func run() {
 
 	cfg := config.MustLoadConfig()
 
-	logger, err := bootstrap.BuildLogger(cfg.Log.Level)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
-	defer logger.Sync()
+	logger := bootstrap.BuildLogger(cfg.Log.Level)
 
-	logger.Debug("config loaded", zap.Object("config", cfg))
+	logger.Debug("config loaded", slog.Any("config", cfg))
 
 	if cfg.DB != nil {
 		logger.Info("database pool config",
-			zap.Int("max_open_conns", cfg.DB.MaxConns),
-			zap.Int("min_idle_conns", cfg.DB.MinConns),
-			zap.Duration("conn_max_lifetime", cfg.DB.MaxConnLifetime),
+			slog.Int("max_open_conns", cfg.DB.MaxConns),
+			slog.Int("min_idle_conns", cfg.DB.MinConns),
+			slog.Duration("conn_max_lifetime", cfg.DB.MaxConnLifetime),
 		)
 	}
 	if cfg.Egress != nil {
 		logger.Info("http pool config",
-			zap.Int("max_idle_conns", cfg.Egress.MaxIdleConns),
-			zap.Int("max_idle_conns_per_host", cfg.Egress.MaxIdleConnsPerHost),
-			zap.Duration("idle_timeout", cfg.Egress.IdleTimeout),
-			zap.Bool("disable_keep_alives", cfg.Egress.DisableKeepAlives),
+			slog.Int("max_idle_conns", cfg.Egress.MaxIdleConns),
+			slog.Int("max_idle_conns_per_host", cfg.Egress.MaxIdleConnsPerHost),
+			slog.Duration("idle_timeout", cfg.Egress.IdleTimeout),
+			slog.Bool("disable_keep_alives", cfg.Egress.DisableKeepAlives),
 		)
 	}
 
 	registry, err := routingSvc.NewProviderRegistry(toDomainRoutingConfig(cfg.Routing))
 	if err != nil {
-		logger.Fatal("failed to create provider registry", zap.Error(err))
+		logger.Error("failed to create provider registry", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 	selector := routingSvc.NewRouteSelector(registry)
 	clients := make(map[string]ports.ProviderClient)
@@ -67,13 +63,14 @@ func run() {
 			pcfg := &cfg.Routing.Providers[i]
 			client, err := provider.NewProviderClient(pcfg, cfg.Egress)
 			if err != nil {
-				logger.Fatal("failed to create provider client", zap.String("provider", pcfg.Name), zap.Error(err))
+				logger.Error("failed to create provider client", slog.String("provider", pcfg.Name), slog.String("error", err.Error()))
+				os.Exit(1)
 			}
 			clients[pcfg.Name] = client
 			logger.Info("provider client created",
-				zap.String("provider", pcfg.Name),
-				zap.String("api_type", pcfg.APIType),
-				zap.String("base_url", pcfg.BaseURL),
+				slog.String("provider", pcfg.Name),
+				slog.String("api_type", pcfg.APIType),
+				slog.String("base_url", pcfg.BaseURL),
 			)
 		}
 	}
@@ -88,7 +85,7 @@ func run() {
 			changed := config.DiffSections(old, new)
 			if changed["routing"] {
 				if updateErr := registry.UpdateConfig(toDomainRoutingConfig(new.Routing)); updateErr != nil {
-					logger.Error("config reload: routing registry update failed", zap.Error(updateErr))
+					logger.Error("config reload: routing registry update failed", slog.String("error", updateErr.Error()))
 					return
 				}
 				newClients := make(map[string]ports.ProviderClient)
@@ -97,7 +94,7 @@ func run() {
 						pcfg := &new.Routing.Providers[i]
 						client, clientErr := provider.NewProviderClient(pcfg, new.Egress)
 						if clientErr != nil {
-							logger.Error("config reload: failed to create provider client", zap.String("provider", pcfg.Name), zap.Error(clientErr))
+							logger.Error("config reload: failed to create provider client", slog.String("provider", pcfg.Name), slog.String("error", clientErr.Error()))
 							continue
 						}
 						newClients[pcfg.Name] = client
@@ -148,7 +145,7 @@ func run() {
 			logger,
 		)
 		if err != nil {
-			logger.Warn("telemetry init", zap.Error(err))
+			logger.Warn("telemetry init", slog.String("error", err.Error()))
 		}
 		otelShutdown = shutdown
 	}
@@ -166,18 +163,21 @@ func run() {
 
 	pgPool, err := bootstrap.InitPG(ctx, cfg.DB, logger)
 	if err != nil {
-		logger.Fatal("failed to init postgres", zap.Error(err))
+		logger.Error("failed to init postgres", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 
 	if pgPool != nil {
 		if err := postgres.RunMigrations(cfg.DB.DSN); err != nil {
-			logger.Fatal("failed to run migrations", zap.Error(err))
+			logger.Error("failed to run migrations", slog.String("error", err.Error()))
+			os.Exit(1)
 		}
 	}
 
 	vkClient, err := bootstrap.InitValkey(cfg.Valkey, logger)
 	if err != nil {
-		logger.Fatal("failed to init valkey", zap.Error(err))
+		logger.Error("failed to init valkey", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 
 	gwServer := buildGatewayServer(cfg, logger, serviceName, pgPool, vkClient, gwPromRegistry, gwMetricsHandler, registry, selector, clients, fallbackHandler, routingHandler, otelShutdown)
@@ -186,14 +186,14 @@ func run() {
 	errCh := make(chan error, 2)
 
 	go func() {
-		logger.Info("starting combined gateway server", zap.Int("port", cfg.Server.Port))
+		logger.Info("starting combined gateway server", slog.Int("port", cfg.Server.Port))
 		if err := gwServer.Start(); err != nil && err != http.ErrServerClosed {
 			errCh <- fmt.Errorf("gateway: %w", err)
 		}
 	}()
 
 	go func() {
-		logger.Info("starting combined admin server", zap.Int("port", cfg.Server.AdminPort))
+		logger.Info("starting combined admin server", slog.Int("port", cfg.Server.AdminPort))
 		if err := adminServer.Start(); err != nil && err != http.ErrServerClosed {
 			errCh <- fmt.Errorf("admin: %w", err)
 		}
@@ -205,9 +205,9 @@ func run() {
 	var sig os.Signal
 	select {
 	case sig = <-quit:
-		logger.Info("shutting down", zap.String("signal", sig.String()))
+		logger.Info("shutting down", slog.String("signal", sig.String()))
 	case err := <-errCh:
-		logger.Error("server error", zap.Error(err))
+		logger.Error("server error", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 
@@ -215,7 +215,7 @@ func run() {
 	defer shutdownCancel()
 
 	if err := otelShutdown(shutdownCtx); err != nil {
-		logger.Error("otel shutdown error", zap.Error(err))
+		logger.Error("otel shutdown error", slog.String("error", err.Error()))
 	}
 
 	if pgPool != nil {
@@ -226,10 +226,10 @@ func run() {
 	}
 
 	if err := gwServer.Shutdown(shutdownCtx); err != nil {
-		logger.Error("gateway shutdown error", zap.Error(err))
+		logger.Error("gateway shutdown error", slog.String("error", err.Error()))
 	}
 	if err := adminServer.Shutdown(shutdownCtx); err != nil {
-		logger.Error("admin shutdown error", zap.Error(err))
+		logger.Error("admin shutdown error", slog.String("error", err.Error()))
 	}
 
 	logger.Info("combined server stopped")

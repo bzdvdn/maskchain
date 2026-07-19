@@ -2,16 +2,17 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 
-	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
+	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
 	routing2 "github.com/bzdvdn/maskchain/src/internal/domain/routing"
 	routingSvc "github.com/bzdvdn/maskchain/src/internal/domain/routing/service"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
@@ -51,7 +52,7 @@ func (m *integrationMockClient) Stream(_ context.Context, _ *ports.ProviderReque
 func TestIntegration_FullCycle(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	log, _ := zap.NewProduction()
+	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	slug, _ := value.NewTenantSlug("test-tenant")
 	tenant := entity.NewTenant(slug, "test-tenant", "Authorization", []string{"valid-key"},

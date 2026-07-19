@@ -36,7 +36,12 @@ func (h *MaskHandler) HandleMask(c *gin.Context) {
 	maskID := c.Query("mask_id")
 	var docMaskID string
 	if maskID == "" {
-		maskID = mask.NewShortID()
+		id, err := mask.NewShortID()
+		if err != nil {
+			c.String(http.StatusInternalServerError, "failed to generate mask id")
+			return
+		}
+		maskID = id
 		docMaskID = maskID
 	} else {
 		if !validMaskID(maskID) {
@@ -44,7 +49,12 @@ func (h *MaskHandler) HandleMask(c *gin.Context) {
 			return
 		}
 		if len(maskID) > 12 {
-			docMaskID = mask.NewShortID()
+			id, err := mask.NewShortID()
+			if err != nil {
+				c.String(http.StatusInternalServerError, "failed to generate document mask id")
+				return
+			}
+			docMaskID = id
 		} else {
 			docMaskID = maskID
 		}

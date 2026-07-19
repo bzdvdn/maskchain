@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -14,13 +15,12 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
-	"go.uber.org/zap"
 )
 
 // @sk-task 61-observability#T1.2: InitProvider initializes OTel TracerProvider and MeterProvider (AC-001, AC-006, AC-007)
-func InitProvider(ctx context.Context, endpoint, serviceName, environment string, samplingRatio float64, log *zap.Logger) (func(context.Context) error, error) {
+func InitProvider(ctx context.Context, endpoint, serviceName, environment string, samplingRatio float64, log *slog.Logger) (func(context.Context) error, error) {
 	if endpoint == "" {
-		log.Warn("otel endpoint is empty, tracing and metrics disabled")
+		log.WarnContext(ctx, "otel endpoint is empty, tracing and metrics disabled")
 		otel.SetTracerProvider(noopTracerProvider())
 		otel.SetMeterProvider(noopMeterProvider())
 		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
@@ -45,7 +45,7 @@ func InitProvider(ctx context.Context, endpoint, serviceName, environment string
 		otlptracegrpc.WithInsecure(),
 	)
 	if err != nil {
-		log.Warn("failed to create trace exporter, tracing disabled", zap.Error(err))
+		log.WarnContext(ctx, "failed to create trace exporter, tracing disabled", slog.String("error", err.Error()))
 		return noopShutdown(), nil
 	}
 
@@ -74,7 +74,7 @@ func InitProvider(ctx context.Context, endpoint, serviceName, environment string
 		otlpmetricgrpc.WithInsecure(),
 	)
 	if err != nil {
-		log.Warn("failed to create metric exporter, metrics export disabled", zap.Error(err))
+		log.WarnContext(ctx, "failed to create metric exporter, metrics export disabled", slog.String("error", err.Error()))
 		return tpShutdown(tp), nil
 	}
 

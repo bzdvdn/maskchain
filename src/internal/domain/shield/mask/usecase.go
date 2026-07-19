@@ -30,10 +30,10 @@ func (uc *MaskUseCase) MaskFromResults(ctx context.Context, text string, maskID 
 		docID = maskID
 	}
 	entry = &MaskEntry{
-		MaskID:          maskID,
-		DocumentMaskID:  docID,
-		Replacements:    make(map[string]string),
-		CreatedAt:       time.Now(),
+		MaskID:         maskID,
+		DocumentMaskID: docID,
+		Replacements:   make(map[string]string),
+		CreatedAt:      time.Now(),
 	}
 
 	if len(results) == 0 {

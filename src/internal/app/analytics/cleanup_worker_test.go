@@ -2,10 +2,10 @@ package analytics
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"testing"
 	"time"
-
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/analytics"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
@@ -14,7 +14,7 @@ import (
 // @sk-test 131-analytics-pipeline#T4.4: TestCleanupWorkerDeletesOldRecords (AC-008)
 func TestCleanupWorkerDeletesOldRecords(t *testing.T) {
 	store := &mockUsageStore{}
-	worker := NewCleanupWorker(store, 50*time.Millisecond, 24*time.Hour, zap.NewNop())
+	worker := NewCleanupWorker(store, 50*time.Millisecond, 24*time.Hour, slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1})))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -25,7 +25,7 @@ func TestCleanupWorkerDeletesOldRecords(t *testing.T) {
 // @sk-test 131-analytics-pipeline#T4.4: TestCleanupWorkerIntervalZero (AC-008)
 func TestCleanupWorkerIntervalZero(t *testing.T) {
 	store := &mockUsageStore{}
-	worker := NewCleanupWorker(store, 0, 24*time.Hour, zap.NewNop())
+	worker := NewCleanupWorker(store, 0, 24*time.Hour, slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1})))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
@@ -39,7 +39,7 @@ func TestCleanupWorkerCallsDeleteOlderThan(t *testing.T) {
 	now := time.Now().UTC()
 
 	store := &usageStoreWithRecorder{
-		UsageStore: &mockUsageStore{},
+		UsageStore:  &mockUsageStore{},
 		deleteCalls: make([]time.Time, 0),
 	}
 	store.UsageStore.Record(context.Background(), analytics.TokenUsage{
@@ -49,7 +49,7 @@ func TestCleanupWorkerCallsDeleteOlderThan(t *testing.T) {
 		TenantID: tid, Model: "gpt-4", Timestamp: now,
 	})
 
-	worker := NewCleanupWorker(store, 50*time.Millisecond, 24*time.Hour, zap.NewNop())
+	worker := NewCleanupWorker(store, 50*time.Millisecond, 24*time.Hour, slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1})))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()

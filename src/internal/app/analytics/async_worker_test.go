@@ -2,18 +2,18 @@ package analytics
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"sync"
 	"testing"
 	"time"
-
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/analytics"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
 
 type mockUsageStore struct {
-	mu           sync.Mutex
+	mu               sync.Mutex
 	recordBatchCalls int
 	batches          [][]analytics.TokenUsage
 }
@@ -71,7 +71,7 @@ func testTokenUsage() analytics.TokenUsage {
 // @sk-test 131-analytics-pipeline#T4.2: TestAsyncWorkerBatchInsert (AC-002)
 func TestAsyncWorkerBatchInsert(t *testing.T) {
 	store := &mockUsageStore{}
-	worker := NewAsyncWorker(store, 1000, 50*time.Millisecond, zap.NewNop())
+	worker := NewAsyncWorker(store, 1000, 50*time.Millisecond, slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1})))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -103,7 +103,7 @@ func TestAsyncWorkerBatchInsert(t *testing.T) {
 // @sk-test 131-analytics-pipeline#T4.2: TestAsyncWorkerBufferOverflow (AC-002)
 func TestAsyncWorkerBufferOverflow(t *testing.T) {
 	store := &mockUsageStore{}
-	worker := NewAsyncWorker(store, 5, time.Hour, zap.NewNop())
+	worker := NewAsyncWorker(store, 5, time.Hour, slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1})))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -127,7 +127,7 @@ func TestAsyncWorkerBufferOverflow(t *testing.T) {
 // @sk-test 131-analytics-pipeline#T4.2: TestAsyncWorkerGracefulShutdown (AC-002)
 func TestAsyncWorkerGracefulShutdown(t *testing.T) {
 	store := &mockUsageStore{}
-	worker := NewAsyncWorker(store, 1000, time.Hour, zap.NewNop())
+	worker := NewAsyncWorker(store, 1000, time.Hour, slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1})))
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -155,7 +155,7 @@ func TestAsyncWorkerGracefulShutdown(t *testing.T) {
 // @sk-test 131-analytics-pipeline#T4.2: TestAsyncWorkerBufferNonBlockingSend (AC-002)
 func TestAsyncWorkerBufferNonBlockingSend(t *testing.T) {
 	store := &mockUsageStore{}
-	worker := NewAsyncWorker(store, 0, time.Hour, zap.NewNop())
+	worker := NewAsyncWorker(store, 0, time.Hour, slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1})))
 
 	worker.Send(testTokenUsage())
 }

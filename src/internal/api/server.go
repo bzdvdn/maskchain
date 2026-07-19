@@ -3,12 +3,12 @@ package api
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/pprof"
 
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
@@ -23,7 +23,7 @@ type Server struct {
 	engine            *gin.Engine
 	HTTP              *http.Server
 	cfg               *config.ServerConfig
-	log               *zap.Logger
+	log               *slog.Logger
 	serviceName       string
 	metricsHandler    gin.HandlerFunc
 	healthHandler     *health.Handler
@@ -32,7 +32,7 @@ type Server struct {
 }
 
 // @sk-task 114-real-health-probes#T2.2: Accept healthSvc and replace static handlers (AC-001, AC-005, AC-008)
-func New(cfg *config.ServerConfig, log *zap.Logger, serviceName string, healthSvc *health.HealthService) *Server {
+func New(cfg *config.ServerConfig, log *slog.Logger, serviceName string, healthSvc *health.HealthService) *Server {
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
 
@@ -169,7 +169,7 @@ func (s *Server) Start() error {
 		Addr:    addr,
 		Handler: s.engine,
 	}
-	s.log.Info("server starting", zap.String("addr", addr))
+	s.log.Info("server starting", slog.String("addr", addr))
 	return s.HTTP.ListenAndServe()
 }
 

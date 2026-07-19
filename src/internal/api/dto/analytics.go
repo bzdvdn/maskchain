@@ -70,11 +70,11 @@ type TimeSeriesResponse struct {
 }
 
 type TrafficResponse struct {
-	RequestCount  int64   `json:"request_count"`
-	AvgLatencyMs  *float64 `json:"avg_latency_ms"`
-	P50LatencyMs  *float64 `json:"p50_latency_ms"`
-	P95LatencyMs  *float64 `json:"p95_latency_ms"`
-	P99LatencyMs  *float64 `json:"p99_latency_ms"`
+	RequestCount int64    `json:"request_count"`
+	AvgLatencyMs *float64 `json:"avg_latency_ms"`
+	P50LatencyMs *float64 `json:"p50_latency_ms"`
+	P95LatencyMs *float64 `json:"p95_latency_ms"`
+	P99LatencyMs *float64 `json:"p99_latency_ms"`
 }
 
 type ModelBreakdown struct {

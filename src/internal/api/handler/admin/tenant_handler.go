@@ -9,9 +9,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	dictionaryrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/dictionary"
 	"github.com/bzdvdn/maskchain/src/internal/api/dto"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
-	dictionaryrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/dictionary"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/dictionary"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
@@ -245,12 +245,12 @@ func (h *TenantHandler) UpdateDictionaries(c *gin.Context) {
 		return
 	}
 
-    dicts := make([]*dictionary.Dictionary, len(req.Dictionaries))
-    for i, d := range req.Dictionaries {
-        dicts[i] = dictionary.NewDictionary(d.Name, d.Entries, dictionary.MatchMode(d.MatchMode))
-    }
+	dicts := make([]*dictionary.Dictionary, len(req.Dictionaries))
+	for i, d := range req.Dictionaries {
+		dicts[i] = dictionary.NewDictionary(d.Name, d.Entries, dictionary.MatchMode(d.MatchMode))
+	}
 
-    if err := h.repo.UpdateDictionaries(c.Request.Context(), slug, dicts); err != nil {
+	if err := h.repo.UpdateDictionaries(c.Request.Context(), slug, dicts); err != nil {
 		if errors.Is(err, domainErr.ErrTenantNotFound) {
 			middleware.AbortWithError(c, http.StatusNotFound, middleware.ErrorCodeNotFound, "tenant not found")
 			return
@@ -261,7 +261,7 @@ func (h *TenantHandler) UpdateDictionaries(c *gin.Context) {
 
 	if h.dictionaryCache != nil {
 		if err := h.dictionaryCache.Set(c.Request.Context(), slugStr, dicts); err != nil {
-			// non-fatal: cache write failure should not break the request
+			c.Error(err) // non-fatal: logged but does not break the response
 		}
 	}
 

@@ -168,7 +168,7 @@ func TestHandleUnmask(t *testing.T) {
 			MaskID:       "test-mask-1",
 			Replacements: map[string]string{"[MASK_test.1]": "world"},
 		}
-		if err := ms.Save(nil, maskEntry); err != nil {
+		if err := ms.Save(context.TODO(), maskEntry); err != nil {
 			t.Fatal(err)
 		}
 

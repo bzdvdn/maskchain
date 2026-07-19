@@ -26,17 +26,21 @@ func (uc *SessionUseCase) Create(ctx context.Context, sessionID, tenantID, model
 		return nil, fmt.Errorf("tenant_id is required")
 	}
 	if sessionID == "" {
-		sessionID = NewSessionID()
+		var genErr error
+		sessionID, genErr = NewSessionID()
+		if genErr != nil {
+			return nil, fmt.Errorf("generate session id: %w", genErr)
+		}
 	}
 	now := time.Now()
 	s := &Session{
-		SessionID:         sessionID,
-		TenantID:          tenantID,
-		Model:             model,
-		Status:            SessionStatusActive,
-		TTL:               ttl,
-		CreatedAt:         now,
-		ExpiresAt:         now.Add(ttl),
+		SessionID: sessionID,
+		TenantID:  tenantID,
+		Model:     model,
+		Status:    SessionStatusActive,
+		TTL:       ttl,
+		CreatedAt: now,
+		ExpiresAt: now.Add(ttl),
 	}
 	if err := uc.store.Save(ctx, s); err != nil {
 		return nil, fmt.Errorf("save session: %w", err)

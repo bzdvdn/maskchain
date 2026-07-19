@@ -128,5 +128,5 @@ func (m *mockAdminSessionStore) GetByTokenHash(_ context.Context, _ string) (*ad
 	sess, _, _ := admin_session.NewAdminSession("admin", 30*time.Minute)
 	return sess, nil
 }
-func (m *mockAdminSessionStore) Delete(_ context.Context, _ string) error { return nil }
+func (m *mockAdminSessionStore) Delete(_ context.Context, _ string) error       { return nil }
 func (m *mockAdminSessionStore) DeleteExpired(_ context.Context) (int64, error) { return 0, nil }

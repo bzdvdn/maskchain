@@ -36,8 +36,8 @@ func TestCallWithHeaders(t *testing.T) {
 	var capturedHeaders map[string]string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedHeaders = map[string]string{
-			"X-Tenant-ID":  r.Header.Get("X-Tenant-ID"),
-			"X-Custom":     r.Header.Get("X-Custom"),
+			"X-Tenant-ID": r.Header.Get("X-Tenant-ID"),
+			"X-Custom":    r.Header.Get("X-Custom"),
 		}
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{}`))
@@ -352,7 +352,7 @@ func TestSSEChunkDelivery(t *testing.T) {
 	}
 
 	start := time.Now()
-	var received []string
+	var received []string //nolint:prealloc // unknown size
 	for chunk := range ch {
 		if chunk.Err != nil {
 			t.Fatalf("unexpected error: %v", chunk.Err)
@@ -552,7 +552,7 @@ func TestSSEPrematureClose(t *testing.T) {
 		t.Fatalf("Stream failed: %v", err)
 	}
 
-	var received []string
+	var received []string //nolint:prealloc // unknown size
 	var finalErr error
 	for chunk := range ch {
 		if chunk.Err != nil {

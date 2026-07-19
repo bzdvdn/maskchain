@@ -4,16 +4,50 @@ package sessionrepo
 
 import (
 	"context"
+	"log/slog"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/session"
 )
+
+type cachedTestRecordHandler struct {
+	mu      sync.Mutex
+	records []slog.Record
+	level   slog.Level
+}
+
+func (h *cachedTestRecordHandler) Enabled(_ context.Context, l slog.Level) bool {
+	return l >= h.level
+}
+
+func (h *cachedTestRecordHandler) Handle(_ context.Context, r slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.records = append(h.records, r)
+	return nil
+}
+
+func (h *cachedTestRecordHandler) WithAttrs(_ []slog.Attr) slog.Handler { return h }
+func (h *cachedTestRecordHandler) WithGroup(_ string) slog.Handler      { return h }
+
+func (h *cachedTestRecordHandler) All() []slog.Record {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	out := make([]slog.Record, len(h.records))
+	copy(out, h.records)
+	return out
+}
+
+func (h *cachedTestRecordHandler) Len() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return len(h.records)
+}
 
 func setupPGForCache(t *testing.T) *pgxpool.Pool {
 	t.Helper()
@@ -34,8 +68,8 @@ func setupPGForCache(t *testing.T) *pgxpool.Pool {
 
 // @sk-test sessions#T3.3: TestCachedSessionStore_GracefulDegradation (AC-008)
 func TestCachedSessionStore_GracefulDegradation(t *testing.T) {
-	observedZap, logs := observer.New(zap.WarnLevel)
-	log := zap.New(observedZap)
+	logHandler := &cachedTestRecordHandler{level: slog.LevelWarn}
+	log := slog.New(logHandler)
 
 	pool := setupPGForCache(t)
 	primary := NewPostgresSessionStore(pool)
@@ -88,9 +122,9 @@ func TestCachedSessionStore_GracefulDegradation(t *testing.T) {
 		t.Errorf("expected closed, got %s", got.Status)
 	}
 
-	if logs.Len() > 0 {
-		t.Logf("WARN logs recorded: %d entries", logs.Len())
-		for _, entry := range logs.All() {
+	if logHandler.Len() > 0 {
+		t.Logf("WARN logs recorded: %d entries", logHandler.Len())
+		for _, entry := range logHandler.All() {
 			t.Logf("  %s: %s", entry.Level, entry.Message)
 		}
 	}
@@ -101,7 +135,7 @@ func TestCachedSessionStore_SaveGetRoundTrip(t *testing.T) {
 	pool := setupPGForCache(t)
 	primary := NewPostgresSessionStore(pool)
 	secondary := NewValkeySessionCache(nil, 5*time.Minute)
-	log := zap.NewNop()
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 	store := NewCachedSessionStore(primary, secondary, log)
 
 	ctx := context.Background()

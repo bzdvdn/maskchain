@@ -49,8 +49,8 @@ type openAIResponse struct {
 }
 
 type openAIChoice struct {
-	Message       openAIMessage `json:"message"`
-	FinishReason  *string      `json:"finish_reason,omitempty"`
+	Message      openAIMessage `json:"message"`
+	FinishReason *string       `json:"finish_reason,omitempty"`
 }
 
 type openAIStreamChunk struct {
@@ -67,12 +67,12 @@ type openAIDelta struct {
 }
 
 type geminiRequest struct {
-	Contents          []geminiContent  `json:"contents"`
-	SystemInstruction *geminiPart      `json:"systemInstruction,omitempty"`
+	Contents          []geminiContent `json:"contents"`
+	SystemInstruction *geminiPart     `json:"systemInstruction,omitempty"`
 }
 
 type geminiContent struct {
-	Role  string      `json:"role"`
+	Role  string       `json:"role"`
 	Parts []geminiPart `json:"parts"`
 }
 
@@ -196,7 +196,7 @@ func parseOpenAIRequest(body []byte) (*openAIRequest, error) {
 
 func convertToGemini(openAIReq *openAIRequest) *geminiRequest {
 	var system *geminiPart
-	var contents []geminiContent
+	contents := make([]geminiContent, 0, len(openAIReq.Messages))
 
 	for _, msg := range openAIReq.Messages {
 		if msg.Role == "system" {
@@ -255,7 +255,7 @@ func convertGeminiStreamChunk(data []byte) ([]ports.ProviderChunk, error) {
 		return nil, err
 	}
 
-	var chunks []ports.ProviderChunk
+	chunks := make([]ports.ProviderChunk, 0, len(geminiChunk.Candidates))
 	for _, c := range geminiChunk.Candidates {
 		var text string
 		for _, p := range c.Content.Parts {

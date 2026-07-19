@@ -128,7 +128,7 @@ Images are tagged with `latest` (main branch), commit SHA, and SemVer tags on re
 ### Observability
 - OpenTelemetry tracing (gRPC exporter)
 - Prometheus metrics (request rate, latency, shield stats, pool stats)
-- Structured logging (zap) with trace IDs
+- Structured logging (slog) with trace IDs via OTel enrichment
 
 ## Security
 
@@ -262,6 +262,10 @@ Binary endpoints expose version info via `GET /api/v1/version`.
 ## Links
 
 - [Examples](examples/README.md) — tenant setup, test flows, config reference
+- [Tutorial](docs/TUTORIAL.md) — 5-minute walkthrough
+- [Deployment Guide](docs/DEPLOYMENT.md) — Docker Compose + Helm + bare binary
+- [Shield Architecture](docs/SHIELD.md) — deep-dive into content shield
+- [Performance](docs/PERFORMANCE.md) — benchmarks and tuning
 - [Runbook](deployments/runbook.md) — production operations, debugging, recovery
 - [Helm Chart](deployments/helm/maskchain/) — Kubernetes deployment
 - [Roadmap](ROADMAP.md) — planned features and milestones

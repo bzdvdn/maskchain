@@ -2,9 +2,8 @@ package worker
 
 import (
 	"context"
+	"log/slog"
 	"time"
-
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/session"
 )
@@ -13,11 +12,11 @@ import (
 type CleanupWorker struct {
 	usecase  *session.SessionUseCase
 	interval time.Duration
-	log      *zap.Logger
+	log      *slog.Logger
 }
 
 // @sk-task sessions#T5.1: NewCleanupWorker creates a new worker (AC-007)
-func NewCleanupWorker(usecase *session.SessionUseCase, interval time.Duration, log *zap.Logger) *CleanupWorker {
+func NewCleanupWorker(usecase *session.SessionUseCase, interval time.Duration, log *slog.Logger) *CleanupWorker {
 	return &CleanupWorker{
 		usecase:  usecase,
 		interval: interval,
@@ -32,7 +31,7 @@ func (w *CleanupWorker) Run(ctx context.Context) {
 		return
 	}
 
-	w.log.Info("session cleanup worker started", zap.Duration("interval", w.interval))
+	w.log.Info("session cleanup worker started", slog.Duration("interval", w.interval))
 
 	ticker := time.NewTicker(w.interval)
 	defer ticker.Stop()
@@ -40,7 +39,7 @@ func (w *CleanupWorker) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			w.log.Info("session cleanup worker stopped", zap.Error(ctx.Err()))
+			w.log.Info("session cleanup worker stopped", slog.String("error", ctx.Err().Error()))
 			return
 		case <-ticker.C:
 			w.runOnce(ctx)
@@ -52,10 +51,10 @@ func (w *CleanupWorker) Run(ctx context.Context) {
 func (w *CleanupWorker) runOnce(ctx context.Context) {
 	deleted, err := w.usecase.DeleteExpired(ctx)
 	if err != nil {
-		w.log.Warn("session cleanup: delete expired failed", zap.Error(err))
+		w.log.Warn("session cleanup: delete expired failed", slog.String("error", err.Error()))
 		return
 	}
 	if deleted > 0 {
-		w.log.Info("session cleanup: expired sessions deleted", zap.Int64("count", deleted))
+		w.log.Info("session cleanup: expired sessions deleted", slog.Int64("count", deleted))
 	}
 }

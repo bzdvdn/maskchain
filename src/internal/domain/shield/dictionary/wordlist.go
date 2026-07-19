@@ -119,4 +119,3 @@ func (m *WordlistMatcher) Match(text string) []Match {
 
 	return matches
 }
-

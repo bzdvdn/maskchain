@@ -21,10 +21,7 @@ type PromptInjectionDetector struct {
 // @sk-task prompt-injection-shield#T1.2: NewPromptInjectionDetector constructor (AC-002, AC-003, AC-004)
 func NewPromptInjectionDetector(tenantPatterns ...entity.Pattern) *PromptInjectionDetector {
 	builtin := defaultPatterns()
-	provided := make([]entity.Pattern, 0, len(tenantPatterns))
-	for _, p := range tenantPatterns {
-		provided = append(provided, p)
-	}
+	provided := append([]entity.Pattern{}, tenantPatterns...)
 	return &PromptInjectionDetector{
 		builtinPatterns: builtin,
 		tenantPatterns:  provided,

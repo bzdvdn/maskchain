@@ -23,9 +23,9 @@ func TenantFromContext(c *gin.Context) (*entity.Tenant, bool) {
 }
 
 var publicPaths = map[string]bool{
-	"/health": true,
-	"/ready":  true,
-	"/live":   true,
+	"/health":  true,
+	"/ready":   true,
+	"/live":    true,
 	"/metrics": true,
 }
 

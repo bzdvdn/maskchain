@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,9 +10,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/testutil"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/analytics"
 	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
@@ -24,15 +22,15 @@ func testCostRates() []*analytics.CostRate {
 	}
 }
 
-func newTestUsageMiddleware(t *testing.T) (*UsageMiddleware, *observer.ObservedLogs) {
+func newTestUsageMiddleware(t *testing.T) (*UsageMiddleware, *testRecordHandler) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	metrics.Reset()
 	reg := analytics.NewCostRateRegistry(testCostRates())
 	usageCh := make(chan analytics.TokenUsage, 100)
-	core, recorded := observer.New(zapcore.WarnLevel)
-	log := zap.New(core)
-	return NewUsageMiddleware(reg, usageCh, log), recorded
+	rec, log := newTestLogger(t)
+	rec.level = slog.LevelWarn
+	return NewUsageMiddleware(reg, usageCh, log), rec
 }
 
 func usageResponseBody(promptTokens, completionTokens int64) string {
@@ -150,7 +148,7 @@ func TestUsageMiddlewareNoUsage(t *testing.T) {
 
 	var found bool
 	for _, entry := range recorded.All() {
-		if entry.Level == zapcore.WarnLevel && strings.Contains(entry.Message, "no usage field") {
+		if entry.Level == slog.LevelWarn && strings.Contains(entry.Message, "no usage field") {
 			found = true
 			break
 		}
@@ -214,7 +212,8 @@ func TestUsageMiddlewareNonPost(t *testing.T) {
 func TestUsageMiddlewareCostComputation(t *testing.T) {
 	usageCh := make(chan analytics.TokenUsage, 10)
 	reg := analytics.NewCostRateRegistry(testCostRates())
-	mw := NewUsageMiddleware(reg, usageCh, zap.NewNop())
+	_, mwLog := newTestLogger(t)
+	mw := NewUsageMiddleware(reg, usageCh, mwLog)
 
 	engine := gin.New()
 	engine.Use(mw.Handler())

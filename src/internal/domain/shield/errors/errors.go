@@ -14,5 +14,5 @@ var (
 	ErrBlockedByPolicy = errors.New("request blocked by content shield policy")
 
 	// @sk-task tenant-profile-sync#T1.3: Add ErrTenantNotFound sentinel (AC-008)
-	ErrTenantNotFound  = errors.New("tenant not found")
+	ErrTenantNotFound = errors.New("tenant not found")
 )

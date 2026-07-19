@@ -39,6 +39,6 @@ func NewScanResultWithFindings(status value.ScanStatus, findings []Finding) *Sca
 	}
 }
 
-func (r *ScanResult) Status() value.ScanStatus  { return r.status }
-func (r *ScanResult) ScannedAt() time.Time      { return r.scannedAt }
-func (r *ScanResult) Findings() []Finding        { return r.findings }
+func (r *ScanResult) Status() value.ScanStatus { return r.status }
+func (r *ScanResult) ScannedAt() time.Time     { return r.scannedAt }
+func (r *ScanResult) Findings() []Finding      { return r.findings }

@@ -4,20 +4,20 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"net/http/pprof"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
-	"go.uber.org/zap"
 
-	"github.com/bzdvdn/maskchain/src/internal/api/swagger"
 	"github.com/bzdvdn/maskchain/src/internal/api/dto"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/admin"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/analytics"
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
+	"github.com/bzdvdn/maskchain/src/internal/api/swagger"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
 )
@@ -27,7 +27,7 @@ type AdminServer struct {
 	engine         *gin.Engine
 	http           *http.Server
 	cfg            *config.ServerConfig
-	log            *zap.Logger
+	log            *slog.Logger
 	serviceName    string
 	metricsHandler gin.HandlerFunc
 	healthHandler  *health.Handler
@@ -36,7 +36,7 @@ type AdminServer struct {
 }
 
 // @sk-task 114-real-health-probes#T2.2: Accept healthSvc and replace static handlers (AC-001, AC-005, AC-008)
-func NewAdminServer(cfg *config.ServerConfig, log *zap.Logger, serviceName string, healthSvc *health.HealthService) *AdminServer {
+func NewAdminServer(cfg *config.ServerConfig, log *slog.Logger, serviceName string, healthSvc *health.HealthService) *AdminServer {
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
 
@@ -113,10 +113,10 @@ func (s *AdminServer) RegisterTenantHandler(h *admin.TenantHandler, mw gin.Handl
 }
 
 // @sk-task 118-api-consistency#T3.4: Register Swagger UI at /api/v1/docs (AC-008, RQ-010)
-func (s *AdminServer) RegisterSwaggerUI() {
+func (s *AdminServer) RegisterSwaggerUI() error {
 	yamlData, err := swagger.DocsFiles.ReadFile("openapi.yaml")
 	if err != nil {
-		s.log.Fatal("failed to read embedded openapi.yaml", zap.Error(err))
+		return fmt.Errorf("read embedded openapi.yaml: %w", err)
 	}
 	s.engine.GET("/api/v1/openapi.yaml", func(c *gin.Context) {
 		c.Data(http.StatusOK, "application/x-yaml", yamlData)
@@ -127,6 +127,7 @@ func (s *AdminServer) RegisterSwaggerUI() {
 		c.Request.URL.Path = "/swagger-ui/index.html"
 		http.FileServer(swaggerFS).ServeHTTP(c.Writer, c.Request)
 	})
+	return nil
 }
 
 // @sk-task admin-ui-design#T2.3: Register session routes with admin session middleware (AC-001)
@@ -179,10 +180,10 @@ func (s *AdminServer) RegisterAnalyticsHandler(h *analytics.AnalyticsHandler, de
 }
 
 // @sk-task 118-api-consistency#T3.5: NoRoute checks Accept:text/html for SPA fallback (AC-009)
-func (s *AdminServer) RegisterStaticFiles(fsys fs.FS) {
+func (s *AdminServer) RegisterStaticFiles(fsys fs.FS) error {
 	sub, err := fs.Sub(fsys, "dist")
 	if err != nil {
-		s.log.Fatal("failed to create static sub-filesystem", zap.Error(err))
+		return fmt.Errorf("create static sub-filesystem: %w", err)
 	}
 	root := http.FS(sub)
 	fileServer := http.FileServer(root)
@@ -202,6 +203,7 @@ func (s *AdminServer) RegisterStaticFiles(fsys fs.FS) {
 		}
 		fileServer.ServeHTTP(c.Writer, c.Request)
 	})
+	return nil
 }
 
 func (s *AdminServer) RegisterDebugRoutes(adminMw gin.HandlerFunc) {
@@ -220,7 +222,7 @@ func (s *AdminServer) Start() error {
 		Addr:    addr,
 		Handler: s.engine,
 	}
-	s.log.Info("admin server starting", zap.String("addr", addr))
+	s.log.Info("admin server starting", slog.String("addr", addr))
 	return s.http.ListenAndServe()
 }
 

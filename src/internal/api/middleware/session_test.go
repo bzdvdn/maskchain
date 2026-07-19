@@ -3,13 +3,14 @@ package middleware
 import (
 	"bytes"
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/session"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
@@ -92,7 +93,7 @@ func setupSessionMWTest(t *testing.T) (*gin.Engine, *mockSessionStoreMW, *entity
 		c.Set("tenant", tenant)
 		c.Next()
 	})
-	engine.Use(SessionMiddleware(uc, cfg, zap.NewNop()))
+	engine.Use(SessionMiddleware(uc, cfg, slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))))
 	engine.POST("/test", func(c *gin.Context) {
 		s, ok := SessionFromContext(c)
 		if ok && s != nil {
@@ -190,8 +191,8 @@ func TestSessionMiddlewareWithShieldMiddlewareIncrement(t *testing.T) {
 		c.Set("tenant", tenant)
 		c.Next()
 	})
-	engine.Use(SessionMiddleware(uc, cfg, zap.NewNop()))
-	engine.Use(ShieldMiddleware(nil, &config.ShieldConfig{}, zap.NewNop(), uc))
+	engine.Use(SessionMiddleware(uc, cfg, slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))))
+	engine.Use(ShieldMiddleware(nil, &config.ShieldConfig{}, slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1})), uc))
 	engine.POST("/test", func(c *gin.Context) {
 		c.String(http.StatusOK, "ok")
 	})

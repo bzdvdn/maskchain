@@ -585,9 +585,7 @@ func TestStreamingNonStreamingUnchanged(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200 for non-streaming, got %d", w.Code)
 	}
-	if ct := w.Header().Get("Content-Type"); ct != "" && ct != "text/plain" {
-		// Content-Type will be set by mock provider, may vary
-	}
+	_ = w.Header().Get("Content-Type") // Content-Type varies by mock provider
 }
 
 // @sk-test 117-critical-test-coverage#T3.2: TestProxyCompletionHandler (AC-006)

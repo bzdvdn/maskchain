@@ -78,7 +78,7 @@ func TestProxyClient_Stream(t *testing.T) {
 		t.Fatalf("Stream failed: %v", err)
 	}
 
-	var chunks []string
+	var chunks []string //nolint:prealloc // unknown size until stream completes
 	for chunk := range ch {
 		if chunk.Err != nil {
 			t.Fatalf("unexpected error: %v", chunk.Err)

@@ -41,9 +41,9 @@ func NewDictionary(name string, entries []interface{}, matchMode MatchMode) *Dic
 		matchMode: matchMode,
 	}
 }
-func (d *Dictionary) Name() string                   { return d.name }
-func (d *Dictionary) Entries() []interface{}          { return d.entries }
-func (d *Dictionary) MatchMode() MatchMode           { return d.matchMode }
+func (d *Dictionary) Name() string           { return d.name }
+func (d *Dictionary) Entries() []interface{} { return d.entries }
+func (d *Dictionary) MatchMode() MatchMode   { return d.matchMode }
 
 // AllValues recursively extracts all unique string values from structured entries.
 // Flattens {"name":"John","email":"j@c"} into ["John","j@c"].

@@ -15,31 +15,31 @@ type DictionaryItem struct {
 }
 
 type CreateTenantRequest struct {
-	Slug         string           `json:"slug" binding:"required"`
-	Name         string           `json:"name" binding:"required"`
-	AuthHeader   string           `json:"auth_header"`
-	APIKeys      []string         `json:"api_keys" binding:"required"`
-	Dictionaries []DictionaryItem `json:"dictionaries"`
+	Slug         string            `json:"slug" binding:"required"`
+	Name         string            `json:"name" binding:"required"`
+	AuthHeader   string            `json:"auth_header"`
+	APIKeys      []string          `json:"api_keys" binding:"required"`
+	Dictionaries []DictionaryItem  `json:"dictionaries"`
 	PIIConfig    *entity.PIIConfig `json:"pii_config"`
 }
 
 type UpdateTenantRequest struct {
-	Name         string           `json:"name" binding:"required"`
-	AuthHeader   string           `json:"auth_header"`
-	APIKeys      []string         `json:"api_keys" binding:"required"`
-	Dictionaries []DictionaryItem `json:"dictionaries"`
+	Name         string            `json:"name" binding:"required"`
+	AuthHeader   string            `json:"auth_header"`
+	APIKeys      []string          `json:"api_keys" binding:"required"`
+	Dictionaries []DictionaryItem  `json:"dictionaries"`
 	PIIConfig    *entity.PIIConfig `json:"pii_config"`
 }
 
 type TenantResponse struct {
-	Slug         string           `json:"slug"`
-	Name         string           `json:"name"`
-	AuthHeader   string           `json:"auth_header"`
-	APIKeys      []string         `json:"api_keys"`
-	Dictionaries []DictionaryItem `json:"dictionaries,omitempty"`
+	Slug         string            `json:"slug"`
+	Name         string            `json:"name"`
+	AuthHeader   string            `json:"auth_header"`
+	APIKeys      []string          `json:"api_keys"`
+	Dictionaries []DictionaryItem  `json:"dictionaries,omitempty"`
 	PIIConfig    *entity.PIIConfig `json:"pii_config,omitempty"`
-	CreatedAt    time.Time        `json:"created_at"`
-	UpdatedAt    time.Time        `json:"updated_at"`
+	CreatedAt    time.Time         `json:"created_at"`
+	UpdatedAt    time.Time         `json:"updated_at"`
 }
 
 type DictionaryRequest struct {
@@ -62,5 +62,3 @@ func TenantToResponse(t *entity.Tenant) TenantResponse {
 		UpdatedAt:  t.UpdatedAt(),
 	}
 }
-
-

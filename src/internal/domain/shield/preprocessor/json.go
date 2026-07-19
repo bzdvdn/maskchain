@@ -19,10 +19,10 @@ func (p *JSONProcessor) Process(data string, namespace string) *ProcessResult {
 	}
 
 	// Build path -> mask mode map
-	var pathRules []struct {
+	pathRules := make([]struct {
 		segments []jsonPathSegment
 		mask     string
-	}
+	}, 0, len(p.rules))
 	for _, r := range p.rules {
 		if r.Path == "" {
 			continue

@@ -4,8 +4,8 @@ package value
 type ScanStatus string
 
 const (
-	ScanStatusClean       ScanStatus = "clean"
-	ScanStatusSuspicious  ScanStatus = "suspicious"
-	ScanStatusBlocked     ScanStatus = "blocked"
-	ScanStatusError       ScanStatus = "error"
+	ScanStatusClean      ScanStatus = "clean"
+	ScanStatusSuspicious ScanStatus = "suspicious"
+	ScanStatusBlocked    ScanStatus = "blocked"
+	ScanStatusError      ScanStatus = "error"
 )

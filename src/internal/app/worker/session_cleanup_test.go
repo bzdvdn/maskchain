@@ -2,11 +2,11 @@ package worker
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"sync"
 	"testing"
 	"time"
-
-	"go.uber.org/zap"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/session"
 )
@@ -105,7 +105,7 @@ func TestCleanupWorkerDeletesExpiredSessions(t *testing.T) {
 		t.Fatalf("expected 2 sessions, got %d", store.count())
 	}
 
-	worker := NewCleanupWorker(uc, 10*time.Millisecond, zap.NewNop())
+	worker := NewCleanupWorker(uc, 10*time.Millisecond, slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1})))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
@@ -127,7 +127,7 @@ func TestCleanupWorkerIntervalZero(t *testing.T) {
 	store := newMockStore()
 	uc := session.NewSessionUseCase(store)
 
-	worker := NewCleanupWorker(uc, 0, zap.NewNop())
+	worker := NewCleanupWorker(uc, 0, slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1})))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()

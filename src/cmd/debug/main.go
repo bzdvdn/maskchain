@@ -23,7 +23,7 @@ func main() {
 		"model": "mistral-large-latest",
 		"messages": []map[string]string{
 			{
-				"role":    "user",
+				"role": "user",
 				"content": `I have an employee database dump in CSV format below. Please analyze it and give me a clear answer with a table.
 
 ` + "```" + `

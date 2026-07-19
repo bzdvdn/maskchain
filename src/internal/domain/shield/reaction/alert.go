@@ -2,8 +2,7 @@ package reaction
 
 import (
 	"context"
-
-	"go.uber.org/zap"
+	"log/slog"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 )
@@ -11,11 +10,11 @@ import (
 // @sk-task 23-shield-reactions#T2.4: Implement AlertReaction (AC-004)
 // @sk-task remove-audit-incidents#T2.1: Replace IncidentRepository with structured logging (AC-007)
 type AlertReaction struct {
-	log *zap.Logger
+	log *slog.Logger
 }
 
 // @sk-task remove-audit-incidents#T2.1: Constructor without IncidentRepository (AC-007)
-func NewAlertReaction(log *zap.Logger) *AlertReaction {
+func NewAlertReaction(log *slog.Logger) *AlertReaction {
 	return &AlertReaction{log: log}
 }
 
@@ -25,9 +24,9 @@ func (r *AlertReaction) Execute(ctx context.Context, result *entity.ScanResult, 
 		return text, nil
 	}
 
-	r.log.Info("shield alert",
-		zap.String("status", string(result.Status())),
-		zap.String("action", "alert"),
+	r.log.InfoContext(ctx, "shield alert",
+		slog.String("status", string(result.Status())),
+		slog.String("action", "alert"),
 	)
 	return text, nil
 }

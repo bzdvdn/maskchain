@@ -11,7 +11,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"go.uber.org/zap/zapcore"
 	"gopkg.in/yaml.v3"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
@@ -82,21 +81,21 @@ type ShieldConfig struct {
 // @sk-task 111-provider-auth-and-config#T1.1: Add APIKeys, AuthScheme, AuthHeader, AdditionalHeaders (AC-003)
 // @sk-task provider-adapters-expansion#T1.1: Add AWS Bedrock config fields (AC-004)
 type ProviderConfig struct {
-	Name              string            `mapstructure:"name" yaml:"name"`
-	BaseURL           string            `mapstructure:"base_url" yaml:"base_url"`
-	HealthEndpoint    string            `mapstructure:"health_endpoint" yaml:"health_endpoint"`
-	Timeout           string            `mapstructure:"timeout" yaml:"timeout"`
-	Priority          int               `mapstructure:"priority" yaml:"priority"`
-	APIType           string            `mapstructure:"api_type" yaml:"api_type"`
-	APIKeys           []string          `mapstructure:"api_keys" yaml:"api_keys" validate:"required"`
-	AuthScheme        string            `mapstructure:"auth_scheme" yaml:"auth_scheme"`
-	AuthHeader        string            `mapstructure:"auth_header" yaml:"auth_header"`
-	AuthPrefix        string            `mapstructure:"auth_prefix" yaml:"auth_prefix"`
-	AdditionalHeaders map[string]string `mapstructure:"additional_headers" yaml:"additional_headers"`
-	ProxyURL          string            `mapstructure:"proxy_url" yaml:"proxy_url"`
-	AWSRegion         string            `mapstructure:"aws_region" yaml:"aws_region"`
-	AWSAccessKeyID    string            `mapstructure:"aws_access_key_id" yaml:"aws_access_key_id"`
-	AWSSecretAccessKey string           `mapstructure:"aws_secret_access_key" yaml:"aws_secret_access_key"`
+	Name               string            `mapstructure:"name" yaml:"name"`
+	BaseURL            string            `mapstructure:"base_url" yaml:"base_url"`
+	HealthEndpoint     string            `mapstructure:"health_endpoint" yaml:"health_endpoint"`
+	Timeout            string            `mapstructure:"timeout" yaml:"timeout"`
+	Priority           int               `mapstructure:"priority" yaml:"priority"`
+	APIType            string            `mapstructure:"api_type" yaml:"api_type"`
+	APIKeys            []string          `mapstructure:"api_keys" yaml:"api_keys" validate:"required"`
+	AuthScheme         string            `mapstructure:"auth_scheme" yaml:"auth_scheme"`
+	AuthHeader         string            `mapstructure:"auth_header" yaml:"auth_header"`
+	AuthPrefix         string            `mapstructure:"auth_prefix" yaml:"auth_prefix"`
+	AdditionalHeaders  map[string]string `mapstructure:"additional_headers" yaml:"additional_headers"`
+	ProxyURL           string            `mapstructure:"proxy_url" yaml:"proxy_url"`
+	AWSRegion          string            `mapstructure:"aws_region" yaml:"aws_region"`
+	AWSAccessKeyID     string            `mapstructure:"aws_access_key_id" yaml:"aws_access_key_id"`
+	AWSSecretAccessKey string            `mapstructure:"aws_secret_access_key" yaml:"aws_secret_access_key"`
 }
 
 type RouteConfig struct {
@@ -231,8 +230,6 @@ type Config struct {
 	Tenants         map[string]*TenantConfig `mapstructure:"tenants" yaml:"tenants"`
 	Admin           *AdminConfig             `mapstructure:"admin" yaml:"admin"`
 }
-
-var _ zapcore.ObjectMarshaler = (*Config)(nil)
 
 // LoadConfigFromDir reads all *.yaml files from dir, deep-merges them in
 // alphabetical order (last file wins), unmarshals into a Config, and applies

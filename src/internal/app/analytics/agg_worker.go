@@ -2,21 +2,21 @@ package analytics
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"go.uber.org/zap"
 )
 
 // @sk-task 131-analytics-pipeline#T3.4: Implement AggregationWorker with ticker-based materialization (AC-004)
 type AggregationWorker struct {
 	pool     *pgxpool.Pool
 	interval time.Duration
-	log      *zap.Logger
+	log      *slog.Logger
 }
 
 // @sk-task 131-analytics-pipeline#T3.4: NewAggregationWorker creates a new aggregation worker (AC-004)
-func NewAggregationWorker(pool *pgxpool.Pool, interval time.Duration, log *zap.Logger) *AggregationWorker {
+func NewAggregationWorker(pool *pgxpool.Pool, interval time.Duration, log *slog.Logger) *AggregationWorker {
 	return &AggregationWorker{
 		pool:     pool,
 		interval: interval,
@@ -31,7 +31,7 @@ func (w *AggregationWorker) Run(ctx context.Context) {
 		return
 	}
 
-	w.log.Info("aggregation worker started", zap.Duration("interval", w.interval))
+	w.log.Info("aggregation worker started", slog.Duration("interval", w.interval))
 
 	ticker := time.NewTicker(w.interval)
 	defer ticker.Stop()
@@ -56,11 +56,11 @@ func (w *AggregationWorker) runOnce(ctx context.Context) {
 	defer cancel()
 
 	if err := w.materializeHourly(aggCtx, hourBoundary); err != nil {
-		w.log.Warn("aggregation worker: hourly materialization failed", zap.Error(err))
+		w.log.Warn("aggregation worker: hourly materialization failed", slog.String("error", err.Error()))
 		return
 	}
 	if err := w.materializeDaily(aggCtx, dayBoundary); err != nil {
-		w.log.Warn("aggregation worker: daily materialization failed", zap.Error(err))
+		w.log.Warn("aggregation worker: daily materialization failed", slog.String("error", err.Error()))
 		return
 	}
 }
