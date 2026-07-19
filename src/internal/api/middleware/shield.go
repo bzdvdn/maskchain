@@ -214,21 +214,23 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *zap.Logger,
 				if msg.Content == "" {
 					continue
 				}
+				var all []detector.DetectorResult
 				for _, dd := range dictDetectors {
 					results, _ := dd.Scan(c.Request.Context(), msg.Content)
-					if len(results) == 0 {
-						continue
-					}
-					cat := sanitizeLabel(dd.Dict().Name())
-					sort.Slice(results, func(i, j int) bool {
-						return results[i].StartPos > results[j].StartPos
-					})
-					for _, r := range results {
-						ph := fmt.Sprintf("[MASK_%s_%s.%d]", cat, dictMaskID, phCounter)
-						dictMaskMapping[ph] = r.Fragment
-						phCounter++
-						chatReq.Messages[mi].Content = chatReq.Messages[mi].Content[:r.StartPos] + ph + chatReq.Messages[mi].Content[r.StartPos+len(r.Fragment):]
-					}
+					all = append(all, results...)
+				}
+				if len(all) == 0 {
+					continue
+				}
+				kept := mask.ResolveOverlaps(all)
+				sort.Slice(kept, func(i, j int) bool {
+					return kept[i].StartPos > kept[j].StartPos
+				})
+				for _, r := range kept {
+					ph := fmt.Sprintf("[MASK_%s.%d]", dictMaskID, phCounter)
+					dictMaskMapping[ph] = r.Fragment
+					phCounter++
+					chatReq.Messages[mi].Content = chatReq.Messages[mi].Content[:r.StartPos] + ph + chatReq.Messages[mi].Content[r.StartPos+len(r.Fragment):]
 				}
 			}
 			log.Debug("shield dict mask",
@@ -452,19 +454,4 @@ func shieldFindings(resp *appshield.ScanResponse) []entity.Finding {
 	return resp.Findings()
 }
 
-// sanitizeLabel converts a dictionary name to a safe uppercase label for placeholders.
-// "Engineering #1" → "ENGINEERING__1" (we keep the # as _ for uniqueness).
-// Actually, let's just uppercase and replace non-alphanumeric with _.
-func sanitizeLabel(name string) string {
-	s := strings.ToUpper(name)
-	var b strings.Builder
-	b.Grow(len(s))
-	for _, r := range s {
-		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
-			b.WriteRune(r)
-		} else {
-			b.WriteRune('_')
-		}
-	}
-	return strings.Trim(b.String(), "_")
-}
+

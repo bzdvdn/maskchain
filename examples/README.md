@@ -4,31 +4,53 @@ Prod-like local dev stack for testing mask/unmask flows.
 
 ## Quick Start
 
+Two deployment modes — choose one:
+
+### Split mode (separate gateway + admin containers)
+
 ```bash
-# 1. Start infrastructure + gateway + admin
-docker compose up -d --build
+docker compose -f docker-compose.split.yml up -d --build
+```
 
-# 2. Or start combined binary (gateway + admin in one container)
-docker compose --profile combined up -d --build postgres valkey all
+### Combined mode (gateway + admin in one container)
 
-# 3. Seed tenant dictionaries (500 users, 50 depts, 300 projects)
+```bash
+docker compose -f docker-compose.all.yml up -d --build
+```
+
+### After starting either mode
+
+```bash
+# Seed tenant dictionaries (500 users, 50 depts, 300 projects)
 ./seed-tenant.sh
 
-# 4. Open test-prompt.md for Postman test prompts
+# Open test-prompt.md for Postman test prompts
 ```
 
 ## Services
 
+### Split mode (`docker-compose.split.yml`)
+
 | Service    | URL                          | Auth                          |
 |------------|------------------------------|-------------------------------|
 | Gateway    | http://localhost:8080        | Bearer sk-test-default        |
-| Admin      | http://localhost:8082        | Bearer sk-test-default        |
-| All        | http://localhost:8080        | Bearer sk-test-default        |
-| All (admin)| http://localhost:9091        | Session cookie                |
-| Postgres   | postgres://test:test@localhost:5432/maskchain | — |
+| Admin      | http://localhost:9090        | Bearer sk-test-default        |
+
+### Combined mode (`docker-compose.all.yml`)
+
+| Service    | URL                          | Auth                          |
+|------------|------------------------------|-------------------------------|
+| Gateway    | http://localhost:8080        | Bearer sk-test-default        |
+| Admin      | http://localhost:9090        | Session cookie                |
+
+### Both modes
+
+| Service    | URL                          | Notes                         |
+|------------|------------------------------|-------------------------------|
+| Postgres   | postgres://test:test@localhost:5433/maskchain | port 5433 (avoid clash) |
 | Valkey     | localhost:6379               | —                             |
 | Grafana    | http://localhost:3000        | admin/admin (anonymous enabled) |
-| Prometheus | http://localhost:9090        | —                             |
+| Prometheus | http://localhost:9091        | —                             |
 
 ## Tenant: `default`
 

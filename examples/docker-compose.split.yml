@@ -1,5 +1,5 @@
-# Prod-like local dev stack for testing mask/unmask flow
-# Usage: docker compose up -d --build
+# MaskChain split deployment — separate gateway + admin containers
+# Usage: docker compose -f docker-compose.split.yml up -d --build
 
 services:
   postgres:
@@ -37,6 +37,7 @@ services:
     container_name: maskchain-gateway
     ports:
       - "8080:8080"
+    dns: 8.8.8.8
     environment:
       CONFIG_DIR: /etc/maskchain/conf.d
       CONFIG_LOG_LEVEL: debug
@@ -63,11 +64,11 @@ services:
       dockerfile: Dockerfile.admin
     container_name: maskchain-admin
     ports:
-      - "8082:8081"
+      - "9090:9090"
     environment:
       CONFIG_DIR: /etc/maskchain/conf.d
       CONFIG_LOG_LEVEL: debug
-      CONFIG_SERVER_PORT: "8081"
+      CONFIG_SERVER_PORT: "9090"
       CONFIG_DATABASE_DSN: postgres://test:test@postgres:5432/maskchain?sslmode=disable
       CONFIG_VALKEY_ADDR: valkey:6379
       CONFIG_ADMIN_USERNAME: admin
@@ -78,39 +79,7 @@ services:
     volumes:
       - ./config-base.yaml:/etc/maskchain/conf.d/00-config-base.yaml:ro
       - ./config-runtime.yaml:/etc/maskchain/conf.d/99-config-runtime.yaml:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
-      valkey:
-        condition: service_healthy
-
-  all:
-    build:
-      context: ..
-      dockerfile: Dockerfile.combined
-    container_name: maskchain-all
-    profiles:
-      - combined
-    ports:
-      - "8080:8080"
-      - "9091:9090"
-    environment:
-      CONFIG_DIR: /etc/maskchain/conf.d
-      CONFIG_LOG_LEVEL: debug
-      CONFIG_SERVER_PORT: "8080"
-      CONFIG_SERVER_ADMIN_PORT: "9090"
-      CONFIG_DATABASE_DSN: postgres://test:test@postgres:5432/maskchain?sslmode=disable
-      CONFIG_VALKEY_ADDR: valkey:6379
-      CONFIG_ADMIN_USERNAME: admin
-      CONFIG_ADMIN_PASSWORD: test
-      CONFIG_OTEL_ENDPOINT: ""
-    env_file:
-      - .env
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    volumes:
-      - ./config-base.yaml:/etc/maskchain/conf.d/00-config-base.yaml:ro
-      - ./config-runtime.yaml:/etc/maskchain/conf.d/99-config-runtime.yaml:ro
+      - ./99z-admin-overrides.yaml:/etc/maskchain/conf.d/99z-admin-overrides.yaml:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -121,7 +90,7 @@ services:
     image: prom/prometheus:latest
     container_name: maskchain-prom
     ports:
-      - "9090:9090"
+      - "9091:9090"
     volumes:
       - promdata:/prometheus
     command:
@@ -139,14 +108,6 @@ services:
           - job_name: 'admin'
             static_configs:
               - targets: ['admin:8081']
-                metrics_path: '/metrics'
-          - job_name: 'all-gateway'
-            static_configs:
-              - targets: ['all:8080']
-                metrics_path: '/metrics'
-          - job_name: 'all-admin'
-            static_configs:
-              - targets: ['all:9090']
                 metrics_path: '/metrics'
     depends_on:
       gateway:

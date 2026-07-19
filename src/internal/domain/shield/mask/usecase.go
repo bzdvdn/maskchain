@@ -43,32 +43,7 @@ func (uc *MaskUseCase) MaskFromResults(ctx context.Context, text string, maskID 
 		return text, entry, nil
 	}
 
-	sort.Slice(results, func(i, j int) bool {
-		lenI := results[i].EndPos - results[i].StartPos
-		lenJ := results[j].EndPos - results[j].StartPos
-		if lenI != lenJ {
-			return lenI > lenJ
-		}
-		if results[i].StartPos != results[j].StartPos {
-			return results[i].StartPos < results[j].StartPos
-		}
-		return results[i].EndPos > results[j].EndPos
-	})
-
-	var kept []detector.DetectorResult
-	for _, r := range results {
-		overlap := false
-		for _, k := range kept {
-			if r.StartPos < k.EndPos && r.EndPos > k.StartPos {
-				overlap = true
-				break
-			}
-		}
-		if !overlap {
-			kept = append(kept, r)
-		}
-	}
-
+	kept := ResolveOverlaps(results)
 	sort.Slice(kept, func(i, j int) bool {
 		return kept[i].StartPos > kept[j].StartPos
 	})
@@ -121,4 +96,40 @@ func (uc *MaskUseCase) UnmaskText(ctx context.Context, maskedText string, maskID
 	}
 
 	return result, nil
+}
+
+// @sk-task 23-shield-reactions#T1.2: Extract overlap resolution for reuse across mask and proxy paths
+// ResolveOverlaps sorts results by length (longest first) and removes
+// shorter results that overlap with longer ones — exactly like MaskFromResults.
+// Exported for reuse in ShieldMiddleware so the proxy path resolves overlaps
+// the same way as the /mask endpoint.
+func ResolveOverlaps(results []detector.DetectorResult) []detector.DetectorResult {
+	if len(results) == 0 {
+		return results
+	}
+	sort.Slice(results, func(i, j int) bool {
+		lenI := results[i].EndPos - results[i].StartPos
+		lenJ := results[j].EndPos - results[j].StartPos
+		if lenI != lenJ {
+			return lenI > lenJ
+		}
+		if results[i].StartPos != results[j].StartPos {
+			return results[i].StartPos < results[j].StartPos
+		}
+		return results[i].EndPos > results[j].EndPos
+	})
+	var kept []detector.DetectorResult
+	for _, r := range results {
+		overlap := false
+		for _, k := range kept {
+			if r.StartPos < k.EndPos && r.EndPos > k.StartPos {
+				overlap = true
+				break
+			}
+		}
+		if !overlap {
+			kept = append(kept, r)
+		}
+	}
+	return kept
 }

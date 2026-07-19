@@ -166,6 +166,7 @@ type EgressConfig struct {
 	DisableKeepAlives   bool                  `mapstructure:"disable_keep_alives" yaml:"disable_keep_alives"`
 	TLS                 *EgressTLSConfig      `mapstructure:"tls" yaml:"tls"`
 	CircuitBreaker      *CircuitBreakerConfig `mapstructure:"circuit_breaker" yaml:"circuit_breaker"`
+	DebugEnabled        bool                  `mapstructure:"debug_enabled" yaml:"debug_enabled"`
 }
 
 // @sk-task 116-connection-pool-fixes#T1.1: Add EgressTLSConfig struct (AC-003, AC-004, AC-005)

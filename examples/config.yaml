@@ -70,7 +70,7 @@ routing:
       auth_prefix: "Api-Key "
       api_keys:
         - "${YANDEX_AI_KEY}"
-      timeout: 60s
+      timeout: 120s
       priority: 2
 
   rules:

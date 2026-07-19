@@ -1,0 +1,7 @@
+# Admin service overrides — загружается после config-base + config-runtime
+# (99z сортируется после 99-config-runtime.yaml)
+server:
+  port: 9090
+
+otel:
+  endpoint: ""

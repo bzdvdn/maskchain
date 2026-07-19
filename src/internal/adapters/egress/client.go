@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
@@ -70,10 +72,20 @@ func (c *Client) Call(ctx context.Context, req *ports.ProviderRequest) (*ports.P
 		httpReq.Header.Set(k, v)
 	}
 
+	if c.cfg.DebugEnabled {
+		fmt.Fprintf(os.Stderr, "\n=== DEBUG UPSTREAM REQ ===\nURL: %s\nHeaders: %v\nBody:\n%s\n=== END DEBUG ===\n\n",
+			req.URL, req.Headers, string(req.Body))
+	}
+
+	t0 := time.Now()
 	resp, err := c.doWithRetry(ctx, req.Method, func() (*http.Response, error) {
 		return c.tp.RoundTrip(httpReq)
 	})
+	t1 := time.Now()
 	if err != nil {
+		if c.cfg.DebugEnabled {
+			fmt.Fprintf(os.Stderr, "=== UPSTREAM ERROR (roundtrip=%v) ===\n%v\n", t1.Sub(t0), err)
+		}
 		if c.cb != nil {
 			c.cb.Fail()
 		}
@@ -85,7 +97,15 @@ func (c *Client) Call(ctx context.Context, req *ports.ProviderRequest) (*ports.P
 		c.cb.Reset()
 	}
 
+	if c.cfg.DebugEnabled {
+		fmt.Fprintf(os.Stderr, "=== UPSTREAM RESP (roundtrip=%v, status=%d, proto=%s) ===\n", t1.Sub(t0), resp.StatusCode, resp.Proto)
+	}
+
+	t2 := time.Now()
 	respBody, err := io.ReadAll(resp.Body)
+	if c.cfg.DebugEnabled {
+		fmt.Fprintf(os.Stderr, "=== READ BODY (read=%v) ===\n", time.Since(t2))
+	}
 	if err != nil {
 		return nil, err
 	}

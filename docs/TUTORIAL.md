@@ -169,7 +169,7 @@ Client --> Auth --> Rate Limit --> Shield Scan --> Routing --> LLM Provider --> 
 
 1. **Auth** -- the API key (`sk-demo`) identifies the tenant and loads its config.
 2. **Rate Limit** -- per-tenant request budget is checked (if configured).
-3. **Shield Scan** -- the request body is scanned by the PII engine (regex detectors for email, phone, SSN). Matches are replaced with `[[pii.<label>.<N>]]` placeholders. Dictionary terms (if any) are masked with `[MASK_<DictName>_<ID>]` placeholders.
+3. **Shield Scan** -- the request body is scanned by the PII engine (regex detectors for email, phone, SSN). Matches are replaced with `[[pii.<label>.<N>]]` placeholders. Dictionary terms (if any) are masked with `[MASK_<ID>.<N>]` placeholders.
 4. **Routing** -- the modified request is forwarded to the configured LLM provider based on the model name.
 5. **Unmask** -- on the response path, placeholders are restored to original values. Streaming SSE responses are unmasked chunk-by-chunk.
 

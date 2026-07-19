@@ -3,9 +3,11 @@ package egress
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand/v2"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -40,17 +42,20 @@ func isRetriable(err error, statusCode int, method string, retryOn5xx bool) bool
 // @sk-task 71-egress-streaming#T3.1: Implement retry loop with context cancellation (AC-005, AC-007)
 func (c *Client) doWithRetry(ctx context.Context, method string, fn func() (*http.Response, error)) (*http.Response, error) {
 	var lastErr error
-	attempts := c.cfg.MaxRetries
-	if attempts < 1 {
-		attempts = 1
+	maxRetries := c.cfg.MaxRetries
+	if maxRetries < 0 {
+		maxRetries = 0
 	}
 
-	for attempt := 0; attempt <= attempts; attempt++ {
+	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
 			wait := backoff(attempt, c.cfg.BaseBackoff)
+			if c.cfg.DebugEnabled {
+				fmt.Fprintf(os.Stderr, "=== RETRY backoff=%v (attempt=%d/%d) ===\n", wait, attempt, maxRetries)
+			}
 			select {
 			case <-time.After(wait):
 			case <-ctx.Done():
@@ -58,9 +63,20 @@ func (c *Client) doWithRetry(ctx context.Context, method string, fn func() (*htt
 			}
 		}
 
+		attemptStart := time.Now()
 		resp, err := fn()
+		if c.cfg.DebugEnabled {
+			attemptDur := time.Since(attemptStart)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "=== ATTEMPT %d/%d FAILED (dur=%v, err=%v) ===\n", attempt, maxRetries, attemptDur, err)
+			} else if resp.StatusCode >= 500 {
+				fmt.Fprintf(os.Stderr, "=== ATTEMPT %d/%d 5xx (dur=%v, status=%d) ===\n", attempt, maxRetries, attemptDur, resp.StatusCode)
+			} else {
+				fmt.Fprintf(os.Stderr, "=== ATTEMPT %d/%d OK (dur=%v) ===\n", attempt, maxRetries, attemptDur)
+			}
+		}
 		if err != nil {
-			if attempt < attempts && isRetriable(err, 0, method, c.cfg.RetryOn5xx) {
+			if attempt < maxRetries && isRetriable(err, 0, method, c.cfg.RetryOn5xx) {
 				lastErr = err
 				continue
 			}
@@ -70,7 +86,7 @@ func (c *Client) doWithRetry(ctx context.Context, method string, fn func() (*htt
 		if resp.StatusCode >= 500 {
 			if isRetriable(nil, resp.StatusCode, method, c.cfg.RetryOn5xx) {
 				resp.Body.Close()
-				if attempt < attempts {
+				if attempt < maxRetries {
 					lastErr = errFromStatus(resp.StatusCode)
 					continue
 				}

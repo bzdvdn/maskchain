@@ -16,6 +16,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY src/ ./src/
+COPY ui/embed.go ./ui/embed.go
 COPY --from=ui-builder /app/ui/dist ./ui/dist
 RUN CGO_ENABLED=0 go build -tags admin -ldflags="-s -w" -o /admin ./src/cmd/admin/
 

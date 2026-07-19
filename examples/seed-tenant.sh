@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-ADMIN_URL="${1:-http://localhost:8082}"
+ADMIN_URL="${1:-http://localhost:9090}"
 API_KEY="${2:-sk-test-default}"
 AUTH="Authorization: Bearer ${API_KEY}"
 

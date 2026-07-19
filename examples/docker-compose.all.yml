@@ -1,0 +1,105 @@
+# MaskChain combined deployment — gateway + admin + UI in one process
+# Usage: docker compose -f docker-compose.all.yml up -d --build
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: maskchain-pg
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: maskchain
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d maskchain"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: maskchain-vk
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  all:
+    build:
+      context: ..
+      dockerfile: Dockerfile.combined
+    container_name: maskchain-all
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    environment:
+      CONFIG_DIR: /etc/maskchain/conf.d
+      CONFIG_LOG_LEVEL: debug
+      CONFIG_SERVER_PORT: "8080"
+      CONFIG_SERVER_ADMIN_PORT: "9090"
+      CONFIG_DATABASE_DSN: postgres://test:test@postgres:5432/maskchain?sslmode=disable
+      CONFIG_VALKEY_ADDR: valkey:6379
+      CONFIG_ADMIN_USERNAME: admin
+      CONFIG_ADMIN_PASSWORD: test
+      CONFIG_OTEL_ENDPOINT: ""
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./config-base.yaml:/etc/maskchain/conf.d/00-config-base.yaml:ro
+      - ./config-runtime.yaml:/etc/maskchain/conf.d/99-config-runtime.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: maskchain-prom
+    ports:
+      - "9091:9090"
+    volumes:
+      - promdata:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    environment:
+      PROMETHEUS_CONFIG: |
+        global:
+          scrape_interval: 15s
+        scrape_configs:
+          - job_name: 'maskchain'
+            static_configs:
+              - targets: ['all:8080']
+                metrics_path: '/metrics'
+          - job_name: 'maskchain-admin'
+            static_configs:
+              - targets: ['all:9090']
+                metrics_path: '/metrics'
+    depends_on:
+      all:
+        condition: service_started
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: maskchain-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+    depends_on:
+      prometheus:
+        condition: service_started
+
+volumes:
+  pgdata:
+  promdata:

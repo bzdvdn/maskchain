@@ -32,7 +32,7 @@ Request
 ### Stages
 
 - **Preprocessors** (optional, per-tenant config): `JSONProcessor` masks fields by JSONPath; `CSVProcessor` masks columns by name. Run before detection to reduce noise.
-- **Dictionary Scan**: `DictionaryDetector` per dictionary, runs first. Prioritizes known terms so PII regexes don't false-positive on dictionary entries. Produces `[MASK_<DictName>_<ID>.<N>]` placeholders.
+- **Dictionary Scan**: `DictionaryDetector` per dictionary, runs first. Prioritizes known terms so PII regexes don't false-positive on dictionary entries. Produces `[MASK_<ID>.<N>]` placeholders (dictionary name omitted — system prompt already tells the LLM all `[MASK_...]` are data tokens).
 - **PII Engine Scan**: `ShieldEngine` wraps `ScanUseCase`, builds a `Pipeline` of `DetectorBinding`s from tenant `PIARule`s. Produces `[[pii.<label>.<N>]]` placeholders.
 - **Reaction Pipeline**: `ApplyPolicyUseCase` evaluates `ScanResult` severity via `PolicyEvaluator`, selects a `Reaction` (allow/block/review/log). Executed by `DefaultReactionPipeline`.
 - **Unmask**: On the response path, the middleware restores original text from the merged placeholder map. SSE streams are unmasked chunk-by-chunk; non-streaming responses are buffered then unmasked before flush.
@@ -132,7 +132,7 @@ The middleware maintains a merged placeholder-to-original map (`dictMaskMapping`
 
 ### Unmask scope
 Both writers handle two placeholder families:
-- `[MASK_<DictName>_<ID>.<N>]` -- from dictionary scans
+- `[MASK_<ID>.<N>]` -- from dictionary scans
 - `[[pii.<label>.<N>]]` -- from PII engine scans
 
 These are merged into a single `dictMaskMapping` map in the middleware before response processing.
@@ -270,7 +270,7 @@ type PIARule struct {
 ### Per-tenant Dictionaries
 
 Attached to `Tenant.Dictionaries()` as `[]*dictionary.Dictionary`. Each dictionary has:
-- `Name`: logical name, used in placeholder label (`[MASK_<NAME>_...]`)
+- `Name`: logical name, used for diagnostics/logging only (not included in placeholder format)
 - `MatchMode`: exact / contains / regex / fuzzy
 - `Entries`: heterogeneous slice (strings, maps, arrays), flattened at scan time
 
@@ -279,7 +279,7 @@ Dictionaries are scanned first, before PII rules, so that known business terms a
 ## 10. Unique Characteristics vs Generic PII Redaction
 
 1. **Dual-path scan**: dictionary detection runs before regex PII detection, with priority masking to avoid false positives on legitimate business terms.
-2. **In-band unmask**: placeholders carry enough context (`[MASK_<DictName>_<ID>.<N>]`) for lossless restoration on the response path, even across SSE chunk boundaries.
+2. **In-band unmask**: placeholders carry enough context (`[MASK_<ID>.<N>]`) for lossless restoration on the response path, even across SSE chunk boundaries.
 3. **System prompt injection**: tells the LLM how to handle masked tokens, preventing it from hallucinating replacements or disclosing the masking mechanism.
 4. **Aho-Corasick dictionary engine**: custom trie-based matcher for tenant-specific term lists at scale, with fuzzy fallback via Levenshtein.
 5. **Middleware-level integration**: shield operates as a transparent HTTP middleware, not an SDK -- it intercepts JSON chat bodies, mutates them in-flight, and restores them on the way out.

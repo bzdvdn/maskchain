@@ -23,7 +23,7 @@ routing:
       auth_prefix: "Api-Key "
       api_keys:
         - "${YANDEX_AI_KEY}"
-      timeout: 60s
+      timeout: 120s
       priority: 2
 
   rules:
@@ -45,6 +45,9 @@ routing:
           providers: ["mistral"]
         - model: "gpt://b1ggb5ebrubb9a4gbp2o/yandexgpt/latest"
           providers: ["yandex"]
+
+otel:
+  endpoint: ""
 
 shield:
   action_on_suspicious: mask

@@ -3,14 +3,18 @@
 # Stage 1: Go build
 FROM golang:1.26-alpine AS go-builder
 
+RUN apk add --no-cache gcc musl-dev
+
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY src/ ./src/
-RUN CGO_ENABLED=0 go build -tags gateway -ldflags="-s -w" -o /gateway ./src/cmd/gateway/
+RUN CGO_ENABLED=1 go build -tags gateway -ldflags="-s -w" -o /gateway ./src/cmd/gateway/
 
 # Stage 2: Runtime
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM alpine:3.20
+
+RUN apk add --no-cache ca-certificates curl
 
 LABEL org.opencontainers.image.source="https://github.com/bzdvdn/maskchain" \
       org.opencontainers.image.description="MaskChain Gateway — LLM proxy with content shield" \

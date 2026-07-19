@@ -15,11 +15,14 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY src/ ./src/
+COPY ui/embed.go ./ui/embed.go
 COPY --from=ui-builder /app/ui/dist ./ui/dist
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /maskchain ./src/cmd/all/
 
 # Stage 3: Runtime
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM alpine:3.20
+
+RUN apk add --no-cache ca-certificates curl
 
 LABEL org.opencontainers.image.source="https://github.com/bzdvdn/maskchain" \
       org.opencontainers.image.description="MaskChain Combined — gateway + admin + UI in one binary" \
