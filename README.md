@@ -14,26 +14,26 @@ Content shield proxy — PII/PHI/financial/secrets detection, dictionary masking
 
 ## Why MaskChain?
 
-| Feature | MaskChain | GoModel | privacy-filter | LiteLLM (Python) |
-|---------|-----------|---------|----------------|-------------------|
-| **Language** | Go (native) | Go | Go | Python |
-| **LLM Proxy** | ✅ Full proxy | ✅ Proxy | ❌ Redact-only | ✅ Full proxy |
-| **Content Shield** | ✅ PII/PHI/finance/secrets/dictionary | ❌ | ✅ PII+secrets only | ❌ |
-| **Streaming Unmask** | ✅ SSE response restore | ❌ | ❌ | ❌ |
-| **Tenant Isolation** | ✅ Per-tenant API keys + config | ❌ | ❌ | ✅ |
-| **Dictionary Masking** | ✅ Per-tenant exact-match | ❌ | ❌ | ❌ |
-| **Routing** | ✅ Per-tenant per-model + fallback + CB | ✅ Multi-provider | ❌ | ✅ Multi-provider |
-| **Circuit Breaker** | ✅ | ❌ | ❌ | ❌ |
-| **Rate Limiting** | ✅ Sliding window (Valkey) | ❌ | ❌ | ✅ |
-| **Cost Tracking** | ✅ Token + cost analytics | ❌ | ❌ | ✅ |
-| **Admin UI** | ✅ React SPA | ❌ | ❌ | ✅ |
-| **Helm Chart** | ✅ | ❌ | ❌ | ✅ |
-| **OTel Tracing** | ✅ gRPC exporter | ❌ | ❌ | ❌ |
-| **Binary Size** | ~18 MB (gateway) | ~20 MB | ~15 MB | ~200 MB+ (Python) |
-| **Startup Time** | <100ms | <100ms | <50ms | ~2-5s |
-| **License** | MIT | MIT | MIT | MIT |
+| Feature | MaskChain | PasteGuard | CloakPipe | Bifrost | GoModel | privacy-filter |
+|---------|-----------|------------|-----------|---------|---------|----------------|
+| **Language** | Go (native) | TypeScript (Bun) | Rust | Go | Go | Go |
+| **LLM Proxy** | ✅ Full proxy | ✅ Proxy | ❌ Mask-only | ✅ Full proxy | ✅ Proxy | ❌ Redact-only |
+| **Content Shield** | ✅ PII/PHI/finance/secrets/dictionary | ✅ PII+secrets (Presidio) | ✅ PII+secrets (ONNX NER) | ✅ Prompt injection + PII | ❌ | ✅ PII+secrets only |
+| **Streaming Unmask** | ✅ SSE response restore | ✅ SSE (partial buffer) | ✅ SSE rehydration | ❌ | ❌ | ❌ |
+| **Tenant Isolation** | ✅ Per-tenant API keys + config | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Dictionary Masking** | ✅ Per-tenant, 4 match modes (exact/contains/regex/fuzzy) | ❌ NER-only | ❌ NER-only | ❌ | ❌ | ❌ |
+| **Routing** | ✅ Per-tenant per-model + fallback + CB | ❌ Single provider | ❌ | ✅ Multi-provider | ✅ Multi-provider | ❌ |
+| **Circuit Breaker** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Rate Limiting** | ✅ Sliding window (Valkey) | ❌ | ❌ | ✅ | ❌ | ❌ |
+| **Cost Tracking** | ✅ Token + cost analytics | ❌ | ❌ | ✅ | ❌ | ❌ |
+| **Admin UI** | ✅ React SPA | ✅ Dashboard (SQLite) | ❌ | ❌ | ❌ | ❌ |
+| **Helm Chart** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **OTel Tracing** | ✅ gRPC exporter | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Binary Size** | ~18 MB (gateway) | ~200 MB+ (Bun+Presidio) | ~15 MB | ~18 MB | ~20 MB | ~15 MB |
+| **Startup Time** | <100ms | ~2-5s | <50ms | <100ms | <100ms | <50ms |
+| **License** | MIT | Apache 2.0 | MIT | Open source | MIT | MIT |
 
-MaskChain is the **only Go-native LLM gateway with a full content shield** — PII/PHI/financial/secrets regex detection plus per-tenant dictionary masking and streaming unmask. Unlike Python-based solutions (LiteLLM), it starts in under 100ms with a ~18 MB static binary. Unlike PII-only tools (privacy-filter), it's a complete proxy with routing, circuit breaker, rate limiting, tenant isolation, and an admin UI.
+MaskChain is the **only Go-native LLM gateway with per-tenant dictionary masking** — PII/PHI/financial/secrets regex detection plus Aho-Corasick dictionary matching (exact/contains/regex/fuzzy) and streaming SSE unmask. Unlike NER-only tools (PasteGuard, CloakPipe), it masks internal business terms — product codenames, patient IDs, trading signals — with deterministic, reversible placeholders. Unlike Python-based solutions (LiteLLM), it starts in under 100ms with a ~18 MB static binary. Unlike PII-only tools (privacy-filter, Bifrost), it's a complete proxy with routing, circuit breaker, rate limiting, tenant isolation, and an admin UI.
 
 ## Use Cases
 
@@ -198,6 +198,20 @@ src/
 │   ├── infra/                # Infrastructure (config, telemetry, metrics)
 │   └── ports/                # Interface definitions
 └── pkg/                      # Public packages
+```
+
+## Demos
+
+| Aho-Corasick 1000-term matching (<1ms) | Real mask/unmask round-trip (Docker) |
+|:---:|:---:|
+| ![Benchmark](demo/bench-ahocorasick.gif) | ![Mask/Unmask](demo/mask-unmask-live.gif) |
+
+```bash
+# Performance benchmark (Aho-Corasick, 1000 terms, no Docker needed)
+bash demo/run-benchmark.sh
+
+# Full stack demo: Docker Compose + seed + mask/unmask
+bash demo/run-mask-unmask-live.sh
 ```
 
 ## CI/CD

@@ -1,6 +1,8 @@
 package dictionary
 
 import (
+	"math/rand"
+	"strings"
 	"testing"
 )
 
@@ -71,3 +73,54 @@ func TestWordlistMatcher_Substring(t *testing.T) {
 		t.Errorf("expected to find 'example.com' in matches: %v", matches)
 	}
 }
+
+// @sk-bench 24-shield-dictionaries: 1000 terms Aho-Corasick benchmark
+func BenchmarkAhoCorasick_1000Terms(b *testing.B) {
+	rng := rand.New(rand.NewSource(42))
+	terms := make([]string, 1000)
+	termSet := make(map[string]bool)
+	for i := range terms {
+		// generate unique 8-12 char terms
+		term := randomWord(rng, 8+rng.Intn(4))
+		if termSet[term] {
+			i--
+			continue
+		}
+		termSet[term] = true
+		terms[i] = term
+	}
+
+	m := BuildWordlistMatcher(terms)
+	_ = m // built once; benchmark matches below
+
+	// 10KB text with ~100 embedded terms
+	var sb strings.Builder
+	for sb.Len() < 10_000 {
+		term := terms[rng.Intn(len(terms))]
+		sb.WriteString(term)
+		sb.WriteString(" and some filler text. ")
+		// inject non-matching text too
+		sb.WriteString(randomWord(rng, 4) + " " + randomWord(rng, 6) + ". ")
+	}
+	text := sb.String()
+
+	b.ResetTimer()
+	var total int
+	for i := 0; i < b.N; i++ {
+		matches := m.Match(text)
+		total += len(matches)
+	}
+	b.StopTimer()
+	b.ReportMetric(float64(total)/float64(b.N), "matches/op")
+}
+
+func randomWord(rng *rand.Rand, n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letters[rng.Intn(len(letters))]
+	}
+	return string(b)
+}
+
+// run as: go test -bench=BenchmarkAhoCorasick_1000Terms -benchmem -count=1 -run=^$
