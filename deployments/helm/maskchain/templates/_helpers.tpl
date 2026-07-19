@@ -48,3 +48,4 @@ app.kubernetes.io/component: {{ .component }}
 {{ include "maskchain.selectorLabels" . }}
 app.kubernetes.io/component: {{ .component }}
 {{- end }}
+

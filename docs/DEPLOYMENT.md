@@ -59,17 +59,17 @@ helm install maskchain deployments/helm/maskchain/ \
 | Value | Description |
 |-------|-------------|
 | `gateway.enabled` / `admin.enabled` / `all.enabled` | Component selection (mutually exclusive with `all.enabled`) |
-| `gateway.image.tag` | Docker image tag |
+| `<component>.image.tag` | Docker image tag per component |
+| `<component>.replicaCount` | Replicas per component (e.g. `gateway.replicaCount: 2`) |
+| `<component>.resources` | CPU/memory requests and limits per component |
+| `<component>.ingress.enabled` | Expose component via Ingress |
+| `<component>.gatewayAPI.enabled` | Use Gateway API (HTTPRoute) per component |
 | `apiKeys` | All secrets injected as env vars (`OPENAI_API_KEY`, `ADMIN_PASSWORD`, `DEFAULT_API_KEY`, `POSTGRES_DSN`, `VALKEY_ADDR`, `VALKEY_PASSWORD`) |
 | `postgresql.enabled` | Deploy bundled PostgreSQL (set `postgresql.external.enabled=true` to use external) |
 | `valkey.enabled` | Deploy bundled Valkey (set `valkey.external.enabled=true` to use external) |
-| `ingress.enabled` | Expose gateway/admin via Ingress |
-| `gatewayAPI.enabled` | Use Gateway API (HTTPRoute) instead of Ingress |
 | `servicemonitor.enabled` | Prometheus ServiceMonitor integration |
 | `pdb.enabled` | PodDisruptionBudget for HA |
 | `networkPolicy.enabled` | Network policy isolation |
-| `replicaCount` | Number of replicas |
-| `resources` | CPU/memory requests and limits |
 
 Config is split into `configBase` (infrastructure — db, valkey, egress, otel) and `configRuntime` (business logic — routing, shield, tenants). Both use `${VAR}` placeholders resolved from the `apiKeys` secret.
 
@@ -110,7 +110,7 @@ CGO_ENABLED=0 go build -tags admin -ldflags="-s -w" -o admin ./src/cmd/admin/
 
 ## Scaling
 
-- **Horizontal**: Stateless gateway — scale replicas behind a load balancer. In Helm set `replicaCount`.
+- **Horizontal**: Stateless gateway — scale replicas behind a load balancer. In Helm set `<component>.replicaCount` (e.g. `gateway.replicaCount: 3`).
 - **Database connection pool**: Tune `max_conns` and `min_conns` in `configBase.database`.
 - **Rate limiting**: Adjust `default_rate_per_window` and `default_window_sec` in `configBase.ratelimit`.
 - **Dictionary cache**: Tune `lru_size` and `valkey_ttl_sec` in `configBase.dictionary_cache`.
@@ -118,7 +118,7 @@ CGO_ENABLED=0 go build -tags admin -ldflags="-s -w" -o admin ./src/cmd/admin/
 
 ## Troubleshooting
 
-See `deployments/runbook.md` for detailed procedures for:
+See `deployments/runbook.md` for detailed procedures.
 
 | Issue | Quick Pointer |
 |-------|---------------|

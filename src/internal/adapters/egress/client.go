@@ -4,11 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
@@ -72,10 +70,11 @@ func (c *Client) Call(ctx context.Context, req *ports.ProviderRequest) (*ports.P
 		httpReq.Header.Set(k, v)
 	}
 
-	if c.cfg.DebugEnabled {
-		fmt.Fprintf(os.Stderr, "\n=== DEBUG UPSTREAM REQ ===\nURL: %s\nHeaders: %v\nBody:\n%s\n=== END DEBUG ===\n\n",
-			req.URL, req.Headers, string(req.Body))
-	}
+	slog.Debug("egress: upstream request",
+		"url", req.URL,
+		"method", req.Method,
+		"body_size", len(req.Body),
+	)
 
 	t0 := time.Now()
 	resp, err := c.doWithRetry(ctx, req.Method, func() (*http.Response, error) {
@@ -83,9 +82,10 @@ func (c *Client) Call(ctx context.Context, req *ports.ProviderRequest) (*ports.P
 	})
 	t1 := time.Now()
 	if err != nil {
-		if c.cfg.DebugEnabled {
-			fmt.Fprintf(os.Stderr, "=== UPSTREAM ERROR (roundtrip=%v) ===\n%v\n", t1.Sub(t0), err)
-		}
+		slog.Debug("egress: upstream error",
+			"elapsed", t1.Sub(t0).String(),
+			"error", err.Error(),
+		)
 		if c.cb != nil {
 			c.cb.Fail()
 		}
@@ -97,16 +97,20 @@ func (c *Client) Call(ctx context.Context, req *ports.ProviderRequest) (*ports.P
 		c.cb.Reset()
 	}
 
-	if c.cfg.DebugEnabled {
-		fmt.Fprintf(os.Stderr, "=== UPSTREAM RESP (roundtrip=%v, status=%d, proto=%s) ===\n", t1.Sub(t0), resp.StatusCode, resp.Proto)
-	}
+	slog.Debug("egress: upstream response",
+		"elapsed", t1.Sub(t0).String(),
+		"status", resp.StatusCode,
+		"proto", resp.Proto,
+	)
 
 	t2 := time.Now()
 	respBody, err := io.ReadAll(resp.Body)
-	if c.cfg.DebugEnabled {
-		fmt.Fprintf(os.Stderr, "=== READ BODY (read=%v) ===\n", time.Since(t2))
-	}
+	slog.Debug("egress: response body read",
+		"body_size", len(respBody),
+		"elapsed", time.Since(t2).String(),
+	)
 	if err != nil {
+		slog.Debug("egress: response body read error", "error", err.Error())
 		return nil, err
 	}
 

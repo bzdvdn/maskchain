@@ -8,6 +8,8 @@ fullnameOverride: ""
 global:
   security:
     allowInsecureImages: true
+  # -- Default priorityClassName for all components (overridable per component)
+  priorityClassName: ""
 
 # -- Component flags. all.enabled=true конфликтует с gateway.enabled и admin.enabled.
 gateway:
@@ -16,6 +18,40 @@ gateway:
     repository: bzdvdn/maskchain-gateway
     tag: latest
     pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    type: ClusterIP
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  priorityClassName: ""
+  ingress:
+    enabled: false
+    className: ""
+    host: api.maskchain.local
+    path: /
+    annotations: {}
+    tls: []
+  gatewayAPI:
+    enabled: false
+    hostname: api.maskchain.local
+    gatewayName: maskchain-gateway
+    gatewayNamespace: ""
+    tls:
+      enabled: false
+      certificateRef:
+        name: ""
+  pdb:
+    enabled: false
+    minAvailable: 1
+  networkPolicy:
+    enabled: false
+    ingressControllerNamespace: ingress-nginx
+    externalCIDRs: []
 
 admin:
   enabled: false
@@ -23,6 +59,40 @@ admin:
     repository: bzdvdn/maskchain-admin
     tag: latest
     pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    type: ClusterIP
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  priorityClassName: ""
+  ingress:
+    enabled: false
+    className: ""
+    host: admin.maskchain.local
+    path: /
+    annotations: {}
+    tls: []
+  gatewayAPI:
+    enabled: false
+    hostname: admin.maskchain.local
+    gatewayName: maskchain-gateway
+    gatewayNamespace: ""
+    tls:
+      enabled: false
+      certificateRef:
+        name: ""
+  pdb:
+    enabled: false
+    minAvailable: 1
+  networkPolicy:
+    enabled: false
+    ingressControllerNamespace: ingress-nginx
+    externalCIDRs: []
 
 all:
   enabled: false
@@ -30,19 +100,45 @@ all:
     repository: bzdvdn/maskchain
     tag: latest
     pullPolicy: IfNotPresent
-
-replicaCount: 1
-
-service:
-  type: ClusterIP
-
-resources:
-  requests:
-    cpu: 100m
-    memory: 128Mi
-  limits:
-    cpu: 500m
-    memory: 256Mi
+  replicaCount: 1
+  service:
+    type: ClusterIP
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  priorityClassName: ""
+  ingress:
+    enabled: false
+    className: ""
+    host: api.maskchain.local
+    path: /
+    annotations: {}
+    tls: []
+    admin_host: admin.maskchain.local
+    admin_path: /
+    admin_annotations: {}
+    admin_tls: []
+  gatewayAPI:
+    enabled: false
+    hostname: api.maskchain.local
+    adminHostname: admin.maskchain.local
+    gatewayName: maskchain-gateway
+    gatewayNamespace: ""
+    tls:
+      enabled: false
+      certificateRef:
+        name: ""
+  pdb:
+    enabled: false
+    minAvailable: 1
+  networkPolicy:
+    enabled: false
+    ingressControllerNamespace: ingress-nginx
+    externalCIDRs: []
 
 # -- Base config — infrastructure sections (rarely change).
 # Sensitive values use ${VAR} placeholders resolved from apiKeys secret.
@@ -109,83 +205,65 @@ configBase:
     warm_concurrency: 5
 
 # -- Runtime config — business-logic sections (change more often).
+# All blocks are `{}` / `[]` by default — uncomment and fill as needed.
 configRuntime:
-  shield:
-    action_on_suspicious: mask
-    tenant_model_mapping:
-      default:
-        "gpt-4o": "strict"
+  # shield:
+  #   action_on_suspicious: mask
+  #   tenant_model_mapping:
+  #     default:
+  #       "gpt-4o": "strict"
+  shield: {}
 
+  # routing:
+  #   providers:
+  #     - name: openai
+  #       api_type: openai
+  #       base_url: "https://api.openai.com"
+  #       api_keys:
+  #         - "${OPENAI_API_KEY}"
+  #       timeout: 120s
+  #       priority: 1
+  #     - name: anthropic
+  #       api_type: anthropic
+  #       base_url: "https://api.anthropic.com"
+  #       api_keys:
+  #         - "${ANTHROPIC_API_KEY}"
+  #       proxy_url: "http://corp-proxy:3128"
+  #       timeout: 120s
+  #       priority: 2
+  #   rules:
+  #     - tenant: default
+  #       routes:
+  #         - model: "gpt-4o"
+  #           providers: ["openai"]
   routing:
-    providers:
-      - name: openai
-        api_type: openai
-        base_url: "https://api.openai.com"
-        api_keys:
-          - "${OPENAI_API_KEY}"
-        timeout: 120s
-        priority: 1
-      - name: anthropic
-        api_type: anthropic
-        base_url: "https://api.anthropic.com"
-        api_keys:
-          - "${ANTHROPIC_API_KEY}"
-        proxy_url: "http://corp-proxy:3128"   # per-provider egress proxy (HTTP/HTTPS/SOCKS5)
-        timeout: 120s
-        priority: 2
-      - name: gemini
-        api_type: gemini
-        base_url: "https://generativelanguage.googleapis.com"
-        api_keys:
-          - "${GEMINI_API_KEY}"
-        timeout: 120s
-        priority: 2
-      - name: bedrock
-        api_type: bedrock
-        aws_region: "us-east-1"                   # required; credentials from env/IAM
-        timeout: 120s
-        priority: 3
-      - name: groq
-        api_type: proxy                       # generic OpenAI-compatible passthrough
-        base_url: "https://api.groq.com/openai/v1"
-        api_keys:
-          - "${GROQ_API_KEY}"
-        timeout: 60s
-        priority: 4
-    rules:
-      - tenant: default
-        routes:
-          - model: "gpt-4o"
-            providers: ["openai"]
-          - model: "gpt-4o-mini"
-            providers: ["openai"]
-          - model: "claude-sonnet-4"
-            providers: ["anthropic"]
-          - model: "gemini-2.0-flash"
-            providers: ["gemini"]
-          - model: "llama-3.3-70b"
-            providers: ["groq"]
+    providers: []
+    rules: []
 
-  admin:
-    username: admin
-    password: "${ADMIN_PASSWORD}"
-    session_ttl: 30m
-    dashboard_poll_interval: 5s
+  # admin:
+  #   username: admin
+  #   password: "${ADMIN_PASSWORD}"
+  #   session_ttl: 30m
+  #   dashboard_poll_interval: 5s
+  admin: {}
 
-  debug:
-    enabled: false
-    admin_token: ""
+  # debug:
+  #   enabled: false
+  #   admin_token: ""
+  debug: {}
 
-  analytics:
-    batch_interval: 5s
-    retention_days: 90
+  # analytics:
+  #   batch_interval: 5s
+  #   retention_days: 90
+  analytics: {}
 
-  tenants:
-    default:
-      name: "Default Tenant"
-      auth_header: "Authorization"
-      api_keys:
-        - "${DEFAULT_API_KEY}"
+  # tenants:
+  #   default:
+  #     name: "Default Tenant"
+  #     auth_header: "Authorization"
+  #     api_keys:
+  #       - "${DEFAULT_API_KEY}"
+  tenants: {}
 
 # -- API keys and secrets injected as env vars for ${VAR} substitution in config.
 # Each key becomes an environment variable in the Deployment.
@@ -233,31 +311,6 @@ valkey:
     enabled: false
     addr: ""
 
-# -- Kubernetes Ingress settings
-ingress:
-  enabled: false
-  className: ""
-  annotations: {}
-  tls: []
-  gateway:
-    host: api.maskchain.local
-    path: /
-  admin:
-    host: admin.maskchain.local
-    path: /
-
-# -- Gateway API (HTTPRoute) settings
-gatewayAPI:
-  enabled: false
-  gatewayName: maskchain-gateway
-  gatewayNamespace: ""
-  hostname: api.maskchain.local
-  adminHostname: admin.maskchain.local
-  tls:
-    enabled: false
-    certificateRef:
-      name: ""
-
 # -- Prometheus ServiceMonitor
 servicemonitor:
   enabled: false
@@ -265,13 +318,4 @@ servicemonitor:
   scrapeTimeout: 10s
   labels: {}
 
-# -- PodDisruptionBudget
-pdb:
-  enabled: false
-  minAvailable: 1
 
-# -- NetworkPolicy
-networkPolicy:
-  enabled: false
-  ingressControllerNamespace: ingress-nginx
-  externalCIDRs: []

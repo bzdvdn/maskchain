@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/bzdvdn/maskchain/src/internal/ports"
 )
@@ -42,23 +44,48 @@ func (h *FallbackHandler) Call(ctx context.Context, providers []string, req *por
 		client, ok := clients[name]
 		if !ok {
 			lastErr = fmt.Errorf("provider %s not configured", name)
+			slog.DebugContext(ctx, "fallback: provider not configured", "provider", name)
 			continue
 		}
+		tStart := time.Now()
 		resp, err := client.Call(ctx, req)
+		elapsed := time.Since(tStart)
 		if err != nil {
+			slog.DebugContext(ctx, "fallback: provider call failed",
+				"provider", name,
+				"elapsed", elapsed.String(),
+				"error", err.Error(),
+				"retriable", isRetriableError(err),
+			)
 			if isRetriableError(err) {
 				lastErr = err
 				continue
 			}
 			return resp, name, err
 		}
+		slog.DebugContext(ctx, "fallback: provider succeeded",
+			"provider", name,
+			"elapsed", elapsed.String(),
+			"status", resp.StatusCode,
+		)
 		if resp.StatusCode >= 500 {
 			lastErr = fmt.Errorf("provider returned status %d", resp.StatusCode)
+			slog.DebugContext(ctx, "fallback: provider returned server error, trying next",
+				"provider", name, "status", resp.StatusCode,
+			)
 			continue
 		}
 		return resp, name, nil
 	}
+	slog.DebugContext(ctx, "fallback: all providers exhausted", "error", errString(lastErr))
 	return nil, "", lastErr
+}
+
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 // @sk-task 112-proxy-streaming-wiring#T1.1: Implement FallbackHandler.Stream() (AC-006)

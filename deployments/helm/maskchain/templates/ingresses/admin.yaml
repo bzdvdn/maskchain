@@ -1,5 +1,5 @@
 # @sk-task helm-chart#T5.1: Admin Ingress (AC-007)
-{{- if and .Values.ingress.enabled .Values.admin.enabled }}
+{{- if and .Values.admin.ingress.enabled .Values.admin.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -7,23 +7,23 @@ metadata:
   labels:
     {{- include "maskchain.labels" . | nindent 4 }}
   annotations:
-    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+    {{- toYaml .Values.admin.ingress.annotations | nindent 4 }}
 spec:
-  {{- with .Values.ingress.className }}
+  {{- with .Values.admin.ingress.className }}
   ingressClassName: {{ . }}
   {{- end }}
   rules:
-    - host: {{ .Values.ingress.admin.host }}
+    - host: {{ .Values.admin.ingress.host }}
       http:
         paths:
-          - path: {{ .Values.ingress.admin.path }}
+          - path: {{ .Values.admin.ingress.path }}
             pathType: Prefix
             backend:
               service:
                 name: {{ include "maskchain.fullname" . }}-admin
                 port:
                   number: {{ .Values.configBase.server.admin_port }}
-  {{- with .Values.ingress.tls }}
+  {{- with .Values.admin.ingress.tls }}
   tls:
     {{- toYaml . | nindent 4 }}
   {{- end }}

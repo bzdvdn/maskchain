@@ -8,7 +8,7 @@ metadata:
     {{- include "maskchain.labels" . | nindent 4 }}
     app.kubernetes.io/component: admin
 spec:
-  type: {{ .Values.service.type | default "ClusterIP" }}
+  type: {{ .Values.admin.service.type | default "ClusterIP" }}
   ports:
     - port: {{ .Values.configBase.server.admin_port }}
       targetPort: admin-http

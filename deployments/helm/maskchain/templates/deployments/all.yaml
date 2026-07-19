@@ -8,7 +8,7 @@ metadata:
     {{- include "maskchain.labels" . | nindent 4 }}
     app.kubernetes.io/component: all
 spec:
-  replicas: {{ .Values.replicaCount | default 1 }}
+  replicas: {{ .Values.all.replicaCount | default 1 }}
   selector:
     matchLabels:
       {{- include "maskchain.selectorLabels" . | nindent 6 }}
@@ -23,6 +23,10 @@ spec:
         checksum/config-runtime: {{ include (print $.Template.BasePath "/configmap-runtime.yaml") . | sha256sum }}
     spec:
       serviceAccountName: {{ include "maskchain.fullname" . }}
+      {{- $pc := .Values.all.priorityClassName | default .Values.global.priorityClassName }}
+      {{- if $pc }}
+      priorityClassName: {{ $pc }}
+      {{- end }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001
@@ -80,7 +84,7 @@ spec:
               drop:
                 - ALL
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.all.resources | nindent 12 }}
       volumes:
         - name: config-base
           configMap:

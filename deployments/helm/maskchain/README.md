@@ -41,8 +41,8 @@ The chart renders **separate** Kubernetes resources per component, organised int
 
 ```
 templates/
-├── configmap-base.yaml      # Infrastructure config (base, редко меняется)
-├── configmap-runtime.yaml   # Business-logic config (runtime, меняется чаще)
+├── configmap-base.yaml      # Infrastructure config (base, rarely changes)
+├── configmap-runtime.yaml   # Business-logic config (runtime, changes more often)
 ├── secret.yaml              # Shared API keys + auto-generated DB secrets
 ├── deployments/             # Component Deployments
 │   ├── gateway.yaml         (gateway.enabled)
@@ -52,18 +52,23 @@ templates/
 │   ├── gateway.yaml
 │   ├── admin.yaml
 │   └── all.yaml
-├── ingresses/               # Component Ingresses
+├── ingresses/               # Per-component Ingresses
 │   ├── gateway.yaml
 │   ├── admin.yaml
 │   └── all.yaml
-├── httproute.yaml           # Gateway API HTTPRoute
+├── gateway-api/             # Per-component Gateway API HTTPRoutes
+│   ├── gateway.yaml
+│   ├── admin.yaml
+│   └── all.yaml
 ├── servicemonitor.yaml      # Prometheus ServiceMonitor
 ├── pdb.yaml                 # PodDisruptionBudget
 ├── networkpolicy.yaml       # NetworkPolicy
 └── tests/test-connection.yaml
 ```
 
-Each component is self-contained: a Deployment with its own selector label (`app.kubernetes.io/component: <name>`), paired Service, and optional Ingress.
+Each component is self-contained: a Deployment with its own selector label (`app.kubernetes.io/component: <name>`), paired Service, and optional Ingress / HTTPRoute.
+
+All component-scoped settings (`replicaCount`, `service`, `resources`, `ingress`, `gatewayAPI`) are configured **inside** each component block — see [Configuration Reference](#configuration-reference).
 
 ---
 
@@ -73,8 +78,8 @@ Three mutually exclusive component flags control what runs:
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `gateway.enabled` | `true` | Separate gateway Deployment (port `config.server.port`) |
-| `admin.enabled` | `false` | Separate admin Deployment (port `config.server.admin_port`) |
+| `gateway.enabled` | `true` | Separate gateway Deployment (port `configBase.server.port`) |
+| `admin.enabled` | `false` | Separate admin Deployment (port `configBase.server.admin_port`) |
 | `all.enabled` | `false` | Combined Deployment with both ports (`all` conflicts with `gateway` and `admin`) |
 
 ### Examples
@@ -112,37 +117,130 @@ helm install maskchain . \
 
 All chart settings are documented in [values.yaml](values.yaml). Key sections:
 
-### Global
+### Per-Component Settings
 
-```yaml
-nameOverride: ""
-fullnameOverride: ""
-replicaCount: 1
-```
-
-### Component Images
+Each component (`gateway` / `admin` / `all`) has its own `replicaCount`, `service`, `resources`, `ingress`, and `gatewayAPI`:
 
 ```yaml
 gateway:
   enabled: true
   image:
-    repository: maskchain/gateway
+    repository: bzdvdn/maskchain-gateway
     tag: latest
     pullPolicy: IfNotPresent
+  replicaCount: 1                              # component replicas
+  service:
+    type: ClusterIP
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  ingress:                                      # see Ingress section below
+    enabled: false
+    className: ""
+    host: api.maskchain.local
+    path: /
+    annotations: {}
+    tls: []
+  gatewayAPI:                                   # see Gateway API section below
+    enabled: false
+    hostname: api.maskchain.local
+    gatewayName: maskchain-gateway
+    gatewayNamespace: ""
+    tls:
+      enabled: false
+      certificateRef:
+        name: ""
+  priorityClassName: ""
+  pdb:
+    enabled: false
+    minAvailable: 1
+  networkPolicy:
+    enabled: false
+    ingressControllerNamespace: ingress-nginx
+    externalCIDRs: []
 
 admin:
   enabled: false
   image:
-    repository: maskchain/admin
+    repository: bzdvdn/maskchain-admin
     tag: latest
     pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    type: ClusterIP
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  ingress:
+    enabled: false
+    className: ""
+    host: admin.maskchain.local
+    path: /
+    annotations: {}
+    tls: []
+  gatewayAPI:
+    enabled: false
+    hostname: admin.maskchain.local
+    gatewayName: maskchain-gateway
+    gatewayNamespace: ""
+  priorityClassName: ""
+  pdb:
+    enabled: false
+    minAvailable: 1
+  networkPolicy:
+    enabled: false
+    ingressControllerNamespace: ingress-nginx
+    externalCIDRs: []
 
 all:
   enabled: false
   image:
-    repository: maskchain/all
+    repository: bzdvdn/maskchain
     tag: latest
     pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    type: ClusterIP
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  ingress:
+    enabled: false
+    className: ""
+    host: api.maskchain.local
+    path: /
+    annotations: {}
+    tls: []
+    admin_host: admin.maskchain.local          # admin Ingress settings in all mode
+    admin_path: /
+    admin_annotations: {}
+    admin_tls: []
+  gatewayAPI:
+    enabled: false
+    hostname: api.maskchain.local
+    adminHostname: admin.maskchain.local       # admin hostname in all mode
+    gatewayName: maskchain-gateway
+    gatewayNamespace: ""
+  priorityClassName: ""
+  pdb:
+    enabled: false
+    minAvailable: 1
+  networkPolicy:
+    enabled: false
+    ingressControllerNamespace: ingress-nginx
+    externalCIDRs: []
 ```
 
 ### Application Config
@@ -156,131 +254,46 @@ Config is split into two layers in `values.yaml` — `configBase` (infrastructur
 
 Both are mounted to `/etc/maskchain/conf.d/` in the container. The binary reads all `*.yaml` files from this directory and deep-merges them (last file wins — `99-config-runtime.yaml` overrides `00-config-base.yaml`). This means changing routing or analytics does **not** trigger a Pod restart (the filesystem syncs automatically via ConfigMap volume).
 
+ConfigRuntime blocks are empty by default — uncomment and fill as needed:
+
 ```yaml
-configBase:
-  log:
-    level: info
-
-  server:
-    port: 8080
-    admin_port: 9090
-    shutdown_timeout: 30
-    tenant_reload_interval: 15s
-    health_check:
-      critical_deps:
-        - database
-
-  database:
-    dsn: ${POSTGRES_DSN}
-    max_conns: 25
-    min_conns: 5
-    max_conn_lifetime: 30m
-
-  valkey:
-    addr: ${VALKEY_ADDR}
-    password: ${VALKEY_PASSWORD}
-    ttl_sec: 3600
-
-  mask:
-    cache_ttl_sec: 3600
-
-  egress:
-    max_idle_conns: 25
-    max_idle_conns_per_host: 4
-    idle_timeout: 60s
-    max_retries: 3
-    base_backoff: 200ms
-    retry_on_5xx: true
-    disable_keep_alives: false
-    circuit_breaker:
-      max_failures: 5
-      cooldown: 30s
-
-  session:
-    default_ttl: 1h
-    max_ttl: 24h
-    cache_ttl: 5m
-    cleanup_interval: 15m
-    cleanup_enabled: true
-
-  otel:
-    endpoint: ""
-    service_name: maskchain
-    environment: production
-    sampling_ratio: 0.1
-
-  ratelimit:
-    default_rate_per_window: 100
-    default_window_sec: 60
-
-  dictionary_cache:
-    valkey_ttl_sec: 300
-    lru_size: 10000
-    warm_on_startup: true
-    warm_concurrency: 5
-
 configRuntime:
-  shield:
-    action_on_suspicious: mask
-    tenant_model_mapping:
-      default:
-        "gpt-4o": strict
+  # shield:
+  #   action_on_suspicious: mask
+  #   tenant_model_mapping:
+  #     default:
+  #       "gpt-4o": "strict"
+  shield: {}
 
+  # routing:
+  #   providers:
+  #     - name: openai
+  #       api_type: openai
+  #       base_url: "https://api.openai.com"
+  #       api_keys:
+  #         - "${OPENAI_API_KEY}"
+  #       timeout: 120s
+  #       priority: 1
+  #   rules:
+  #     - tenant: default
+  #       routes:
+  #         - model: "gpt-4o"
+  #           providers: ["openai"]
   routing:
-    providers:
-      - name: openai
-        api_type: openai
-        base_url: https://api.openai.com
-        api_keys:
-          - ${OPENAI_API_KEY}
-        timeout: 120s
-        priority: 1
-    rules:
-      - tenant: default
-        routes:
-          - model: gpt-4o
-            providers: [openai]
-          - model: gpt-4o-mini
-            providers: [openai]
+    providers: []
+    rules: []
 
-  admin:
-    username: admin
-    password: ${ADMIN_PASSWORD}
-    session_ttl: 30m
-    dashboard_poll_interval: 5s
-
-  debug:
-    enabled: false
-    admin_token: ""
-
-  analytics:
-    batch_interval: 5s
-    retention_days: 90
-
-  tenants:
-    default:
-      name: Default Tenant
-      auth_header: Authorization
-      api_keys:
-        - ${DEFAULT_API_KEY}
+  # admin:
+  #   username: admin
+  #   password: "${ADMIN_PASSWORD}"
+  #   session_ttl: 30m
+  admin: {}
+  debug: {}
+  analytics: {}
+  tenants: {}
 ```
 
 Sensitive values (`${POSTGRES_DSN}`, `${VALKEY_PASSWORD}`, `${OPENAI_API_KEY}`, `${ADMIN_PASSWORD}`, `${DEFAULT_API_KEY}`) are resolved at runtime from environment variables injected via the `apiKeys` Secret. See [API Keys & Secrets](#api-keys--secrets).
-
-### Resources
-
-```yaml
-resources:
-  requests:
-    cpu: 100m
-    memory: 128Mi
-  limits:
-    cpu: 500m
-    memory: 256Mi
-
-service:
-  type: ClusterIP
-```
 
 ---
 
@@ -384,37 +397,76 @@ apiKeys:
 
 ### Ingress
 
+Configured **per-component** inside each component block:
+
 ```yaml
-ingress:
-  enabled: false
-  className: ""
-  annotations: {}
-  tls: []
-  gateway:
+gateway:
+  ingress:
+    enabled: false
+    className: "nginx"
     host: api.maskchain.local
     path: /
-  admin:
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    tls:
+      - hosts: [api.maskchain.local]
+        secretName: maskchain-tls
+
+admin:
+  ingress:
+    enabled: false
+    className: "nginx"
     host: admin.maskchain.local
     path: /
+    annotations: {}
+    tls: []
+
+all:
+  ingress:
+    enabled: false
+    className: "nginx"
+    host: api.maskchain.local
+    path: /
+    annotations: {}
+    tls: []
+    admin_host: admin.maskchain.local            # separate admin Ingress settings
+    admin_path: /
+    admin_annotations: {}
+    admin_tls: []
 ```
 
-- **gateway mode** (`gateway.enabled=true`, `all.enabled=false`): Ingress routes to `-gateway` Service
-- **admin mode** (`admin.enabled=true`): Ingress routes to `-admin` Service
-- **all mode** (`all.enabled=true`): Two Ingresses (gateway + admin) route to `-all` Service on respective ports
+- **gateway mode** (`gateway.enabled=true`, `all.enabled=false`): single Ingress → `-gateway` Service
+- **admin mode** (`admin.enabled=true`): single Ingress → `-admin` Service
+- **all mode** (`all.enabled=true`): two Ingresses (gateway + admin) → `-all` Service on respective ports
 
 ### Gateway API (HTTPRoute)
 
+Also configured **per-component**:
+
 ```yaml
-gatewayAPI:
-  enabled: false
-  gatewayName: maskchain-gateway
-  gatewayNamespace: ""
-  hostname: api.maskchain.local
-  adminHostname: admin.maskchain.local
-  tls:
+gateway:
+  gatewayAPI:
     enabled: false
-    certificateRef:
-      name: ""
+    hostname: api.maskchain.local
+    gatewayName: maskchain-gateway
+    gatewayNamespace: ""
+    tls:
+      enabled: false
+      certificateRef:
+        name: ""
+
+admin:
+  gatewayAPI:
+    enabled: false
+    hostname: admin.maskchain.local
+    gatewayName: maskchain-gateway
+
+all:
+  gatewayAPI:
+    enabled: false
+    hostname: api.maskchain.local
+    adminHostname: admin.maskchain.local
+    gatewayName: maskchain-gateway
 ```
 
 Requires a Gateway API controller in the cluster.
@@ -433,24 +485,48 @@ Creates a `ServiceMonitor` for prometheus-operator. Gateway metrics on port `htt
 
 ### PodDisruptionBudget
 
+Configured **per-component** inside each component block:
+
 ```yaml
-pdb:
-  enabled: false
-  minAvailable: 1
+gateway:
+  pdb:
+    enabled: false
+    minAvailable: 1
+admin:
+  pdb:
+    enabled: false
+    minAvailable: 1
+all:
+  pdb:
+    enabled: false
+    minAvailable: 1
 ```
 
-Creates a PDB for each enabled component with `minAvailable: 1`.
+Creates a PDB for each component that has `pdb.enabled=true`.
 
 ### NetworkPolicy
 
+Configured **per-component** inside each component block:
+
 ```yaml
-networkPolicy:
-  enabled: false
-  ingressControllerNamespace: ingress-nginx
-  externalCIDRs: []
+gateway:
+  networkPolicy:
+    enabled: false
+    ingressControllerNamespace: ingress-nginx
+    externalCIDRs: []
+admin:
+  networkPolicy:
+    enabled: false
+    ingressControllerNamespace: ingress-nginx
+    externalCIDRs: []
+all:
+  networkPolicy:
+    enabled: false
+    ingressControllerNamespace: ingress-nginx
+    externalCIDRs: []
 ```
 
-Restricts ingress traffic:
+Restricts ingress traffic per component:
 - Port 8080 (gateway) from ingress controller namespace
 - Port 9090 (admin) from ingress controller namespace
 - DNS (port 53) from cluster
@@ -466,14 +542,14 @@ Use a custom values file:
 helm install maskchain . -f my-values.yaml
 ```
 
-Override individual values:
+Override individual values (note per-component paths):
 
 ```bash
 helm install maskchain . \
   --set gateway.enabled=false \
   --set admin.enabled=true \
-  --set ingress.enabled=true \
-  --set ingress.gateway.host=api.mycompany.com \
+  --set admin.ingress.enabled=true \
+  --set admin.ingress.host=admin.mycompany.com \
   --set apiKeys.OPENAI_API_KEY=sk-real-key
 ```
 
@@ -564,7 +640,7 @@ helm template test-release . --dependency-update
 helm template test-release . --set gateway.enabled=false,admin.enabled=true
 
 # Combined all mode with ingress
-helm template test-release . --set all.enabled=true,gateway.enabled=false,admin.enabled=false,ingress.enabled=true
+helm template test-release . --set all.enabled=true,gateway.enabled=false,admin.enabled=false,all.ingress.enabled=true
 
 # External database
 helm template test-release . --set postgresql.enabled=false,postgresql.external.enabled=true,postgresql.external.dsn=...

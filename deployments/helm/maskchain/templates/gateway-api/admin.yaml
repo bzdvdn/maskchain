@@ -1,0 +1,21 @@
+# @sk-task helm-chart#T5.5: Admin HTTPRoute (AC-011)
+{{- if and .Values.admin.gatewayAPI.enabled .Values.admin.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "maskchain.fullname" . }}-admin
+  labels:
+    {{- include "maskchain.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ .Values.admin.gatewayAPI.gatewayName }}
+      {{- with .Values.admin.gatewayAPI.gatewayNamespace }}
+      namespace: {{ . }}
+      {{- end }}
+  hostnames:
+    - {{ .Values.admin.gatewayAPI.hostname }}
+  rules:
+    - backendRefs:
+        - name: {{ include "maskchain.fullname" . }}-admin
+          port: {{ .Values.configBase.server.admin_port }}
+{{- end }}

@@ -1,5 +1,5 @@
 # @sk-task helm-chart#T5.1: All-mode Ingresses — gateway + admin routes (AC-007)
-{{- if and .Values.ingress.enabled .Values.all.enabled }}
+{{- if and .Values.all.ingress.enabled .Values.all.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -7,23 +7,23 @@ metadata:
   labels:
     {{- include "maskchain.labels" . | nindent 4 }}
   annotations:
-    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+    {{- toYaml .Values.all.ingress.annotations | nindent 4 }}
 spec:
-  {{- with .Values.ingress.className }}
+  {{- with .Values.all.ingress.className }}
   ingressClassName: {{ . }}
   {{- end }}
   rules:
-    - host: {{ .Values.ingress.gateway.host }}
+    - host: {{ .Values.all.ingress.host }}
       http:
         paths:
-          - path: {{ .Values.ingress.gateway.path }}
+          - path: {{ .Values.all.ingress.path }}
             pathType: Prefix
             backend:
               service:
                 name: {{ include "maskchain.fullname" . }}-all
                 port:
                   number: {{ .Values.configBase.server.port }}
-  {{- with .Values.ingress.tls }}
+  {{- with .Values.all.ingress.tls }}
   tls:
     {{- toYaml . | nindent 4 }}
   {{- end }}
@@ -35,23 +35,23 @@ metadata:
   labels:
     {{- include "maskchain.labels" . | nindent 4 }}
   annotations:
-    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+    {{- toYaml .Values.all.ingress.admin_annotations | nindent 4 }}
 spec:
-  {{- with .Values.ingress.className }}
+  {{- with .Values.all.ingress.className }}
   ingressClassName: {{ . }}
   {{- end }}
   rules:
-    - host: {{ .Values.ingress.admin.host }}
+    - host: {{ .Values.all.ingress.admin_host }}
       http:
         paths:
-          - path: {{ .Values.ingress.admin.path }}
+          - path: {{ .Values.all.ingress.admin_path }}
             pathType: Prefix
             backend:
               service:
                 name: {{ include "maskchain.fullname" . }}-all
                 port:
                   number: {{ .Values.configBase.server.admin_port }}
-  {{- with .Values.ingress.tls }}
+  {{- with .Values.all.ingress.admin_tls }}
   tls:
     {{- toYaml . | nindent 4 }}
   {{- end }}

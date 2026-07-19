@@ -8,7 +8,7 @@ metadata:
     {{- include "maskchain.labels" . | nindent 4 }}
     app.kubernetes.io/component: all
 spec:
-  type: {{ .Values.service.type | default "ClusterIP" }}
+  type: {{ .Values.all.service.type | default "ClusterIP" }}
   ports:
     - port: {{ .Values.configBase.server.port }}
       targetPort: http

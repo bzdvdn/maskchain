@@ -1,0 +1,21 @@
+# @sk-task helm-chart#T5.5: Gateway HTTPRoute (AC-011)
+{{- if and .Values.gateway.gatewayAPI.enabled .Values.gateway.enabled (not .Values.all.enabled) }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "maskchain.fullname" . }}-gateway
+  labels:
+    {{- include "maskchain.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ .Values.gateway.gatewayAPI.gatewayName }}
+      {{- with .Values.gateway.gatewayAPI.gatewayNamespace }}
+      namespace: {{ . }}
+      {{- end }}
+  hostnames:
+    - {{ .Values.gateway.gatewayAPI.hostname }}
+  rules:
+    - backendRefs:
+        - name: {{ include "maskchain.fullname" . }}-gateway
+          port: {{ .Values.configBase.server.port }}
+{{- end }}

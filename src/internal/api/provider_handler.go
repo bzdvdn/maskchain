@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -96,6 +98,18 @@ func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
 		return
 	}
 
+	primaryName := ""
+	if firstProvider != nil {
+		primaryName = firstProvider.Name
+	}
+	slog.DebugContext(c.Request.Context(), "proxy: route selected",
+		"tenant", tenantID,
+		"model", req.Model,
+		"stream", req.Stream,
+		"primary", primaryName,
+		"fallbacks", fallbackNames(providers),
+	)
+
 	// @sk-task anthropic-messages-endpoint#T2.1+2.2: Set Path and upstream URL from request path (AC-003)
 	upstreamPath := strings.TrimPrefix(c.Request.URL.Path, "/api")
 
@@ -117,7 +131,13 @@ func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
 			return
 		}
 
+		tStart := time.Now()
 		resp, providerName, fbErr := h.fallback.Call(c.Request.Context(), []string{firstProvider.Name}, providerReq)
+		slog.DebugContext(c.Request.Context(), "proxy: primary attempt",
+			"provider", firstProvider.Name,
+			"elapsed", time.Since(tStart).String(),
+			"error", errString(fbErr),
+		)
 		if fbErr == nil && resp != nil {
 			c.Header("X-Provider", providerName)
 			forwardUpstreamHeaders(c, resp.Headers)
@@ -145,7 +165,13 @@ func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
 		return
 	}
 
+	tStart := time.Now()
 	resp, providerName, fbErr := h.fallback.Call(c.Request.Context(), providers, providerReq)
+	slog.DebugContext(c.Request.Context(), "proxy: fallback chain",
+		"providers", fallbackNames(providers),
+		"elapsed", time.Since(tStart).String(),
+		"error", errString(fbErr),
+	)
 	if fbErr != nil {
 		respondWithError(c, http.StatusServiceUnavailable, "NO_HEALTHY_PROVIDER", "no healthy provider for model "+req.Model)
 		return
@@ -201,6 +227,26 @@ func ProxyChatCompletionHandler(c *gin.Context) {
 			},
 		},
 	})
+}
+
+func fallbackNames(providers []string) string {
+	if len(providers) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(providers))
+	for _, p := range providers {
+		if p != "" {
+			names = append(names, p)
+		}
+	}
+	return strings.Join(names, ",")
+}
+
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 func ProxyCompletionHandler(c *gin.Context) {
