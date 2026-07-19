@@ -96,12 +96,16 @@ func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
 		return
 	}
 
+	// @sk-task anthropic-messages-endpoint#T2.1+2.2: Set Path and upstream URL from request path (AC-003)
+	upstreamPath := strings.TrimPrefix(c.Request.URL.Path, "/api")
+
 	if firstProvider != nil {
 		// @sk-task 80-tenant-isolation#T3.1: Propagate X-Tenant-ID to upstream (AC-007)
 		providerReq := &ports.ProviderRequest{
-			Method: http.MethodPost,
-			URL:    "/v1/chat/completions",
-			Body:   body,
+			Method:  http.MethodPost,
+			URL:     upstreamPath,
+			Body:    body,
+			Path:    c.Request.URL.Path,
 			Headers: map[string]string{
 				"X-Tenant-ID": tenantID,
 			},
@@ -131,8 +135,9 @@ func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
 
 	providerReq := &ports.ProviderRequest{
 		Method: http.MethodPost,
-		URL:    "/v1/chat/completions",
+		URL:    upstreamPath,
 		Body:   body,
+		Path:   c.Request.URL.Path,
 	}
 	if req.Stream {
 		// @sk-task 112-proxy-streaming-wiring#T3.1: Streaming branch fallback chain (AC-003, AC-006)

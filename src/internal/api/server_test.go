@@ -172,6 +172,42 @@ func TestMetricsRoute(t *testing.T) {
 	}
 }
 
+// @sk-test anthropic-messages-endpoint#T4.1: TestMessagesEndpointRegistered — POST /api/v1/messages returns 200 (AC-001)
+func TestMessagesEndpointRegistered(t *testing.T) {
+	srv := newTestServer()
+
+	srv.RegisterProxyRoute(nil, nil)
+
+	w := httptest.NewRecorder()
+	body := `{"model":"claude-sonnet-4-20250514","messages":[{"role":"user","content":"hi"}]}`
+	req, _ := http.NewRequest(http.MethodPost, "/api/v1/messages", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	srv.engine.ServeHTTP(w, req)
+
+	if w.Code == http.StatusNotFound {
+		t.Error("expected /api/v1/messages to be registered, got 404")
+	}
+}
+
+// @sk-test anthropic-messages-endpoint#T4.1: TestMessagesRedirectFromV1 — /v1/messages redirects to /api/v1/messages (AC-001)
+func TestMessagesRedirectFromV1(t *testing.T) {
+	srv := newTestServer()
+
+	srv.RegisterProxyRoute(nil, nil)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/v1/messages", nil)
+	srv.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusMovedPermanently {
+		t.Errorf("expected 301 redirect, got %d", w.Code)
+	}
+	loc := w.Header().Get("Location")
+	if loc != "/api/v1/messages" {
+		t.Errorf("expected Location /api/v1/messages, got %q", loc)
+	}
+}
+
 // @sk-test 117-critical-test-coverage#T3.5: TestNilRoutingHandler (AC-001)
 func TestNilRoutingHandler(t *testing.T) {
 	srv := newTestServer()

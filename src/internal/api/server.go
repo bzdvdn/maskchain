@@ -90,6 +90,7 @@ func (s *Server) RegisterRateLimit(mw gin.HandlerFunc) {
 // @sk-task 70-routing-engine#T3.2: Register proxy routes with routing handler (AC-003, AC-004)
 // @sk-task 112-proxy-streaming-wiring#T2.2: Register WrapSSE middleware on streaming route (AC-002)
 // @sk-task 118-api-consistency#T2.2: Add /api/v1/ prefix and 301 redirect from /v1/ (AC-001, AC-002)
+// @sk-task anthropic-messages-endpoint#T3.1: Register /api/v1/messages with same middleware chain (AC-001, AC-006)
 func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHandler *RoutingProxyHandler) {
 	primary := s.engine.Group("/api/v1")
 	if routingHandler != nil {
@@ -103,6 +104,7 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 		}
 		chain = append(chain, routingHandler.HandleChatCompletion)
 		primary.POST("/chat/completions", chain...)
+		primary.POST("/messages", chain...)
 	} else {
 		chain := []gin.HandlerFunc{}
 		if s.sessionMiddleware != nil {
@@ -114,12 +116,15 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 		}
 		chain = append(chain, ProxyChatCompletionHandler)
 		primary.POST("/chat/completions", chain...)
+		primary.POST("/messages", chain...)
 	}
 	primary.POST("/completions", s.withSessionMiddleware(shieldMiddleware), ProxyCompletionHandler)
 
 	// @sk-task 118-api-consistency#T2.2: Deprecated /v1/ paths with 301 redirect (AC-002)
+	// @sk-task anthropic-messages-endpoint#T3.1: Add 301 redirect for /v1/messages (AC-001)
 	redirect := s.engine.Group("/v1")
 	redirect.Any("/chat/completions", redirectPermanent("/api/v1/chat/completions"))
+	redirect.Any("/messages", redirectPermanent("/api/v1/messages"))
 	redirect.Any("/completions", redirectPermanent("/api/v1/completions"))
 }
 

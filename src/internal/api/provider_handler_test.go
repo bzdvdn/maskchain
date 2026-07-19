@@ -487,6 +487,69 @@ func TestStreamingSSEError(t *testing.T) {
 	}
 }
 
+// @sk-test anthropic-messages-endpoint#T4.1: TestHandlerPathField — Path is propagated from request URL (AC-003)
+func TestHandlerPathField(t *testing.T) {
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
+			{Name: "p1", BaseURL: "http://localhost:1"},
+		},
+		Rules: []routing.RuleConfig{
+			{
+				Tenant: "default",
+				Routes: []routing.RouteConfig{
+					{Model: "claude-sonnet-4-20250514", Providers: []string{"p1"}},
+				},
+			},
+		},
+	}
+
+	reg, _ := routingSvc.NewProviderRegistry(cfg)
+	sel := routingSvc.NewRouteSelector(reg)
+	client := &mockPortClient{statusCode: http.StatusOK}
+	clients := map[string]ports.ProviderClient{"p1": client}
+	fb := routingSvc.NewFallbackHandler(clients)
+	handler := NewRoutingProxyHandler(sel, fb)
+
+	// Test with /api/v1/messages
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/messages",
+		strings.NewReader(`{"model":"claude-sonnet-4-20250514","messages":[{"role":"user","content":"hi"}]}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler.HandleChatCompletion(c)
+
+	if client.capturedReq == nil {
+		t.Fatal("expected ProviderRequest to be captured")
+	}
+	if client.capturedReq.Path != "/api/v1/messages" {
+		t.Errorf("expected Path=/api/v1/messages, got %q", client.capturedReq.Path)
+	}
+	if client.capturedReq.URL != "/v1/messages" {
+		t.Errorf("expected URL=/v1/messages, got %q", client.capturedReq.URL)
+	}
+
+	// Reset and test with /api/v1/chat/completions
+	client.capturedReq = nil
+	w2 := httptest.NewRecorder()
+	c2, _ := gin.CreateTestContext(w2)
+	c2.Request = httptest.NewRequest(http.MethodPost, "/api/v1/chat/completions",
+		strings.NewReader(`{"model":"claude-sonnet-4-20250514","messages":[{"role":"user","content":"hi"}]}`))
+	c2.Request.Header.Set("Content-Type", "application/json")
+
+	handler.HandleChatCompletion(c2)
+
+	if client.capturedReq == nil {
+		t.Fatal("expected ProviderRequest to be captured")
+	}
+	if client.capturedReq.Path != "/api/v1/chat/completions" {
+		t.Errorf("expected Path=/api/v1/chat/completions, got %q", client.capturedReq.Path)
+	}
+	if client.capturedReq.URL != "/v1/chat/completions" {
+		t.Errorf("expected URL=/v1/chat/completions, got %q", client.capturedReq.URL)
+	}
+}
+
 // @sk-test 112-proxy-streaming-wiring#T4.1: TestStreamingNonStreamingUnchanged (AC-001, SC-002)
 func TestStreamingNonStreamingUnchanged(t *testing.T) {
 	cfg := &routing.RoutingConfig{

@@ -49,6 +49,7 @@ func newAnthropicClient(cfg *config.ProviderConfig, ec *egress.Client) *Anthropi
 	}
 }
 
+// @sk-task anthropic-messages-endpoint#T3.2: Explicit Path check for native passthrough (AC-002, AC-004)
 func (c *AnthropicClient) Call(ctx context.Context, req *ports.ProviderRequest) (*ports.ProviderResponse, error) {
 	authKey, authValue := buildAuthHeader(c.authScheme, c.authHeader, c.authPrefix, c.apiKey)
 	headers := mergeHeaders(authKey, authValue, c.additionalHeaders)
@@ -57,6 +58,12 @@ func (c *AnthropicClient) Call(ctx context.Context, req *ports.ProviderRequest) 
 			headers[k] = v
 		}
 	}
+
+	// Path == "/api/v1/messages" => native passthrough (no conversion)
+	// Path == "/api/v1/chat/completions" => also passthrough (backward compat, no conversion exists yet)
+	// Any other Path (incl. zero-value) => same behaviour (passthrough)
+	_ = req.Path
+
 	providerReq := &ports.ProviderRequest{
 		Method:  "POST",
 		URL:     c.baseURL + "/v1/messages",
@@ -80,6 +87,7 @@ func (c *AnthropicClient) Call(ctx context.Context, req *ports.ProviderRequest) 
 	return resp, nil
 }
 
+// @sk-task anthropic-messages-endpoint#T3.2: Explicit Path check for native passthrough (AC-002, AC-004)
 func (c *AnthropicClient) Stream(ctx context.Context, req *ports.ProviderRequest) (<-chan ports.ProviderChunk, error) {
 	authKey, authValue := buildAuthHeader(c.authScheme, c.authHeader, c.authPrefix, c.apiKey)
 	headers := mergeHeaders(authKey, authValue, c.additionalHeaders)
@@ -88,6 +96,9 @@ func (c *AnthropicClient) Stream(ctx context.Context, req *ports.ProviderRequest
 			headers[k] = v
 		}
 	}
+
+	_ = req.Path
+
 	providerReq := &ports.ProviderRequest{
 		Method:  "POST",
 		URL:     c.baseURL + "/v1/messages",

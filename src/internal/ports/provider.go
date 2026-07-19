@@ -3,11 +3,13 @@ package ports
 import "context"
 
 // @sk-task 80-tenant-isolation#T3.1: Add Headers field for X-Tenant-ID propagation (AC-007)
+// @sk-task anthropic-messages-endpoint#T1.1: Add Path field for native messages endpoint (AC-003)
 type ProviderRequest struct {
 	Method  string
 	URL     string
 	Body    []byte
 	Headers map[string]string
+	Path    string
 }
 
 type ProviderResponse struct {
