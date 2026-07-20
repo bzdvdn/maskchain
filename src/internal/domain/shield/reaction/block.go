@@ -9,6 +9,8 @@ import (
 )
 
 // @sk-task 23-shield-reactions#T2.2: Implement BlockReaction (AC-001, DEC-003)
+//
+// BlockReaction represents a domain entity or configuration.
 type BlockReaction struct{}
 
 func NewBlockReaction() *BlockReaction {

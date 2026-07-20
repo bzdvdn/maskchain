@@ -3,6 +3,8 @@ package value
 import "fmt"
 
 // @sk-task 20-shield-domain#T1.1: Implement PatternID value object (AC-006)
+//
+// PatternID represents a domain entity or configuration.
 type PatternID struct {
 	value string
 }

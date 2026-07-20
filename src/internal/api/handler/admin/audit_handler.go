@@ -10,11 +10,15 @@ import (
 )
 
 // @sk-task admin-ui-design#T3.2: AuditLogReader interface for listing audit events (AC-005)
+//
+// AuditLogReader defines the interface for domain operations.
 type AuditLogReader interface {
 	List(ctx context.Context, limit, offset int) ([]AuditEvent, error)
 }
 
 // @sk-task admin-ui-design#T3.2: AuditHandler for GET /api/v1/audit (AC-005)
+//
+// AuditHandler represents a domain entity or configuration.
 type AuditHandler struct {
 	store AuditLogReader
 }

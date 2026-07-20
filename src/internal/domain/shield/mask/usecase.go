@@ -11,6 +11,8 @@ import (
 )
 
 // @sk-task 22-shield-mask-storage#T2.1: Implement MaskUseCase (AC-002, AC-003, AC-004, AC-005)
+//
+// MaskUseCase represents a domain entity or configuration.
 type MaskUseCase struct {
 	registry *detector.DetectorRegistry
 	storage  MaskStorage

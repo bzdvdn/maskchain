@@ -3,6 +3,8 @@ package routing
 import "sync/atomic"
 
 // @sk-task 70-routing-engine#T1.1: Create HealthStatus enum (AC-006)
+//
+// HealthStatus is a int32 type for domain values.
 type HealthStatus int32
 
 const (
@@ -23,6 +25,8 @@ func (s HealthStatus) String() string {
 }
 
 // @sk-task 70-routing-engine#T1.1: Create Provider entity with health status (AC-001, AC-006)
+//
+// Provider represents a domain entity or configuration.
 type Provider struct {
 	Name           string
 	BaseURL        string

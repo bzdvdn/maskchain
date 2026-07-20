@@ -6,6 +6,8 @@ import (
 )
 
 // @sk-task 110-provider-adapters#T2.1: Create ProviderError type and ParseProviderError (AC-005)
+//
+// ProviderError represents a domain entity or configuration.
 type ProviderError struct {
 	StatusCode int    `json:"status_code"`
 	Type       string `json:"type,omitempty"`
@@ -17,6 +19,8 @@ func (e *ProviderError) Error() string {
 }
 
 // @sk-task 110-provider-adapters#T2.1: Create ProviderError type and ParseProviderError (AC-005)
+//
+// ParseProviderError handles the operation.
 func ParseProviderError(statusCode int, body []byte, apiType string) *ProviderError {
 	var parsed struct {
 		Error struct {

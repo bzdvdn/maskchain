@@ -10,6 +10,8 @@ import (
 )
 
 // @sk-task admin-ui-design#T3.1: RoutingHandler exposes providers and routing rules (AC-006)
+//
+// RoutingHandler represents a domain entity or configuration.
 type RoutingHandler struct {
 	cfg           *config.RoutingConfig
 	healthChecker *ProviderHealthChecker

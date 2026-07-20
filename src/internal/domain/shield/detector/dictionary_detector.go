@@ -12,6 +12,8 @@ import (
 var _ Detector = (*DictionaryDetector)(nil)
 
 // @sk-task 24-shield-dictionaries#T2.1: Implement DictionaryDetector with exact match (AC-003)
+//
+// DictionaryDetector represents a domain entity or configuration.
 type DictionaryDetector struct {
 	dict *dictionary.Dictionary
 }

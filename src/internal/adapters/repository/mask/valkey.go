@@ -11,6 +11,8 @@ import (
 )
 
 // @sk-task 22-shield-mask-storage#T3.2: Implement ValkeyMaskRepo (AC-009, AC-012)
+//
+// ValkeyMaskRepo represents a domain entity or configuration.
 type ValkeyMaskRepo struct {
 	client valkey.Client
 	ttl    time.Duration

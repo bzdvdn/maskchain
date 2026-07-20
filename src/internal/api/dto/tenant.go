@@ -7,7 +7,8 @@ import (
 )
 
 // @sk-task tenant-profile-sync#T2.2: Tenant request/response DTOs (AC-001, AC-005, AC-008)
-
+//
+// DictionaryItem represents a domain entity or configuration.
 type DictionaryItem struct {
 	Name      string        `json:"name"`
 	MatchMode string        `json:"match_mode"`

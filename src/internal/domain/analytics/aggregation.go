@@ -5,6 +5,8 @@ import (
 )
 
 // @sk-task 130-analytics-domain#T2.1: Implement Aggregation entity (AC-003)
+//
+// Aggregation represents a domain entity or configuration.
 type Aggregation struct {
 	TenantID     string
 	Model        string
@@ -16,6 +18,8 @@ type Aggregation struct {
 }
 
 // @sk-task timeseries-grafana#T1.1: TimeSeriesPoint for bucketed time-series data
+//
+// TimeSeriesPoint represents a domain entity or configuration.
 type TimeSeriesPoint struct {
 	Bucket       time.Time
 	InputTokens  int64

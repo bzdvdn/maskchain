@@ -10,6 +10,8 @@ import (
 )
 
 // @sk-task 114-real-health-probes#T3.1: PGProbe implements Probe for PostgreSQL ping (AC-002, AC-003, AC-004)
+//
+// PGProbe represents a domain entity or configuration.
 type PGProbe struct {
 	pool *pgxpool.Pool
 }
@@ -32,6 +34,8 @@ func (p *PGProbe) Check(ctx context.Context) Result {
 }
 
 // @sk-task 114-real-health-probes#T3.1: ValkeyProbe implements Probe for Valkey PING (AC-002, AC-003)
+//
+// ValkeyProbe represents a domain entity or configuration.
 type ValkeyProbe struct {
 	client valkey.Client
 }
@@ -54,6 +58,8 @@ func (p *ValkeyProbe) Check(ctx context.Context) Result {
 }
 
 // @sk-task 114-real-health-probes#T3.1: EgressProbe implements Probe for TCP dial to providers (AC-002)
+//
+// EgressProbe represents a domain entity or configuration.
 type EgressProbe struct {
 	targets []string
 }

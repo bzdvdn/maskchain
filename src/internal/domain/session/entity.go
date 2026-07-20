@@ -7,6 +7,8 @@ import (
 )
 
 // @sk-task sessions#T1.1: Create Session entity with all fields (AC-001, AC-009)
+//
+// Session represents a domain entity or configuration.
 type Session struct {
 	SessionID         string
 	TenantID          string

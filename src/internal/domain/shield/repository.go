@@ -9,6 +9,8 @@ import (
 )
 
 // @sk-task tenant-profile-sync#T1.3: Implement TenantRepository interface (AC-001, AC-005, AC-008)
+//
+// TenantRepository defines the interface for domain operations.
 type TenantRepository interface {
 	List(ctx context.Context) ([]*entity.Tenant, error)
 	Get(ctx context.Context, slug value.TenantSlug) (*entity.Tenant, error)
@@ -20,6 +22,8 @@ type TenantRepository interface {
 }
 
 // @sk-task tenant-profile-sync#T1.4: Implement TenantResolver interface (AC-002, AC-003, AC-004)
+//
+// TenantResolver defines the interface for domain operations.
 type TenantResolver interface {
 	List(ctx context.Context) ([]*entity.Tenant, error)
 	Get(ctx context.Context, slug value.TenantSlug) (*entity.Tenant, error)

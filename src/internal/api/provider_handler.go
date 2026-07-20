@@ -30,6 +30,8 @@ type chatRequest struct {
 
 // @sk-task 70-routing-engine#T3.1: Implement routing proxy handler (AC-003, AC-004)
 // @sk-task 118-api-consistency#T2.2: Set skipEnvelope on proxy raw body responses (AC-001, AC-002)
+//
+// RoutingProxyHandler represents a domain entity or configuration.
 type RoutingProxyHandler struct {
 	selector *routingSvc.RouteSelector
 	fallback *routingSvc.FallbackHandler

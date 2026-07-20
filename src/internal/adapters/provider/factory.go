@@ -14,6 +14,8 @@ import (
 // @sk-task 110-provider-adapters#T2.2: Implement NewProviderClient factory (AC-001)
 // @sk-task 116-connection-pool-fixes#T2.3: Create per-provider transport with timeout (AC-002, AC-008)
 // @sk-task 116-connection-pool-fixes#T3.4: Wire CircuitBreaker into provider client (AC-006, AC-007)
+//
+// NewProviderClient creates a new ProviderClient.
 func NewProviderClient(pcfg *config.ProviderConfig, egressCfg *config.EgressConfig) (ports.ProviderClient, error) {
 	if pcfg.APIType == "" {
 		return nil, fmt.Errorf("provider %q: api_type is required", pcfg.Name)

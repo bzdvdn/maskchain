@@ -1,6 +1,8 @@
 package value
 
 // @sk-task 20-shield-domain#T1.1: Implement Severity value object with Reaction mapping (AC-006)
+//
+// Severity is a int type for domain values.
 type Severity int
 
 const (

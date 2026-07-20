@@ -17,6 +17,8 @@ type Finding struct {
 
 // @sk-task 20-shield-domain#T2.3: Implement ScanResult entity
 // @sk-task remove-audit-incidents#T1.2: Remove incidents field (AC-006)
+//
+// ScanResult represents a domain entity or configuration.
 type ScanResult struct {
 	status    value.ScanStatus
 	scannedAt time.Time
@@ -24,6 +26,8 @@ type ScanResult struct {
 }
 
 // @sk-task remove-audit-incidents#T1.2: Adapt constructor without incidents (AC-006)
+//
+// NewScanResult creates a new ScanResult.
 func NewScanResult(status value.ScanStatus) *ScanResult {
 	return &ScanResult{
 		status:    status,

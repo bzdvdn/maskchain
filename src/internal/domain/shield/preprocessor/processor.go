@@ -28,6 +28,8 @@ func (r Rule) Validate() error {
 }
 
 // @sk-task 25-shield-preprocessors#T1.1: Define PreprocessorDef struct (AC-007)
+//
+// PreprocessorDef represents a domain entity or configuration.
 type PreprocessorDef struct {
 	Name  string `json:"name"`
 	Type  string `json:"type"`
@@ -35,12 +37,16 @@ type PreprocessorDef struct {
 }
 
 // @sk-task 25-shield-preprocessors#T1.1: Define ProcessResult struct (AC-007)
+//
+// ProcessResult represents a domain entity or configuration.
 type ProcessResult struct {
 	ModifiedText string
 	Replacements map[string]string
 }
 
 // @sk-task 25-shield-preprocessors#T1.1: Define Processor interface (AC-007)
+//
+// Processor defines the interface for domain operations.
 type Processor interface {
 	Name() string
 	Process(data string, namespace string) *ProcessResult

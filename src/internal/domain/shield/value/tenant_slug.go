@@ -8,6 +8,8 @@ import (
 var validSlug = regexp.MustCompile(`^[a-zA-Z0-9-]{3,}$`)
 
 // @sk-task tenant-profile-sync#T1.1: Implement TenantSlug VO (AC-001, AC-002)
+//
+// TenantSlug represents a domain entity or configuration.
 type TenantSlug struct {
 	value string
 }

@@ -6,6 +6,8 @@ import (
 )
 
 // @sk-task 20-shield-domain#T2.2: Implement Pattern entity (AC-008)
+//
+// Pattern represents a domain entity or configuration.
 type Pattern struct {
 	id          value.PatternID
 	expression  string

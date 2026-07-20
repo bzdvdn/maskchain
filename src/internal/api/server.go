@@ -19,6 +19,8 @@ import (
 // @sk-task 10-gateway-skeleton#T2.1: Implement Server struct with New/Start/Shutdown (AC-001, AC-002, AC-003, AC-005)
 // @sk-task 61-observability#T2.1: Add OTel and metrics middleware (AC-001, AC-002, AC-003)
 // @sk-task 117-critical-test-coverage#T2.1: Export http field for test access (AC-001)
+//
+// Server represents a domain entity or configuration.
 type Server struct {
 	engine            *gin.Engine
 	HTTP              *http.Server
@@ -32,6 +34,8 @@ type Server struct {
 }
 
 // @sk-task 114-real-health-probes#T2.2: Accept healthSvc and replace static handlers (AC-001, AC-005, AC-008)
+//
+// New handles the operation.
 func New(cfg *config.ServerConfig, log *slog.Logger, serviceName string, healthSvc *health.HealthService) *Server {
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()

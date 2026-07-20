@@ -9,6 +9,8 @@ import (
 )
 
 // @sk-task admin-ui-design#T1.3: AdminSession entity (AC-001)
+//
+// AdminSession represents a domain entity or configuration.
 type AdminSession struct {
 	ID        string
 	Username  string

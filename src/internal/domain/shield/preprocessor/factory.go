@@ -3,6 +3,8 @@ package preprocessor
 import "fmt"
 
 // @sk-task 25-shield-preprocessors#T1.1: Implement NewPreprocessor factory (AC-007)
+//
+// NewPreprocessor creates a new Preprocessor.
 func NewPreprocessor(def PreprocessorDef) (Processor, error) {
 	if def.Name == "" {
 		return nil, fmt.Errorf("preprocessor name is required")

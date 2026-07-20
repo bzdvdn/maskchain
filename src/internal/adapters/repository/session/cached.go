@@ -9,6 +9,8 @@ import (
 )
 
 // @sk-task sessions#T3.2: Implement CachedSessionStore decorator (AC-008)
+//
+// CachedSessionStore represents a domain entity or configuration.
 type CachedSessionStore struct {
 	primary   session.SessionStore
 	secondary session.SessionStore

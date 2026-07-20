@@ -6,6 +6,8 @@ import (
 )
 
 // @sk-task 21-shield-detectors#T3.1: Implement SecretsDetector (AC-001, AC-004)
+//
+// SecretsDetector represents a domain entity or configuration.
 type SecretsDetector struct {
 	apiKey     *regexp.Regexp
 	jwt        *regexp.Regexp

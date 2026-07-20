@@ -11,6 +11,8 @@ import (
 )
 
 // @sk-task admin-ui-design#T1.4: Postgres admin session store (AC-001, AC-004)
+//
+// PostgresAdminSessionStore represents a domain entity or configuration.
 type PostgresAdminSessionStore struct {
 	pool *pgxpool.Pool
 }

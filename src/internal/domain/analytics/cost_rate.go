@@ -3,6 +3,8 @@ package analytics
 import "fmt"
 
 // @sk-task 130-analytics-domain#T1.1: Implement CostRate value object (AC-004)
+//
+// CostRate represents a domain entity or configuration.
 type CostRate struct {
 	Model            string
 	InputPricePer1K  float64
@@ -33,6 +35,8 @@ func (c *CostRate) Cost(inputTokens, outputTokens int64) float64 {
 }
 
 // @sk-task 131-analytics-pipeline#T2.2: Implement CostRateRegistry (AC-007)
+//
+// CostRateRegistry represents a domain entity or configuration.
 type CostRateRegistry struct {
 	rates map[string]*CostRate
 }

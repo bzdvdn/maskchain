@@ -14,6 +14,8 @@ import (
 var migrationsFS embed.FS
 
 // @sk-task 30-shield-persistence#T2.4: Run golang-migrate on startup (RQ-001)
+//
+// RunMigrations handles the operation.
 func RunMigrations(dsn string) error {
 	if dsn == "" {
 		return nil

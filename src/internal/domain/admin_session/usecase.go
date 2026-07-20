@@ -7,6 +7,8 @@ import (
 )
 
 // @sk-task admin-ui-design#T1.3: AdminSessionUseCase (AC-001, AC-004)
+//
+// AdminSessionUseCase represents a domain entity or configuration.
 type AdminSessionUseCase struct {
 	store AdminSessionStore
 }

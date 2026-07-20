@@ -9,11 +9,15 @@ import (
 )
 
 // @sk-task 23-shield-reactions#T2.5: Implement ReactionPipeline interface (AC-005, DEC-004)
+//
+// ReactionPipeline defines the interface for domain operations.
 type ReactionPipeline interface {
 	Execute(ctx context.Context, reaction entity.Reaction, result *entity.ScanResult, text string) (string, error)
 }
 
 // @sk-task 23-shield-reactions#T2.5: Implement DefaultReactionPipeline (AC-005)
+//
+// DefaultReactionPipeline represents a domain entity or configuration.
 type DefaultReactionPipeline struct {
 	blockExecutor  ReactionExecutor
 	redactExecutor ReactionExecutor

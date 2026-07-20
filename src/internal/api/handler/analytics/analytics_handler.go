@@ -17,6 +17,8 @@ import (
 )
 
 // @sk-task 132-analytics-api#T2.1: AnalyticsHandler with 4 endpoint methods (AC-001, AC-002, AC-003, AC-004, AC-005)
+//
+// AnalyticsHandler represents a domain entity or configuration.
 type AnalyticsHandler struct {
 	store analytics.UsageStore
 }

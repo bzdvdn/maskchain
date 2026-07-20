@@ -6,6 +6,8 @@ import (
 )
 
 // @sk-task 40-profiles-api#T1.1: Create DTO types (AC-003, AC-011)
+//
+// CreateProfileRequest represents a domain entity or configuration.
 type CreateProfileRequest struct {
 	Slug          string                         `json:"slug" validate:"required,min=3"`
 	Name          string                         `json:"name" validate:"required"`

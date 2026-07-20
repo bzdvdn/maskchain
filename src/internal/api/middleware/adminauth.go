@@ -22,6 +22,8 @@ func AdminFromContext(ctx context.Context) (*admin_session.AdminSession, bool) {
 }
 
 // @sk-task 90-production-hardening#T2.1: AdminAuth middleware for pprof access (<AC-001>)
+//
+// AdminAuth handles the operation.
 func AdminAuth(cfg *config.DebugConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if cfg == nil || !cfg.Enabled {
@@ -38,6 +40,8 @@ func AdminAuth(cfg *config.DebugConfig) gin.HandlerFunc {
 }
 
 // @sk-task admin-ui-design#T2.1: AdminSessionAuth middleware validates admin session cookie/header (AC-001, AC-004)
+//
+// AdminSessionAuth handles the operation.
 func AdminSessionAuth(useCase *admin_session.AdminSessionUseCase) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := c.GetHeader("Authorization")
@@ -70,6 +74,8 @@ func AdminSessionAuth(useCase *admin_session.AdminSessionUseCase) gin.HandlerFun
 
 // @sk-task seed-tenant-fix#T1.1: Combined middleware tries Bearer session first, falls back to X-Admin-Token (AC-001)
 // @sk-task seed-tenant-fix#T1.2: Added checkTenantKey fallback for tenant API key auth (AC-001)
+//
+// AdminSessionOrTokenAuth handles the operation.
 func AdminSessionOrTokenAuth(useCase *admin_session.AdminSessionUseCase, cfg *config.DebugConfig, checkTenantKey func(ctx context.Context, apiKey string) bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rawToken := ""

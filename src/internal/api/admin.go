@@ -23,6 +23,8 @@ import (
 )
 
 // @sk-task 100-admin-control-plane#T2.1: Admin server with static files, profile/incident handlers (AC-004, AC-007, AC-010)
+//
+// AdminServer represents a domain entity or configuration.
 type AdminServer struct {
 	engine         *gin.Engine
 	http           *http.Server
@@ -36,6 +38,8 @@ type AdminServer struct {
 }
 
 // @sk-task 114-real-health-probes#T2.2: Accept healthSvc and replace static handlers (AC-001, AC-005, AC-008)
+//
+// NewAdminServer creates a new AdminServer.
 func NewAdminServer(cfg *config.ServerConfig, log *slog.Logger, serviceName string, healthSvc *health.HealthService) *AdminServer {
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()

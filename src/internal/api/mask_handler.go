@@ -17,6 +17,8 @@ import (
 // @sk-task 22-shield-mask-storage#T4.1: Implement MaskHandler (AC-002, AC-003, AC-006)
 // @sk-task 23-shield-reactions#T1.2: Migrate handler from MaskText to MaskFromResults
 // @sk-task 25-shield-preprocessors#T3.2: Integrate preprocessors into MaskHandler (AC-008)
+//
+// MaskHandler represents a domain entity or configuration.
 type MaskHandler struct {
 	useCase       *mask.MaskUseCase
 	registry      *detector.DetectorRegistry

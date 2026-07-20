@@ -9,6 +9,8 @@ import (
 )
 
 // @sk-task 131-analytics-pipeline#T3.2: Implement AsyncWorker with buffered channel and ticker-based batch insert (AC-002)
+//
+// AsyncWorker represents a domain entity or configuration.
 type AsyncWorker struct {
 	store    analytics.UsageStore
 	buffer   chan analytics.TokenUsage
@@ -17,6 +19,8 @@ type AsyncWorker struct {
 }
 
 // @sk-task 131-analytics-pipeline#T3.2: NewAsyncWorker creates a new async worker (AC-002)
+//
+// NewAsyncWorker creates a new AsyncWorker.
 func NewAsyncWorker(store analytics.UsageStore, bufferSize int, interval time.Duration, log *slog.Logger) *AsyncWorker {
 	return &AsyncWorker{
 		store:    store,

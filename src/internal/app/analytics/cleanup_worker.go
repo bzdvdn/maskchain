@@ -9,6 +9,8 @@ import (
 )
 
 // @sk-task 131-analytics-pipeline#T3.5: Implement CleanupWorker with ticker-based retention cleanup (AC-008)
+//
+// CleanupWorker represents a domain entity or configuration.
 type CleanupWorker struct {
 	store     analytics.UsageStore
 	interval  time.Duration
@@ -17,6 +19,8 @@ type CleanupWorker struct {
 }
 
 // @sk-task 131-analytics-pipeline#T3.5: NewCleanupWorker creates a new cleanup worker (AC-008)
+//
+// NewCleanupWorker creates a new CleanupWorker.
 func NewCleanupWorker(store analytics.UsageStore, interval time.Duration, retention time.Duration, log *slog.Logger) *CleanupWorker {
 	return &CleanupWorker{
 		store:     store,

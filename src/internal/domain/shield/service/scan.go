@@ -6,6 +6,8 @@ import (
 )
 
 // @sk-task 20-shield-domain#T4.1: Implement ScanPipeline service (AC-003)
+//
+// ScanPipeline represents a domain entity or configuration.
 type ScanPipeline struct{}
 
 func NewScanPipeline() *ScanPipeline {

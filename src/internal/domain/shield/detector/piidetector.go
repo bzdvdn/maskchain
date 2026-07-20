@@ -6,6 +6,8 @@ import (
 )
 
 // @sk-task 21-shield-detectors#T2.1: Implement PIIDetector (AC-001, AC-003)
+//
+// PIIDetector represents a domain entity or configuration.
 type PIIDetector struct {
 	email    *regexp.Regexp
 	phone    *regexp.Regexp

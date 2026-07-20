@@ -1,6 +1,8 @@
 package dictionary
 
 // @sk-task 24-shield-dictionaries#T1.2: Implement WordlistMatcher Aho-Corasick (AC-008)
+//
+// WordlistMatcher represents a domain entity or configuration.
 type WordlistMatcher struct {
 	trie   *trieNode
 	output map[*trieNode][]string

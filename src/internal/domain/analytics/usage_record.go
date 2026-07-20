@@ -3,6 +3,8 @@ package analytics
 import "time"
 
 // @sk-task 130-analytics-domain#T2.1: Implement UsageRecord value object (AC-005)
+//
+// UsageRecord represents a domain entity or configuration.
 type UsageRecord struct {
 	TenantID          string
 	Model             string

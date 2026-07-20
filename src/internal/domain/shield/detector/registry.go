@@ -8,6 +8,8 @@ import (
 )
 
 // @sk-task 21-shield-detectors#T1.2: Implement DetectorRegistry (AC-008)
+//
+// DetectorRegistry represents a domain entity or configuration.
 type DetectorRegistry struct {
 	mu  sync.RWMutex
 	reg map[entity.DetectorType]Detector

@@ -117,6 +117,8 @@ type Scanner interface {
 // @sk-task tenant-profile-sync#T3.1: ShieldMiddleware reads dictionaries from tenant (AC-006, AC-007)
 // @sk-task remove-audit-incidents#T2.3: Remove incident creation, X-Shield-Incident-ID, and ShieldIncidentsBySeverity (AC-008, AC-011)
 // @sk-task sessions#T4.2: Integrate session increment counters after scan (AC-002)
+//
+// ShieldMiddleware handles the operation.
 func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *slog.Logger, sessionUC ...*session.SessionUseCase) gin.HandlerFunc {
 	var sessUC *session.SessionUseCase
 	if len(sessionUC) > 0 {

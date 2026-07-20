@@ -21,6 +21,8 @@ func setRateLimitHeaders(c *gin.Context, rl *budget.RateLimit) {
 // @sk-task rate-limiting-budgets#T2.2: Implement rate limit middleware (AC-001, AC-004)
 // @sk-task rate-limiting-budgets#T3.1: Add rate-limit headers (AC-003)
 // @sk-task rate-limiting-budgets#T3.3: Add Prometheus metrics counters (AC-007)
+//
+// RateLimit handles the operation.
 func RateLimit(repo budget.RateLimitRepository, cfg *config.RateLimitConfig, tokenBudgetRepo budget.TokenBudgetRepository) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tenantCtx, ok := TenantFromContext(c)

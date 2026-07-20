@@ -8,6 +8,8 @@ import (
 )
 
 // @sk-task config-hot-reload#T1.2: DiffSections for runtime sections (AC-006)
+//
+// DiffSections handles the operation.
 func DiffSections(old, new *Config) map[string]bool {
 	changed := make(map[string]bool)
 	if old == nil || new == nil {

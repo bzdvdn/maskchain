@@ -8,6 +8,8 @@ import (
 )
 
 // @sk-task 70-routing-engine#T2.1: Implement ProviderRegistry (AC-001)
+//
+// ProviderRegistry represents a domain entity or configuration.
 type ProviderRegistry struct {
 	providers atomic.Pointer[map[string]*routing.Provider]
 	rules     atomic.Pointer[[]routing.RoutingRule]

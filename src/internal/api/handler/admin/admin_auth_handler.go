@@ -12,6 +12,8 @@ import (
 )
 
 // @sk-task admin-ui-design#T2.2: AdminAuthHandler with login/logout (AC-001)
+//
+// AdminAuthHandler represents a domain entity or configuration.
 type AdminAuthHandler struct {
 	useCase *admin_session.AdminSessionUseCase
 	cfg     *config.AdminConfig

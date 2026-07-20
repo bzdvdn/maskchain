@@ -17,6 +17,8 @@ var ErrCircuitBreakerOpen = errors.New("provider skipped by circuit breaker")
 
 // @sk-task 71-egress-streaming#T2.1: Implement egress.Client with Call(), proxy, pool, timeout, cancellation (AC-001, AC-002, AC-004, AC-005)
 // @sk-task 116-connection-pool-fixes#T2.2: Add timeout and circuit breaker fields (AC-002, AC-006, AC-007)
+//
+// Client represents a domain entity or configuration.
 type Client struct {
 	cfg     *config.EgressConfig
 	tp      *http.Transport
@@ -37,6 +39,8 @@ func NewClient(cfg *config.EgressConfig) *Client {
 }
 
 // @sk-task 116-connection-pool-fixes#T2.2: Add NewClientWithTransport for per-provider isolation (AC-002, AC-008)
+//
+// NewClientWithTransport creates a new ClientWithTransport.
 func NewClientWithTransport(cfg *config.EgressConfig, tp *http.Transport, timeout time.Duration, cb *CircuitBreaker) *Client {
 	return &Client{
 		cfg:     cfg,

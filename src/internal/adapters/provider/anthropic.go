@@ -13,6 +13,8 @@ import (
 
 // @sk-task 110-provider-adapters#T4.1: Implement AnthropicClient with Call and Stream (AC-004, AC-006)
 // @sk-task 111-provider-auth-and-config#T3.2: Config-driven auth + additional_headers (AC-004, AC-007)
+//
+// AnthropicClient represents a domain entity or configuration.
 type AnthropicClient struct {
 	baseURL           string
 	apiKey            string

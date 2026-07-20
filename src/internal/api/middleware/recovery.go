@@ -8,6 +8,8 @@ import (
 )
 
 // @sk-task 10-gateway-skeleton#T2.3: Implement Recovery middleware with zap logging (AC-006)
+//
+// Recovery handles the operation.
 func Recovery(log *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {

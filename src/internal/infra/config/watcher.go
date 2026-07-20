@@ -32,6 +32,8 @@ func ConfigDirFromArgs() string {
 }
 
 // @sk-task config-hot-reload#T1.1: WatchConfigDir with fsnotify + debounce (AC-004)
+//
+// WatchConfigDir handles the operation.
 func WatchConfigDir(ctx context.Context, dir string, onReload func(old, new *Config)) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {

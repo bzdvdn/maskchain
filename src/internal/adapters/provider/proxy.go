@@ -12,6 +12,8 @@ import (
 )
 
 // @sk-task provider-adapters-expansion#T2.1: Create ProxyClient for generic OpenAI-compatible providers (AC-007)
+//
+// ProxyClient represents a domain entity or configuration.
 type ProxyClient struct {
 	baseURL           string
 	apiKey            string

@@ -13,6 +13,8 @@ import (
 )
 
 // @sk-task 22-shield-mask-storage#T3.1: Implement PostgresMaskRepo (AC-008, AC-012)
+//
+// PostgresMaskRepo represents a domain entity or configuration.
 type PostgresMaskRepo struct {
 	pool *pgxpool.Pool
 }

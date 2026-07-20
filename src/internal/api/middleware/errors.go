@@ -24,6 +24,8 @@ const (
 
 // @sk-task 40-profiles-api#T1.1: Implement error middleware and helpers (AC-011)
 // @sk-task 118-api-consistency#T3.2: Updated to ApiResponse envelope format (AC-004)
+//
+// AbortWithError handles the operation.
 func AbortWithError(c *gin.Context, status int, code ErrorCode, message string, details ...dto.ValidationDetail) {
 	c.Set(EnvelopedKey, true)
 	resp := dto.NewErrorResponse(string(code), message, details...)
@@ -31,6 +33,8 @@ func AbortWithError(c *gin.Context, status int, code ErrorCode, message string, 
 }
 
 // @sk-task 118-api-consistency#T3.2: ErrorHandler now uses ApiResponse envelope (AC-004)
+//
+// ErrorHandler handles the operation.
 func ErrorHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()

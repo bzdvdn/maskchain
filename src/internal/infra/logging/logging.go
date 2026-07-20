@@ -9,6 +9,8 @@ import (
 )
 
 // @sk-task 61-observability#T1.4: NewLogger creates a slog.Logger with JSON handler (AC-005)
+//
+// NewLogger creates a new Logger.
 func NewLogger(w io.Writer, level slog.Level) *slog.Logger {
 	return slog.New(newOTelHandler(w, &slog.HandlerOptions{Level: level}))
 }

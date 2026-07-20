@@ -9,6 +9,8 @@ import (
 
 // @sk-task 130-analytics-domain#T2.2: Implement UsageStore port interface (AC-002)
 // @sk-task 131-analytics-pipeline#T2.1: Add RecordBatch and DeleteOlderThan to UsageStore (AC-002, AC-008)
+//
+// UsageStore defines the interface for domain operations.
 type UsageStore interface {
 	Record(ctx context.Context, usage TokenUsage) error
 	RecordBatch(ctx context.Context, usages []TokenUsage) error

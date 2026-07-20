@@ -6,6 +6,8 @@ import (
 )
 
 // @sk-task 90-production-hardening#T3.1: PGPoolCollector exposes PG pool stats as Prometheus metrics (<AC-003>)
+//
+// PGPoolCollector represents a domain entity or configuration.
 type PGPoolCollector struct {
 	pool         *pgxpool.Pool
 	acquireCount *prometheus.Desc

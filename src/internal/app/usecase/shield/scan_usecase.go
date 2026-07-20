@@ -12,6 +12,8 @@ import (
 // @sk-task 50-shield-engine#T2.1: Implement ScanUseCase orchestration (AC-001, AC-004, AC-005)
 // @sk-task 50-shield-engine#T3.1: Consolidate replacements with placeholder format (AC-002, AC-006)
 // @sk-task 13-shield-middleware-wiring#T1.3: Build pipeline from Rules instead of ProfileSlug (AC-001)
+//
+// ScanUseCase represents a domain entity or configuration.
 type ScanUseCase struct {
 	pipelineFactory *ScanPipelineFactory
 }

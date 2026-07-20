@@ -8,6 +8,8 @@ import (
 )
 
 // @sk-task 50-shield-engine#T4.1: Implement ApplyPolicyUseCase (AC-003)
+//
+// ApplyPolicyUseCase represents a domain entity or configuration.
 type ApplyPolicyUseCase struct {
 	evaluator *service.PolicyEvaluator
 }

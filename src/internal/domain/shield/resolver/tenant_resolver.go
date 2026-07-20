@@ -11,6 +11,8 @@ import (
 )
 
 // @sk-task tenant-profile-sync#T1.4: Implement DBFirstTenantResolver (AC-002, AC-003, AC-004)
+//
+// DBFirstTenantResolver represents a domain entity or configuration.
 type DBFirstTenantResolver struct {
 	repo       shield.TenantRepository
 	cfgTenants map[string]*entity.Tenant

@@ -20,6 +20,8 @@ import (
 )
 
 // @sk-task admin-ui-design#T3.2: AuditEvent for tenant CRUD audit logging (AC-005)
+//
+// AuditEvent represents a domain entity or configuration.
 type AuditEvent struct {
 	AdminUsername string          `json:"admin_username"`
 	Action        string          `json:"action"`
@@ -29,11 +31,15 @@ type AuditEvent struct {
 }
 
 // @sk-task admin-ui-design#T3.2: AuditLogger interface for async audit writes (AC-005)
+//
+// AuditLogger defines the interface for domain operations.
 type AuditLogger interface {
 	Write(ctx context.Context, event *AuditEvent) error
 }
 
 // @sk-task admin-ui-design#T3.2: Extend TenantHandler with audit logger (AC-005)
+//
+// TenantHandler represents a domain entity or configuration.
 type TenantHandler struct {
 	repo            shield.TenantRepository
 	dictionaryCache *dictionaryrepo.ValkeyDictionaryCache

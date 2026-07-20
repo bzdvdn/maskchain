@@ -9,6 +9,8 @@ import (
 )
 
 // @sk-task 70-routing-engine#T1.3: Create stub provider client for tests (AC-002, AC-007)
+//
+// StubClient represents a domain entity or configuration.
 type StubClient struct {
 	Name            string
 	FailWithStatus  int

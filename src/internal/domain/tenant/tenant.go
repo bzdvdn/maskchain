@@ -1,6 +1,8 @@
 package tenant
 
 // @sk-task 80-tenant-isolation#T1.1: Tenant aggregate root (AC-001, AC-002, AC-003, AC-004)
+//
+// Tenant represents a domain entity or configuration.
 type Tenant struct {
 	slug        string
 	name        string

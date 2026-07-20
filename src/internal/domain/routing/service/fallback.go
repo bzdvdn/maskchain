@@ -14,6 +14,8 @@ import (
 )
 
 // @sk-task 70-routing-engine#T2.3: Implement FallbackHandler (AC-002, AC-007)
+//
+// FallbackHandler represents a domain entity or configuration.
 type FallbackHandler struct {
 	clients atomic.Pointer[map[string]ports.ProviderClient]
 }

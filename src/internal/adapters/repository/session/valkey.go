@@ -11,6 +11,8 @@ import (
 )
 
 // @sk-task sessions#T3.1: Implement ValkeySessionCache (AC-008)
+//
+// ValkeySessionCache represents a domain entity or configuration.
 type ValkeySessionCache struct {
 	client valkey.Client
 	ttl    time.Duration

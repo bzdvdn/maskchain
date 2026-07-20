@@ -8,6 +8,8 @@ import (
 )
 
 // @sk-task 112-proxy-streaming-wiring#T2.2: Create WrapSSE middleware (AC-002)
+//
+// WrapSSE handles the operation.
 func WrapSSE() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if isStreamRequest(c) {

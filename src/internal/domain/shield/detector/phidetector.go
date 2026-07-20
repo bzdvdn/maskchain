@@ -6,6 +6,8 @@ import (
 )
 
 // @sk-task 21-shield-detectors#T3.3: Implement PHIDetector (AC-001, AC-007)
+//
+// PHIDetector represents a domain entity or configuration.
 type PHIDetector struct {
 	icd10 *regexp.Regexp
 }

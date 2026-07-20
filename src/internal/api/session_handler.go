@@ -23,6 +23,8 @@ type extendTTLRequest struct {
 }
 
 // @sk-task sessions#T2.2: Implement SessionHandler with all routes (AC-001, AC-003, AC-004, AC-005, AC-006)
+//
+// SessionHandler represents a domain entity or configuration.
 type SessionHandler struct {
 	useCase *session.SessionUseCase
 	cfg     *config.SessionConfig

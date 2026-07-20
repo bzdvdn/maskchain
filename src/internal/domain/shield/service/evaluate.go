@@ -6,6 +6,8 @@ import (
 )
 
 // @sk-task 20-shield-domain#T4.2: Implement PolicyEvaluator service (AC-004)
+//
+// PolicyEvaluator represents a domain entity or configuration.
 type PolicyEvaluator struct{}
 
 func NewPolicyEvaluator() *PolicyEvaluator {

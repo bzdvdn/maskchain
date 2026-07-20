@@ -13,6 +13,8 @@ const (
 )
 
 // @sk-task sessions#T1.2: Implement SessionUseCase with all methods (AC-001, AC-002, AC-003, AC-004, AC-005, AC-006, AC-007, AC-010)
+//
+// SessionUseCase represents a domain entity or configuration.
 type SessionUseCase struct {
 	store SessionStore
 }

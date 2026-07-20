@@ -10,11 +10,15 @@ import (
 )
 
 // @sk-task 30-shield-persistence#T2.1: Implement TransactionManager interface (DEC-002)
+//
+// TransactionManager defines the interface for domain operations.
 type TransactionManager interface {
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
 // @sk-task 30-shield-persistence#T2.1: Implement PGXTransactionManager (DEC-002)
+//
+// PGXTransactionManager represents a domain entity or configuration.
 type PGXTransactionManager struct {
 	pool *pgxpool.Pool
 }

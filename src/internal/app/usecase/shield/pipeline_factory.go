@@ -11,6 +11,8 @@ import (
 )
 
 // @sk-task 50-shield-engine#T2.1: Implement ScanPipelineFactory (AC-001, AC-005)
+//
+// DetectorBinding represents a domain entity or configuration.
 type DetectorBinding struct {
 	Interface detector.Detector
 	Type      entity.DetectorType
@@ -19,17 +21,23 @@ type DetectorBinding struct {
 }
 
 // @sk-task 50-shield-engine#T2.1: Implement ScanPipelineFactory (AC-001, AC-005)
+//
+// Pipeline represents a domain entity or configuration.
 type Pipeline struct {
 	Preprocessors []preprocessor.Processor
 	Detectors     []DetectorBinding
 }
 
 // @sk-task 50-shield-engine#T2.1: Implement ScanPipelineFactory (AC-001, AC-005)
+//
+// ScanPipelineFactory represents a domain entity or configuration.
 type ScanPipelineFactory struct {
 	registry *detector.DetectorRegistry
 }
 
 // @sk-task cleanup-profile-repository#T3.5: Remove Build(ctx, profile), keep BuildFromRules (AC-006)
+//
+// NewScanPipelineFactory creates a new ScanPipelineFactory.
 func NewScanPipelineFactory(registry *detector.DetectorRegistry) *ScanPipelineFactory {
 	return &ScanPipelineFactory{registry: registry}
 }

@@ -14,6 +14,8 @@ const namespace = "maskchain"
 
 // @sk-task 61-observability#T1.3: RegisterMetrics registers all Prometheus metrics (AC-002, AC-003, AC-004)
 // @sk-task 131-analytics-pipeline#T2.4: Register analytics metrics (AC-003)
+//
+// RegisterMetrics handles the operation.
 func RegisterMetrics(reg *prometheus.Registry) {
 	reg.MustRegister(HttpRequestsTotal)
 	reg.MustRegister(HttpRequestDuration)
@@ -31,12 +33,16 @@ func RegisterMetrics(reg *prometheus.Registry) {
 }
 
 // @sk-task 90-production-hardening#T3.2: Register PG pool metrics collector (<AC-003>)
+//
+// RegisterPGPoolCollector handles the operation.
 func RegisterPGPoolCollector(reg *prometheus.Registry, pool *pgxpool.Pool) {
 	reg.MustRegister(NewPGPoolCollector(pool))
 }
 
 // @sk-task 61-observability#T2.1: Middleware returns gin middleware that records HTTP request metrics (AC-003)
 // @sk-task 80-tenant-isolation#T3.3: Add tenant label to HTTP metrics (AC-009)
+//
+// Middleware handles the operation.
 func Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -55,6 +61,8 @@ func Middleware() gin.HandlerFunc {
 }
 
 // @sk-task 61-observability#T1.3: Handler returns gin handler for /metrics (AC-002)
+//
+// Handler handles the operation.
 func Handler(reg *prometheus.Registry) gin.HandlerFunc {
 	h := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
 	return func(c *gin.Context) {
@@ -193,6 +201,8 @@ var (
 )
 
 // @sk-task 131-analytics-pipeline#T4.1: Reset clears analytics metrics for test isolation
+//
+// Reset handles the operation.
 func Reset() {
 	TokensTotal.Reset()
 	CostTotal.Reset()

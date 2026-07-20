@@ -12,6 +12,8 @@ import (
 )
 
 // @sk-task ollama-provider#T2.1: Implement OllamaClient with Call and Stream (AC-002, AC-003, AC-004)
+//
+// OllamaClient represents a domain entity or configuration.
 type OllamaClient struct {
 	baseURL           string
 	apiKey            string

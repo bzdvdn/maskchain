@@ -7,6 +7,8 @@ import (
 )
 
 // @sk-task 22-shield-mask-storage#T3.3: Implement CachedMaskRepo (AC-010)
+//
+// CachedMaskRepo represents a domain entity or configuration.
 type CachedMaskRepo struct {
 	primary   mask.MaskStorage
 	secondary mask.MaskStorage

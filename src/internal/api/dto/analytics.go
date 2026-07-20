@@ -3,7 +3,8 @@ package dto
 import "time"
 
 // @sk-task 132-analytics-api#T1.1: Analytics DTO types (AC-001, AC-002, AC-003, AC-004, AC-005)
-
+//
+// AnalyticsQuery represents a domain entity or configuration.
 type AnalyticsQuery struct {
 	Period  string `form:"period"`
 	From    string `form:"from"`

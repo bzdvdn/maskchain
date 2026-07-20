@@ -19,6 +19,8 @@ import (
 )
 
 // @sk-task tenant-profile-sync#T1.3: Implement PostgresTenantRepo (AC-001, AC-005, AC-008)
+//
+// PostgresTenantRepo represents a domain entity or configuration.
 type PostgresTenantRepo struct {
 	pool  *pgxpool.Pool
 	txMgr TransactionManager

@@ -10,6 +10,8 @@ import (
 // @sk-task tenant-profile-sync#T1.1: Implement Tenant entity (AC-001, AC-002)
 // @sk-task 13-shield-middleware-wiring#T1.1: Add PIIConfig for per-tenant PII rules (AC-001)
 // @sk-task 13-shield-middleware-wiring#T2.2: Add mapstructure tags for YAML/viper deserialization
+//
+// PIIConfig represents a domain entity or configuration.
 type PIIConfig struct {
 	Enabled       bool      `json:"enabled" mapstructure:"enabled"`
 	DefaultAction string    `json:"default_action" mapstructure:"default_action"`

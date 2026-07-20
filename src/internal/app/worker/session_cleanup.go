@@ -9,6 +9,8 @@ import (
 )
 
 // @sk-task sessions#T5.1: Implement CleanupWorker with ticker-based DeleteExpired (AC-007)
+//
+// CleanupWorker represents a domain entity or configuration.
 type CleanupWorker struct {
 	usecase  *session.SessionUseCase
 	interval time.Duration
@@ -16,6 +18,8 @@ type CleanupWorker struct {
 }
 
 // @sk-task sessions#T5.1: NewCleanupWorker creates a new worker (AC-007)
+//
+// NewCleanupWorker creates a new CleanupWorker.
 func NewCleanupWorker(usecase *session.SessionUseCase, interval time.Duration, log *slog.Logger) *CleanupWorker {
 	return &CleanupWorker{
 		usecase:  usecase,

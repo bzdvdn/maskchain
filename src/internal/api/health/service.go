@@ -18,6 +18,8 @@ type CheckState struct {
 }
 
 // @sk-task 114-real-health-probes#T1.1: HealthService with Register/CheckAll (AC-007)
+//
+// HealthService represents a domain entity or configuration.
 type HealthService struct {
 	mu          sync.RWMutex
 	probes      []Probe

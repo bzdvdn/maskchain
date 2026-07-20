@@ -3,6 +3,8 @@ package tenant
 import "fmt"
 
 // @sk-task 80-tenant-isolation#T1.1: APIKey value object (AC-001, AC-003)
+//
+// APIKey represents a domain entity or configuration.
 type APIKey struct {
 	value string
 }

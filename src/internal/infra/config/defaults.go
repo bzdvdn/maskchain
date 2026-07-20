@@ -47,6 +47,8 @@ const defaultAdminSessionTTL = 30 * time.Minute
 const defaultDashboardPollInterval = 5 * time.Second
 
 // @sk-task 10-gateway-skeleton#T1.2: Set ServerConfig defaults in DefaultConfig (AC-001, AC-005)
+//
+// DefaultConfig handles the operation.
 func DefaultConfig() *Config {
 	return &Config{
 		Log: &LogConfig{

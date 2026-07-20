@@ -79,6 +79,8 @@ func preferIPv4DialContext(d *net.Dialer, debug bool) func(ctx context.Context, 
 // @sk-task 116-connection-pool-fixes#T2.1: Fix MaxIdleConnsPerHost and wire DisableKeepAlives (AC-001)
 // @sk-task 116-connection-pool-fixes#T2.3: Export NewTransport for per-provider usage in factory (AC-008)
 // @sk-task 116-connection-pool-fixes#T3.2: Integrate buildTLSConfig into NewTransport (AC-003, AC-004, AC-005)
+//
+// NewTransport creates a new Transport.
 func NewTransport(cfg *config.EgressConfig, proxyURL string) (*http.Transport, error) {
 	dialer := &net.Dialer{
 		Timeout:   defaultDialTimeout,

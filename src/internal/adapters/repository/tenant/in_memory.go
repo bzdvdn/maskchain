@@ -7,6 +7,8 @@ import (
 )
 
 // @sk-task 80-tenant-isolation#T1.3: In-memory TenantRepository with reverse index (AC-001, AC-003)
+//
+// InMemoryRepository represents a domain entity or configuration.
 type InMemoryRepository struct {
 	bySlug map[string]*tenant.Tenant
 	byKey  map[string]*tenant.Tenant

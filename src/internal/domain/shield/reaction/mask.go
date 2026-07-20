@@ -10,12 +10,16 @@ import (
 
 // @sk-task 23-shield-reactions#T3.1: Implement MaskReaction (AC-003)
 // @sk-task remove-audit-incidents#T2.1: Remove Incident dependency, log instead (AC-007)
+//
+// MaskReaction represents a domain entity or configuration.
 type MaskReaction struct {
 	useCase *mask.MaskUseCase
 	log     *slog.Logger
 }
 
 // @sk-task remove-audit-incidents#T2.1: Constructor without incidents (AC-007)
+//
+// NewMaskReaction creates a new MaskReaction.
 func NewMaskReaction(useCase *mask.MaskUseCase, log *slog.Logger) *MaskReaction {
 	return &MaskReaction{useCase: useCase, log: log}
 }

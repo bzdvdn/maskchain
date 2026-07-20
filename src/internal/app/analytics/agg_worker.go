@@ -9,6 +9,8 @@ import (
 )
 
 // @sk-task 131-analytics-pipeline#T3.4: Implement AggregationWorker with ticker-based materialization (AC-004)
+//
+// AggregationWorker represents a domain entity or configuration.
 type AggregationWorker struct {
 	pool     *pgxpool.Pool
 	interval time.Duration
@@ -16,6 +18,8 @@ type AggregationWorker struct {
 }
 
 // @sk-task 131-analytics-pipeline#T3.4: NewAggregationWorker creates a new aggregation worker (AC-004)
+//
+// NewAggregationWorker creates a new AggregationWorker.
 func NewAggregationWorker(pool *pgxpool.Pool, interval time.Duration, log *slog.Logger) *AggregationWorker {
 	return &AggregationWorker{
 		pool:     pool,

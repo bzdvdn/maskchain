@@ -12,6 +12,8 @@ import (
 )
 
 // @sk-task sessions#T2.1: Implement PostgresSessionStore (AC-001, AC-002, AC-003, AC-004, AC-005, AC-006, AC-007, AC-008)
+//
+// PostgresSessionStore represents a domain entity or configuration.
 type PostgresSessionStore struct {
 	pool *pgxpool.Pool
 }

@@ -16,6 +16,8 @@ import (
 )
 
 // @sk-task 131-analytics-pipeline#T3.1: Implement UsageMiddleware (AC-001, AC-003, AC-005)
+//
+// UsageMiddleware represents a domain entity or configuration.
 type UsageMiddleware struct {
 	registry *analytics.CostRateRegistry
 	usageCh  chan<- analytics.TokenUsage

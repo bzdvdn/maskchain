@@ -8,6 +8,8 @@ import (
 )
 
 // @sk-task 10-gateway-skeleton#T3.1: Implement Logger middleware with zap (AC-007)
+//
+// Logger handles the operation.
 func Logger(log *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()

@@ -9,6 +9,8 @@ import (
 const base62Alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 // @sk-task 22-shield-mask-storage#T1.1: Implement UUIDv7 generator (AC-007)
+//
+// NewUUIDv7 creates a new UUIDv7.
 func NewUUIDv7() (string, error) {
 	var buf [16]byte
 	if _, err := rand.Read(buf[:]); err != nil {

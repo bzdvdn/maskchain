@@ -13,12 +13,16 @@ type patternEntry struct {
 }
 
 // @sk-task prompt-injection-shield#T1.2: Implement PromptInjectionDetector (AC-002, AC-003, AC-004)
+//
+// PromptInjectionDetector represents a domain entity or configuration.
 type PromptInjectionDetector struct {
 	builtinPatterns []patternEntry
 	tenantPatterns  []entity.Pattern
 }
 
 // @sk-task prompt-injection-shield#T1.2: NewPromptInjectionDetector constructor (AC-002, AC-003, AC-004)
+//
+// NewPromptInjectionDetector creates a new PromptInjectionDetector.
 func NewPromptInjectionDetector(tenantPatterns ...entity.Pattern) *PromptInjectionDetector {
 	builtin := defaultPatterns()
 	provided := append([]entity.Pattern{}, tenantPatterns...)

@@ -3,6 +3,8 @@ package value
 import "fmt"
 
 // @sk-task 20-shield-domain#T1.1: Implement TenantID value object (AC-006)
+//
+// TenantID represents a domain entity or configuration.
 type TenantID struct {
 	value string
 }

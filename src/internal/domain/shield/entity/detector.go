@@ -6,6 +6,8 @@ import (
 )
 
 // @sk-task 20-shield-domain#T2.2: Implement Detector entity (AC-008)
+//
+// Detector represents a domain entity or configuration.
 type Detector struct {
 	id       string
 	typ      DetectorType

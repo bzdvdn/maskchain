@@ -16,6 +16,8 @@ import (
 const sessionCtxKey = "session"
 
 // @sk-task sessions#T4.1: SessionFromContext reads Session from gin context (AC-010)
+//
+// SessionFromContext handles the operation.
 func SessionFromContext(c *gin.Context) (*session.Session, bool) {
 	v, ok := c.Get(sessionCtxKey)
 	if !ok {
@@ -30,6 +32,8 @@ type sessionChatBody struct {
 }
 
 // @sk-task sessions#T4.1: Implement SessionMiddleware (AC-010)
+//
+// SessionMiddleware handles the operation.
 func SessionMiddleware(useCase *session.SessionUseCase, cfg *config.SessionConfig, log *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		sessionID := c.GetHeader("X-Session-ID")

@@ -1,6 +1,8 @@
 package dto
 
 // @sk-task 118-api-consistency#T1.1: ApiResponse unified envelope type (AC-003, AC-004, AC-005)
+//
+// ApiResponse represents a domain entity or configuration.
 type ApiResponse struct {
 	Data       any         `json:"data"`
 	Error      *ErrorInfo  `json:"error"`
@@ -8,6 +10,8 @@ type ApiResponse struct {
 }
 
 // @sk-task 118-api-consistency#T1.1: ErrorInfo structured error in envelope (AC-004)
+//
+// ErrorInfo represents a domain entity or configuration.
 type ErrorInfo struct {
 	Code    string             `json:"code"`
 	Message string             `json:"message"`
@@ -15,6 +19,8 @@ type ErrorInfo struct {
 }
 
 // @sk-task 118-api-consistency#T1.1: Pagination metadata (AC-005)
+//
+// Pagination represents a domain entity or configuration.
 type Pagination struct {
 	Page    int `json:"page"`
 	PerPage int `json:"per_page"`

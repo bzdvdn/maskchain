@@ -3,6 +3,8 @@ package dictionary
 import "encoding/json"
 
 // @sk-task cleanup-profile-repository#T2.2: Remove profileSlug (AC-004)
+//
+// Dictionary represents a domain entity or configuration.
 type Dictionary struct {
 	name      string
 	entries   []interface{}

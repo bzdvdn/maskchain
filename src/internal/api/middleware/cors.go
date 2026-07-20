@@ -7,6 +7,8 @@ import (
 )
 
 // @sk-task 10-gateway-skeleton#T3.2: Implement CORS middleware (AC-008)
+//
+// CORS handles the operation.
 func CORS(origins []string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")

@@ -8,6 +8,8 @@ import (
 )
 
 // @sk-task admin-ui-design#T4.3: ProviderHealthChecker pings providers (AC-006)
+//
+// ProviderHealth represents a domain entity or configuration.
 type ProviderHealth struct {
 	Status    string `json:"status"`
 	LatencyMs int64  `json:"latency_ms,omitempty"`

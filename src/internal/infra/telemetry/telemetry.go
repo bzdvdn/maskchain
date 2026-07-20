@@ -18,6 +18,8 @@ import (
 )
 
 // @sk-task 61-observability#T1.2: InitProvider initializes OTel TracerProvider and MeterProvider (AC-001, AC-006, AC-007)
+//
+// InitProvider handles the operation.
 func InitProvider(ctx context.Context, endpoint, serviceName, environment string, samplingRatio float64, log *slog.Logger) (func(context.Context) error, error) {
 	if endpoint == "" {
 		log.WarnContext(ctx, "otel endpoint is empty, tracing and metrics disabled")

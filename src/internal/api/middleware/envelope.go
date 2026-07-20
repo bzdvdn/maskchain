@@ -17,6 +17,8 @@ const (
 )
 
 // @sk-task 118-api-consistency#T1.2: ResponseEnvelope middleware wrapping JSON responses (AC-003, AC-004, AC-010)
+//
+// ResponseEnvelope handles the operation.
 func ResponseEnvelope() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		w := &envelopeWriter{ResponseWriter: c.Writer, status: http.StatusOK}

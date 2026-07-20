@@ -14,6 +14,8 @@ import (
 )
 
 // @sk-task provider-adapters-expansion#T3.1: Create GeminiClient with OpenAI↔Gemini format conversion (AC-001, AC-002, AC-003)
+//
+// GeminiClient represents a domain entity or configuration.
 type GeminiClient struct {
 	baseURL string
 	apiKey  string

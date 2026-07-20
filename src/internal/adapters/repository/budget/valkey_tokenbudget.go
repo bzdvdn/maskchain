@@ -9,6 +9,8 @@ import (
 )
 
 // @sk-task rate-limiting-budgets#T3.5: Implement ValkeyTokenBudgetRepo (AC-002, AC-005)
+//
+// ValkeyTokenBudgetRepo represents a domain entity or configuration.
 type ValkeyTokenBudgetRepo struct {
 	client valkey.Client
 }

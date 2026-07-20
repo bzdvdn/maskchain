@@ -14,6 +14,8 @@ import (
 )
 
 // @sk-task 131-analytics-pipeline#T2.3: Implement PgUsageStore (AC-002, AC-004, AC-008)
+//
+// PgUsageStore represents a domain entity or configuration.
 type PgUsageStore struct {
 	pool *pgxpool.Pool
 }

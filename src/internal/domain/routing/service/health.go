@@ -9,6 +9,8 @@ import (
 )
 
 // @sk-task 70-routing-engine#T2.4: Implement HealthChecker (AC-006)
+//
+// HealthChecker represents a domain entity or configuration.
 type HealthChecker struct {
 	registry *ProviderRegistry
 	client   *http.Client

@@ -9,11 +9,15 @@ import (
 
 // @sk-task 23-shield-reactions#T2.4: Implement AlertReaction (AC-004)
 // @sk-task remove-audit-incidents#T2.1: Replace IncidentRepository with structured logging (AC-007)
+//
+// AlertReaction represents a domain entity or configuration.
 type AlertReaction struct {
 	log *slog.Logger
 }
 
 // @sk-task remove-audit-incidents#T2.1: Constructor without IncidentRepository (AC-007)
+//
+// NewAlertReaction creates a new AlertReaction.
 func NewAlertReaction(log *slog.Logger) *AlertReaction {
 	return &AlertReaction{log: log}
 }

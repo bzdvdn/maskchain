@@ -9,6 +9,8 @@ import (
 )
 
 // @sk-task 23-shield-reactions#T2.1: Define ReactionExecutor interface (DEC-001)
+//
+// ReactionExecutor defines the interface for domain operations.
 type ReactionExecutor interface {
 	Execute(ctx context.Context, result *entity.ScanResult, text string) (string, error)
 }

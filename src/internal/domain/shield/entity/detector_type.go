@@ -1,6 +1,8 @@
 package entity
 
 // @sk-task 20-shield-domain#T2.2: Implement DetectorType enum (AC-008)
+//
+// DetectorType is a string type for domain values.
 type DetectorType string
 
 const (

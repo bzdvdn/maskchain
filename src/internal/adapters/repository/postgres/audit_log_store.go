@@ -11,6 +11,8 @@ import (
 )
 
 // @sk-task admin-ui-design#T1.4: Audit log entry (AC-005)
+//
+// AuditLogEntry represents a domain entity or configuration.
 type AuditLogEntry struct {
 	ID            int64           `json:"id"`
 	AdminUsername string          `json:"admin_username"`
@@ -21,6 +23,8 @@ type AuditLogEntry struct {
 }
 
 // @sk-task admin-ui-design#T1.4: AuditLogStore with async buffered channel + flush worker (AC-005)
+//
+// AuditLogStore represents a domain entity or configuration.
 type AuditLogStore struct {
 	pool    *pgxpool.Pool
 	ch      chan *AuditLogEntry

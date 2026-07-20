@@ -21,6 +21,8 @@ import (
 var envToKeyReplacer = strings.NewReplacer("_", ".", "-", ".")
 
 // @sk-task 01-config-bootstrap#T1.2: Create Config struct with LogConfig, mapstructure/yaml/validate tags, defaults (AC-001, AC-003)
+//
+// LogConfig represents a domain entity or configuration.
 type LogConfig struct {
 	Level string `mapstructure:"level" yaml:"level" validate:"required"`
 }
@@ -35,12 +37,16 @@ type ServerConfig struct {
 }
 
 // @sk-task 114-real-health-probes#T1.2: Add HealthCheckConfig with CriticalDeps (AC-006)
+//
+// HealthCheckConfig represents a domain entity or configuration.
 type HealthCheckConfig struct {
 	CriticalDeps []string `mapstructure:"critical_deps" yaml:"critical_deps"`
 }
 
 // @sk-task 22-shield-mask-storage#T5.1: Add Database/Valkey/Mask config (AC-all)
 // @sk-task 30-shield-persistence#T1.3: Add pool params to DatabaseConfig (AC-005)
+//
+// DatabaseConfig represents a domain entity or configuration.
 type DatabaseConfig struct {
 	DSN             string        `mapstructure:"dsn" yaml:"dsn"`
 	MaxConns        int           `mapstructure:"max_conns" yaml:"max_conns"`
@@ -49,6 +55,8 @@ type DatabaseConfig struct {
 }
 
 // @sk-task 22-shield-mask-storage#T5.1: Add Valkey config section (AC-all)
+//
+// ValkeyConfig represents a domain entity or configuration.
 type ValkeyConfig struct {
 	Addr     string `mapstructure:"addr" yaml:"addr"`
 	Password string `mapstructure:"password" yaml:"password"`
@@ -56,11 +64,15 @@ type ValkeyConfig struct {
 }
 
 // @sk-task 22-shield-mask-storage#T5.1: Add Mask config section (AC-all)
+//
+// MaskConfig represents a domain entity or configuration.
 type MaskConfig struct {
 	CacheTTLSec int `mapstructure:"cache_ttl_sec" yaml:"cache_ttl_sec"`
 }
 
 // @sk-task sessions#T1.3: Add SessionConfig section (AC-001, AC-002, AC-005, AC-007, AC-010)
+//
+// SessionConfig represents a domain entity or configuration.
 type SessionConfig struct {
 	DefaultTTL      time.Duration `mapstructure:"default_ttl" yaml:"default_ttl"`
 	MaxTTL          time.Duration `mapstructure:"max_ttl" yaml:"max_ttl"`
@@ -71,6 +83,8 @@ type SessionConfig struct {
 
 // @sk-task 51-shield-gateway-integration#T1.1: Add ShieldConfig section (AC-001, AC-002)
 // @sk-task 13-shield-middleware-wiring#T2.2: Remove ProfileMapping and DefaultAction (AC-005)
+//
+// ShieldConfig represents a domain entity or configuration.
 type ShieldConfig struct {
 	ActionOnSuspicious string                       `mapstructure:"action_on_suspicious" yaml:"action_on_suspicious"`
 	TenantModelMapping map[string]map[string]string `mapstructure:"tenant_model_mapping" yaml:"tenant_model_mapping"`
@@ -80,6 +94,8 @@ type ShieldConfig struct {
 // @sk-task 110-provider-adapters#T1.1: Add APIType and APIKey fields (AC-007, AC-008)
 // @sk-task 111-provider-auth-and-config#T1.1: Add APIKeys, AuthScheme, AuthHeader, AdditionalHeaders (AC-003)
 // @sk-task provider-adapters-expansion#T1.1: Add AWS Bedrock config fields (AC-004)
+//
+// ProviderConfig represents a domain entity or configuration.
 type ProviderConfig struct {
 	Name               string            `mapstructure:"name" yaml:"name"`
 	BaseURL            string            `mapstructure:"base_url" yaml:"base_url"`
@@ -114,6 +130,8 @@ type RoutingConfig struct {
 }
 
 // @sk-task 61-observability#T1.2: Add OtelConfig section (AC-001, AC-006, AC-007)
+//
+// OtelConfig represents a domain entity or configuration.
 type OtelConfig struct {
 	Endpoint      string  `mapstructure:"endpoint" yaml:"endpoint"`
 	ServiceName   string  `mapstructure:"service_name" yaml:"service_name"`
@@ -122,6 +140,8 @@ type OtelConfig struct {
 }
 
 // @sk-task admin-ui-design#T1.1: Add AdminConfig for env-based admin auth (AC-001, AC-004)
+//
+// AdminConfig represents a domain entity or configuration.
 type AdminConfig struct {
 	Username              string        `mapstructure:"username" yaml:"username"`
 	Password              string        `mapstructure:"password" yaml:"password"`
@@ -130,6 +150,8 @@ type AdminConfig struct {
 }
 
 // @sk-task 80-tenant-isolation#T1.2: Add TenantConfig struct (AC-001, AC-003, AC-004)
+//
+// TenantConfig represents a domain entity or configuration.
 type TenantConfig struct {
 	Name       string            `mapstructure:"name" yaml:"name"`
 	AuthHeader string            `mapstructure:"auth_header" yaml:"auth_header"`
@@ -139,6 +161,8 @@ type TenantConfig struct {
 }
 
 // @sk-task rate-limiting-budgets#T1.1: Add RateLimitConfig with defaults (AC-006)
+//
+// RateLimitConfig represents a domain entity or configuration.
 type RateLimitConfig struct {
 	DefaultRatePerWindow int                           `mapstructure:"default_rate_per_window" yaml:"default_rate_per_window"`
 	DefaultWindowSec     int                           `mapstructure:"default_window_sec" yaml:"default_window_sec"`
@@ -155,6 +179,8 @@ type RateLimitOverride struct {
 // @sk-task 71-egress-streaming#T1.2: Add EgressConfig section (AC-002, AC-004, AC-006, AC-007)
 // @sk-task 90-production-hardening#T1.2: Add MaxIdleConnsPerHost and DisableKeepAlives (<AC-002>)
 // @sk-task 116-connection-pool-fixes#T1.1: Add TLS and CircuitBreaker to EgressConfig (AC-003, AC-004, AC-005, AC-006, AC-007)
+//
+// EgressConfig represents a domain entity or configuration.
 type EgressConfig struct {
 	MaxIdleConns        int                   `mapstructure:"max_idle_conns" yaml:"max_idle_conns"`
 	IdleTimeout         time.Duration         `mapstructure:"idle_timeout" yaml:"idle_timeout"`
@@ -169,6 +195,8 @@ type EgressConfig struct {
 }
 
 // @sk-task 116-connection-pool-fixes#T1.1: Add EgressTLSConfig struct (AC-003, AC-004, AC-005)
+//
+// EgressTLSConfig represents a domain entity or configuration.
 type EgressTLSConfig struct {
 	CACert             string `mapstructure:"ca_cert" yaml:"ca_cert"`
 	InsecureSkipVerify bool   `mapstructure:"insecure_skip_verify" yaml:"insecure_skip_verify"`
@@ -177,18 +205,24 @@ type EgressTLSConfig struct {
 }
 
 // @sk-task 116-connection-pool-fixes#T1.1: Add CircuitBreakerConfig struct (AC-006, AC-007)
+//
+// CircuitBreakerConfig represents a domain entity or configuration.
 type CircuitBreakerConfig struct {
 	MaxFailures int           `mapstructure:"max_failures" yaml:"max_failures"`
 	Cooldown    time.Duration `mapstructure:"cooldown" yaml:"cooldown"`
 }
 
 // @sk-task 90-production-hardening#T1.1: Add DebugConfig struct (<AC-001>)
+//
+// DebugConfig represents a domain entity or configuration.
 type DebugConfig struct {
 	Enabled    bool   `mapstructure:"enabled" yaml:"enabled"`
 	AdminToken string `mapstructure:"admin_token" yaml:"admin_token"`
 }
 
 // @sk-task 102-profile-cache#T1.2: Add DictionaryCacheConfig struct (RQ-009, RQ-010)
+//
+// DictionaryCacheConfig represents a domain entity or configuration.
 type DictionaryCacheConfig struct {
 	ValkeyTTLSec    int  `mapstructure:"valkey_ttl_sec" yaml:"valkey_ttl_sec"`
 	LRUSize         int  `mapstructure:"lru_size" yaml:"lru_size"`
@@ -197,6 +231,8 @@ type DictionaryCacheConfig struct {
 }
 
 // @sk-task 131-analytics-pipeline#T1.2: Add AnalyticsConfig with CostRateConfig (AC-007)
+//
+// CostRateConfig represents a domain entity or configuration.
 type CostRateConfig struct {
 	Model            string  `mapstructure:"model" yaml:"model"`
 	InputPricePer1K  float64 `mapstructure:"input_price_per_1k" yaml:"input_price_per_1k"`
@@ -204,6 +240,8 @@ type CostRateConfig struct {
 }
 
 // @sk-task 131-analytics-pipeline#T1.2: Add AnalyticsConfig (AC-002, AC-007, AC-008)
+//
+// AnalyticsConfig represents a domain entity or configuration.
 type AnalyticsConfig struct {
 	CostRates     []CostRateConfig `mapstructure:"cost_rates" yaml:"cost_rates"`
 	RetentionDays int              `mapstructure:"retention_days" yaml:"retention_days"`
@@ -212,6 +250,8 @@ type AnalyticsConfig struct {
 
 // @sk-task 80-tenant-isolation#T1.2: Add Tenants map to Config struct (AC-001, AC-003, AC-004, AC-005)
 // @sk-task 90-production-hardening#T1.1: Wire Debug into Config (<AC-001>)
+//
+// Config represents a domain entity or configuration.
 type Config struct {
 	Log             *LogConfig               `mapstructure:"log" yaml:"log"`
 	Server          *ServerConfig            `mapstructure:"server" yaml:"server"`

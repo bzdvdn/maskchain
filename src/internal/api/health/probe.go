@@ -6,12 +6,16 @@ import (
 )
 
 // @sk-task 114-real-health-probes#T1.1: Probe interface and Result type (AC-007)
+//
+// Probe defines the interface for domain operations.
 type Probe interface {
 	Name() string
 	Check(ctx context.Context) Result
 }
 
 // @sk-task 114-real-health-probes#T1.1: Probe interface and Result type (AC-007)
+//
+// Result represents a domain entity or configuration.
 type Result struct {
 	Status    string `json:"status"`
 	LatencyMs int64  `json:"latency_ms"`

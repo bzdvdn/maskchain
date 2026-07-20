@@ -8,6 +8,8 @@ import (
 )
 
 // @sk-task 130-analytics-domain#T1.2: Implement TokenUsage entity (AC-001)
+//
+// TokenUsage represents a domain entity or configuration.
 type TokenUsage struct {
 	TenantID     value.TenantID
 	Model        string

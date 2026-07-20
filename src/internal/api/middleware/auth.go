@@ -13,6 +13,8 @@ import (
 const tenantKey = "tenant"
 
 // @sk-task tenant-profile-sync#T2.1: TenantFromContext returns Tenant entity from context
+//
+// TenantFromContext handles the operation.
 func TenantFromContext(c *gin.Context) (*entity.Tenant, bool) {
 	v, ok := c.Get(tenantKey)
 	if !ok {
@@ -57,6 +59,8 @@ func (p *TenantProvider) Update(tenants []*entity.Tenant) {
 }
 
 // @sk-task tenant-profile-sync#T2.1: Multi-header auth middleware using TenantResolver (AC-002, AC-005)
+//
+// Auth handles the operation.
 func Auth(provider *TenantProvider) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tenants := provider.Get()

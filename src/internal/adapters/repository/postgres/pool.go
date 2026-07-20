@@ -11,6 +11,8 @@ import (
 )
 
 // @sk-task 30-shield-persistence#T2.1: Implement pool init helper (AC-005)
+//
+// NewPool creates a new Pool.
 func NewPool(ctx context.Context, cfg *config.DatabaseConfig) (*pgxpool.Pool, error) {
 	if cfg == nil || cfg.DSN == "" {
 		return nil, nil

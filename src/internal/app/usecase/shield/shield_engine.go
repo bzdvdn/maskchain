@@ -5,6 +5,8 @@ import (
 )
 
 // @sk-task 50-shield-engine#T2.1: Implement ShieldEngine public API (AC-001, AC-004, AC-005)
+//
+// ShieldEngine represents a domain entity or configuration.
 type ShieldEngine struct {
 	useCase *ScanUseCase
 }

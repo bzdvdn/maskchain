@@ -12,6 +12,8 @@ var (
 )
 
 // @sk-task 70-routing-engine#T2.2: Implement RouteSelector (AC-001, AC-003, AC-004, AC-005)
+//
+// RouteSelector represents a domain entity or configuration.
 type RouteSelector struct {
 	registry *ProviderRegistry
 }

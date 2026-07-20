@@ -8,6 +8,8 @@ import (
 )
 
 // @sk-task 21-shield-detectors#T3.2: Implement FinancialDetector (AC-001, AC-005, AC-006)
+//
+// FinancialDetector represents a domain entity or configuration.
 type FinancialDetector struct {
 	cardRegex  *regexp.Regexp
 	ibanRegex  *regexp.Regexp

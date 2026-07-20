@@ -13,6 +13,8 @@ import (
 
 // @sk-task 110-provider-adapters#T3.1: Implement OpenAIClient with Call and Stream (AC-002, AC-003)
 // @sk-task 111-provider-auth-and-config#T3.1: Config-driven auth + additional_headers (AC-004, AC-007)
+//
+// OpenAIClient represents a domain entity or configuration.
 type OpenAIClient struct {
 	baseURL           string
 	apiKey            string

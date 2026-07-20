@@ -3,6 +3,8 @@ package detector
 import "context"
 
 // @sk-task 22-shield-mask-storage#T1.2: Implement CompositeDetector (AC-011)
+//
+// CompositeDetector represents a domain entity or configuration.
 type CompositeDetector struct {
 	detectors []Detector
 }

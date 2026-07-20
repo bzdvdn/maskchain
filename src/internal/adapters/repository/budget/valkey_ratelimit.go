@@ -46,6 +46,8 @@ return {remaining, reset_time, limit}
 `
 
 // @sk-task rate-limiting-budgets#T2.1: Implement ValkeyRateLimitRepo with sliding window (AC-001, AC-004)
+//
+// ValkeyRateLimitRepo represents a domain entity or configuration.
 type ValkeyRateLimitRepo struct {
 	client valkey.Client
 }

@@ -8,6 +8,8 @@ import (
 )
 
 // @sk-task 116-connection-pool-fixes#T3.3: Implement CircuitBreaker with configurable max failures and cooldown (AC-006, AC-007)
+//
+// CircuitBreaker represents a domain entity or configuration.
 type CircuitBreaker struct {
 	cfg      *config.CircuitBreakerConfig
 	mu       sync.Mutex
