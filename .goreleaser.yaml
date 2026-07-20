@@ -6,6 +6,7 @@ before:
   hooks:
     - go mod tidy
     - go mod verify
+    - make ui-build
 
 builds:
   - id: gateway
@@ -33,8 +34,6 @@ builds:
     env: [CGO_ENABLED=0]
     goos: [linux, darwin]
     goarch: [amd64, arm64]
-    hooks:
-      pre: make ui-build
 
   - id: combined
     binary: maskchain
@@ -47,8 +46,6 @@ builds:
     env: [CGO_ENABLED=0]
     goos: [linux, darwin]
     goarch: [amd64, arm64]
-    hooks:
-      pre: make ui-build
 
 archives:
   - id: binaries

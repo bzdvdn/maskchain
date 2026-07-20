@@ -110,7 +110,7 @@ clean:
 # @sk-task 41-profiles-ui#T1.3: Add UI build and dev targets (AC-008, AC-009)
 ui-build:
 	@echo "building UI..."
-	@cd ui && npm run build
+	@cd ui && npm ci --omit=optional && npm run build
 	@echo "UI built"
 
 ui-dev:
