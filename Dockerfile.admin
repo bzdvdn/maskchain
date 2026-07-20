@@ -1,7 +1,7 @@
 # @sk-task 100-admin-control-plane#T1.1: Admin Dockerfile with UI build stage (AC-006)
 # @sk-task 101-gateway-diet#T2.2: Add -tags admin to Dockerfile.admin (AC-004)
 # Stage 1: UI build
-FROM node:20-alpine AS ui-builder
+FROM node:26-alpine AS ui-builder
 
 WORKDIR /app/ui
 COPY ui/package.json ui/package-lock.json ./

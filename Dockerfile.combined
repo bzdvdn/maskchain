@@ -1,6 +1,6 @@
 # @sk-task combined-binary: Combined Dockerfile — builds single binary with admin + gateway
 # Stage 1: UI build
-FROM node:20-alpine AS ui-builder
+FROM node:26-alpine AS ui-builder
 
 WORKDIR /app/ui
 COPY ui/package.json ui/package-lock.json ./
