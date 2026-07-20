@@ -11,7 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@rolldown/binding-linux-x64-gnu": "^1.1.5",
+    "@rolldown/binding-linux-x64-gnu": "^1.2.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.18.1"
