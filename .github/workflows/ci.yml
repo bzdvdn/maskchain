@@ -25,6 +25,9 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
+      - name: Create UI dist stub
+        run: mkdir -p ui/dist && echo '<html></html>' > ui/dist/index.html
+
       - name: Tidy and verify
         run: |
           go mod tidy
@@ -49,6 +52,9 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+
+      - name: Create UI dist stub
+        run: mkdir -p ui/dist && echo '<html></html>' > ui/dist/index.html
 
       - name: Run tests with race detector
         run: go test -race -count=1 -coverprofile=coverage.out ./...
@@ -178,7 +184,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Trivy vulnerability scan
-        uses: aquasecurity/trivy-action@0.30.0
+        uses: aquasecurity/trivy-action@v0.29.0
         with:
           scan-type: fs
           scanners: vuln,secret,config

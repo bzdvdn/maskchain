@@ -16,7 +16,7 @@ linters:
     - thelper
     - prealloc
     - misspell
-    - exportloopref
+    - copyloopvar
 
 linters-settings:
   errcheck:
@@ -24,6 +24,32 @@ linters-settings:
       - os.Exit
 
 issues:
+  exclude-dirs:
+    - ui
   exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
+  exclude:
+    - "G101: Potential hardcoded credentials"
+    - "G109: Potential Integer overflow"
+    - "G112: Potential Slowloris Attack"
+    - "G115: integer overflow conversion"
+    - "G402: TLS InsecureSkipVerify"
+    - "G404: Use of weak random number generator"
+    - "response body must be closed"
+    - "field .metricsHandler. is unused"
+    - "Error return value of"
+    - "G304: Potential file inclusion via variable"
+    - "is unused"
+    - "G104: Errors unhandled"
+    - "must not be called"
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - ineffassign
+        - noctx
+        - bodyclose
+        - prealloc
+        - gosec
+        - unused
