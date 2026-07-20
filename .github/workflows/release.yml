@@ -49,7 +49,7 @@ jobs:
 
       - name: Docker meta (gateway)
         id: meta-gateway
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: bzdvdn/maskchain-gateway
           tags: |
@@ -59,7 +59,7 @@ jobs:
 
       - name: Docker meta (admin)
         id: meta-admin
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: bzdvdn/maskchain-admin
           tags: |
@@ -69,7 +69,7 @@ jobs:
 
       - name: Docker meta (combined)
         id: meta-combined
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: bzdvdn/maskchain
           tags: |
