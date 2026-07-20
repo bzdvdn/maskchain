@@ -40,8 +40,8 @@ The stack includes three services — `gateway` (port 8080, 2 replicas), `admin`
 ## Option B: Kubernetes with Helm
 
 ```bash
-# Add Bitnami Legacy repo for PostgreSQL and Valkey subcharts
-helm repo add bitnamilegacy https://raw.githubusercontent.com/bitnamilegacy/charts/archive/refs/heads/main/bitnami
+# Add Bitnami repo for PostgreSQL and Valkey subcharts
+helm repo add bitnami https://charts.bitnami.com/bitnami
 helm dependency update deployments/helm/maskchain/
 
 # Install

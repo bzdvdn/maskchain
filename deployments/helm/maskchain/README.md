@@ -23,8 +23,8 @@ helm install maskchain .
 
 This deploys:
 - MaskChain gateway (default component)
-- PostgreSQL (Bitnami subchart, `docker.io/bitnamilegacy` images)
-- Valkey (Bitnami subchart, `docker.io/bitnamilegacy` images)
+- PostgreSQL (Bitnami subchart, `docker.io/bitnami` images)
+- Valkey (Bitnami subchart, `docker.io/bitnami` images)
 
 Check status:
 
@@ -303,13 +303,13 @@ PostgreSQL and Valkey can run as internal subcharts or connect to external insta
 
 ### Internal (default)
 
-Bitnami subcharts with `docker.io/bitnamilegacy` images:
+Bitnami subcharts with `docker.io/bitnami` images:
 
 ```yaml
 postgresql:
   enabled: true
   image:
-    registry: docker.io/bitnamilegacy
+    registry: docker.io/bitnami
   auth:
     username: maskchain
     password: ""            # auto-generated if empty
@@ -321,7 +321,7 @@ postgresql:
 valkey:
   enabled: true
   image:
-    registry: docker.io/bitnamilegacy
+    registry: docker.io/bitnami
   auth:
     password: ""            # auto-generated if empty
   architecture: standalone

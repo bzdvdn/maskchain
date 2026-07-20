@@ -17,7 +17,7 @@ annotations:
     - kind: added
       description: Initial Helm chart for MaskChain deployment
 
-# @sk-task helm-chart#T1.2: Bitnami dependencies with conditional rendering and bitnamilegacy registry
+# @sk-task helm-chart#T1.2: Bitnami dependencies with conditional rendering and bitnami registry
 dependencies:
   - name: postgresql
     version: "~18.x"

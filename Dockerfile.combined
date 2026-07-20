@@ -4,7 +4,7 @@ FROM node:20-alpine AS ui-builder
 
 WORKDIR /app/ui
 COPY ui/package.json ui/package-lock.json ./
-RUN npm ci --only=production
+RUN npm ci
 COPY ui/ .
 RUN npm run build
 

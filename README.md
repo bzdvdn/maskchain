@@ -105,8 +105,8 @@ Images are tagged with `latest` (main branch), commit SHA, and SemVer tags on re
 | Gateway   | 8080 | `bzdvdn/maskchain-gateway`    | LLM proxy + shield scan         |
 | Admin     | 8081 | `bzdvdn/maskchain-admin`      | Management API + UI             |
 | Combined  | 8080/8081 | `bzdvdn/maskchain`       | Both services in one binary     |
-| PostgreSQL| 5432 | `bitnamilegacy/postgresql`     | Primary store                   |
-| Valkey    | 6379 | `bitnamilegacy/valkey`         | Rate limit + cache              |
+| PostgreSQL| 5432 | `postgres:16-alpine`           | Primary store                   |
+| Valkey    | 6379 | `valkey/valkey:8-alpine`       | Rate limit + cache              |
 | Prometheus| 9090 | `prom/prometheus`              | Metrics (examples stack)        |
 | Grafana   | 3000 | `grafana/grafana`              | Dashboards (examples stack)     |
 

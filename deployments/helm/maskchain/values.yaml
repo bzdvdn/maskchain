@@ -282,7 +282,7 @@ apiKeys: {}
 postgresql:
   enabled: true
   image:
-    registry: docker.io/bitnamilegacy
+    registry: docker.io/bitnami
   auth:
     username: maskchain
     password: ""
@@ -299,7 +299,7 @@ postgresql:
 valkey:
   enabled: true
   image:
-    registry: docker.io/bitnamilegacy
+    registry: docker.io/bitnami
   auth:
     password: ""
   architecture: standalone
