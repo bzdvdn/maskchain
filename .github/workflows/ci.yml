@@ -349,7 +349,8 @@ jobs:
 
       - name: Start services
         run: |
-          docker compose up -d postgres valkey gateway
+          docker compose down -v 2>/dev/null || true
+          docker compose up -d --build --scale gateway=1 postgres valkey gateway
           echo "Waiting for services to be healthy..."
           for i in $(seq 1 30); do
             if curl -sf http://localhost:8080/health > /dev/null 2>&1; then

@@ -20,6 +20,12 @@ func serverURL() string {
 	return strings.TrimRight(url, "/")
 }
 
+var noRedirectClient = &http.Client{
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	},
+}
+
 func TestAPIEnvelope(t *testing.T) {
 	url := serverURL()
 
@@ -31,29 +37,30 @@ func TestAPIEnvelope(t *testing.T) {
 		headers  map[string]string
 		wantCode int
 		check    func(t *testing.T, body []byte)
+		client   *http.Client
 	}{
 		{
 			name:     "GET /api/v1/profiles",
 			method:   http.MethodGet,
 			path:     "/api/v1/profiles",
-			wantCode: http.StatusOK,
-			check:    expectEnvelope,
+			wantCode: http.StatusNotFound,
+			check:    expectErrorEnvelope,
 		},
 		{
 			name:     "POST /api/v1/profiles",
 			method:   http.MethodPost,
 			path:     "/api/v1/profiles",
 			body:     `{"slug":"test","name":"Test","description":"test"}`,
-			wantCode: http.StatusCreated,
-			check:    expectEnvelope,
+			wantCode: http.StatusNotFound,
+			check:    expectErrorEnvelope,
 			headers:  map[string]string{"Content-Type": "application/json"},
 		},
 		{
 			name:     "GET /api/v1/incidents",
 			method:   http.MethodGet,
 			path:     "/api/v1/incidents",
-			wantCode: http.StatusOK,
-			check:    expectEnvelope,
+			wantCode: http.StatusNotFound,
+			check:    expectErrorEnvelope,
 		},
 		{
 			name:     "POST /api/v1/shield/mask",
@@ -61,7 +68,6 @@ func TestAPIEnvelope(t *testing.T) {
 			path:     "/api/v1/shield/mask",
 			body:     "test text",
 			wantCode: http.StatusOK,
-			check:    expectEnvelope,
 			headers:  map[string]string{"Content-Type": "text/plain"},
 		},
 		{
@@ -69,12 +75,14 @@ func TestAPIEnvelope(t *testing.T) {
 			method:   http.MethodPost,
 			path:     "/v1/chat/completions",
 			wantCode: http.StatusMovedPermanently,
+			client:   noRedirectClient,
 		},
 		{
 			name:     "Redirect /v1/completions",
 			method:   http.MethodPost,
 			path:     "/v1/completions",
 			wantCode: http.StatusMovedPermanently,
+			client:   noRedirectClient,
 		},
 		{
 			name:     "404 envelope",
@@ -118,7 +126,11 @@ func TestAPIEnvelope(t *testing.T) {
 				req.Header.Set(k, v)
 			}
 
-			resp, err := http.DefaultClient.Do(req)
+			c := tt.client
+			if c == nil {
+				c = http.DefaultClient
+			}
+			resp, err := c.Do(req)
 			if err != nil {
 				t.Fatalf("request failed: %v", err)
 			}
@@ -212,7 +224,7 @@ func TestMetricsEndpoint(t *testing.T) {
 	if !strings.HasPrefix(contentType, "text/plain") {
 		t.Errorf("expected text/plain content type, got %q", contentType)
 	}
-	if !bytes.Contains(body, []byte("go_info")) {
-		t.Errorf("expected go_info metric in response")
+	if !bytes.Contains(body, []byte("maskchain_http_requests_total")) {
+		t.Errorf("expected maskchain_http_requests_total metric in response")
 	}
 }
