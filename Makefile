@@ -8,7 +8,7 @@ GOFLAGS := -ldflags="$(LDFLAGS)"
 GOCMD := go
 GOPATH := $(shell $(GOCMD) env GOPATH)
 
-.PHONY: build build-gateway build-admin build-combined build-admin-ci build-combined-ci test lint clean ui-build ui-dev docker-build docker-build-gateway docker-build-admin docker-build-combined check-structure security-check load-test helm-lint ci
+.PHONY: build build-gateway build-admin build-combined build-admin-ci build-combined-ci test lint clean ui-build ui-dev docker-build docker-build-gateway docker-build-admin docker-build-combined check-structure security-check load-test helm-lint ci test-integration-local
 
 # @sk-task 100-admin-control-plane#T1.2: Add build-gateway, build-admin, docker-build-gateway, docker-build-admin targets (AC-008)
 build: build-gateway build-admin
@@ -49,6 +49,56 @@ build-combined-ci:
 
 test:
 	@$(GOCMD) test -race -count=1 -coverprofile=coverage.out ./...
+
+# @sk-task ci-stability: Run integration tests locally — spins up postgres+valkey, builds gateway, runs tests, cleans up
+test-integration-local:
+	@echo "=== Starting postgres + valkey ==="
+	@docker rm -f maskchain-test-pg maskchain-test-valkey 2>/dev/null || true
+	@docker run -d --name maskchain-test-pg -p 5433:5432 \
+		-e POSTGRES_USER=maskchain \
+		-e POSTGRES_PASSWORD=maskchain \
+		-e POSTGRES_DB=maskchain \
+		postgres:16-alpine 2>&1
+	@docker run -d --name maskchain-test-valkey -p 6380:6379 \
+		valkey/valkey:8-alpine 2>&1
+	@echo "=== Waiting for postgres ==="
+	@for i in $$(seq 1 15); do \
+		if docker exec maskchain-test-pg pg_isready -U maskchain 2>/dev/null; then break; fi; \
+		echo "attempt $$i/15..."; sleep 2; \
+	done
+	@echo "=== Building gateway ==="
+	@mkdir -p bin
+	@CGO_ENABLED=0 $(GOCMD) build $(GOFLAGS) -tags gateway -o $(BINARY_GATEWAY) ./src/cmd/gateway/
+	@echo "=== Creating test config ==="
+	@mkdir -p /tmp/maskchain-test
+	@echo 'log:' > /tmp/maskchain-test/00-config-base.yaml
+	@echo '  level: debug' >> /tmp/maskchain-test/00-config-base.yaml
+	@echo 'server:' >> /tmp/maskchain-test/00-config-base.yaml
+	@echo '  port: 8080' >> /tmp/maskchain-test/00-config-base.yaml
+	@echo '  health_check:' >> /tmp/maskchain-test/00-config-base.yaml
+	@echo '    critical_deps: []' >> /tmp/maskchain-test/00-config-base.yaml
+	@echo 'database:' >> /tmp/maskchain-test/00-config-base.yaml
+	@echo '  dsn: "postgres://maskchain:maskchain@localhost:5433/maskchain?sslmode=disable"' >> /tmp/maskchain-test/00-config-base.yaml
+	@echo '  max_conns: 5' >> /tmp/maskchain-test/00-config-base.yaml
+	@echo '  min_conns: 1' >> /tmp/maskchain-test/00-config-base.yaml
+	@echo '  max_conn_lifetime: 5m' >> /tmp/maskchain-test/00-config-base.yaml
+	@echo 'valkey:' >> /tmp/maskchain-test/00-config-base.yaml
+	@echo '  addr: localhost:6380' >> /tmp/maskchain-test/00-config-base.yaml
+	@echo '  password: ""' >> /tmp/maskchain-test/00-config-base.yaml
+	@echo '  ttl_sec: 3600' >> /tmp/maskchain-test/00-config-base.yaml
+	@echo 'mask:' >> /tmp/maskchain-test/00-config-base.yaml
+	@echo '  cache_ttl_sec: 60' >> /tmp/maskchain-test/00-config-base.yaml
+	@echo "=== Starting gateway ==="
+	@$(BINARY_GATEWAY) --config-dir /tmp/maskchain-test &
+	@sleep 3
+	@echo "=== Running integration tests ==="
+	@$(GOCMD) test -tags=integration -race -count=1 -v ./test/integration/; \
+		EXIT_CODE=$$?; \
+		echo "=== Cleaning up ==="; \
+		pkill -f "$(BINARY_GATEWAY) --config-dir /tmp/maskchain-test" 2>/dev/null || true; \
+		rm -rf /tmp/maskchain-test; \
+		docker rm -f maskchain-test-pg maskchain-test-valkey 2>/dev/null || true; \
+		exit $$EXIT_CODE
 
 lint:
 	@golangci-lint run ./...
