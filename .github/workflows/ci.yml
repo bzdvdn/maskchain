@@ -79,13 +79,13 @@ jobs:
           cache: true
 
       - name: Build gateway
-        run: CGO_ENABLED=0 go build -tags gateway -ldflags="-s -w" -o /dev/null ./src/cmd/gateway/
+        run: make build-gateway
 
       - name: Build admin
-        run: CGO_ENABLED=0 go build -tags admin -ldflags="-s -w" -o /dev/null ./src/cmd/admin/
+        run: make build-admin-ci
 
       - name: Build combined
-        run: CGO_ENABLED=0 go build -ldflags="-s -w" -o /dev/null ./src/cmd/all/
+        run: make build-combined-ci
 
       - name: Check project structure
         run: make check-structure
@@ -184,7 +184,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Trivy vulnerability scan
-        uses: aquasecurity/trivy-action@v0.29.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scanners: vuln,secret,config

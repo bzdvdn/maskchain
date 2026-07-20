@@ -8,7 +8,7 @@ GOFLAGS := -ldflags="$(LDFLAGS)"
 GOCMD := go
 GOPATH := $(shell $(GOCMD) env GOPATH)
 
-.PHONY: build build-gateway build-admin build-combined test lint clean ui-build ui-dev docker-build docker-build-gateway docker-build-admin docker-build-combined check-structure security-check load-test helm-lint ci
+.PHONY: build build-gateway build-admin build-combined build-admin-ci build-combined-ci test lint clean ui-build ui-dev docker-build docker-build-gateway docker-build-admin docker-build-combined check-structure security-check load-test helm-lint ci
 
 # @sk-task 100-admin-control-plane#T1.2: Add build-gateway, build-admin, docker-build-gateway, docker-build-admin targets (AC-008)
 build: build-gateway build-admin
@@ -30,6 +30,22 @@ build-combined: ui-build
 	@mkdir -p bin
 	@CGO_ENABLED=0 $(GOCMD) build $(GOFLAGS) -o bin/maskchain ./src/cmd/all/
 	@echo "built bin/maskchain"
+
+# @sk-task ci-stability: CI target — create ui/dist stub then build admin (AC-008)
+build-admin-ci:
+	@mkdir -p ui/dist
+	@echo '<html></html>' > ui/dist/index.html
+	@mkdir -p bin
+	@CGO_ENABLED=0 $(GOCMD) build $(GOFLAGS) -tags admin -o $(BINARY_ADMIN) ./src/cmd/admin/
+	@echo "built $(BINARY_ADMIN) (CI mode)"
+
+# @sk-task ci-stability: CI target — create ui/dist stub then build combined (AC-008)
+build-combined-ci:
+	@mkdir -p ui/dist
+	@echo '<html></html>' > ui/dist/index.html
+	@mkdir -p bin
+	@CGO_ENABLED=0 $(GOCMD) build $(GOFLAGS) -o bin/maskchain ./src/cmd/all/
+	@echo "built bin/maskchain (CI mode)"
 
 test:
 	@$(GOCMD) test -race -count=1 -coverprofile=coverage.out ./...
