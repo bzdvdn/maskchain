@@ -99,6 +99,7 @@ func (uc *MaskUseCase) UnmaskText(ctx context.Context, maskedText string, maskID
 }
 
 // @sk-task 23-shield-reactions#T1.2: Extract overlap resolution for reuse across mask and proxy paths
+//
 // ResolveOverlaps sorts results by length (longest first) and removes
 // shorter results that overlap with longer ones — exactly like MaskFromResults.
 // Exported for reuse in ShieldMiddleware so the proxy path resolves overlaps

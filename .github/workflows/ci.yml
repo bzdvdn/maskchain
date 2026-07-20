@@ -234,6 +234,94 @@ jobs:
       - name: Lint Helm chart
         run: helm lint deployments/helm/maskchain/
 
+  integration:
+    name: Integration
+    runs-on: ubuntu-latest
+    needs: [build]
+    services:
+      postgres:
+        image: bitnamilegacy/postgresql:16
+        env:
+          POSTGRESQL_USERNAME: test
+          POSTGRESQL_PASSWORD: test
+          POSTGRESQL_DATABASE: maskchain
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      valkey:
+        image: bitnamilegacy/valkey:7
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build gateway binary
+        run: CGO_ENABLED=0 go build -tags gateway -ldflags="-s -w" -o bin/gateway ./src/cmd/gateway/
+
+      - name: Create CI config
+        run: |
+          mkdir -p /tmp/maskchain-ci
+          cat > /tmp/maskchain-ci/00-config-base.yaml << 'YAML'
+          log:
+            level: debug
+          server:
+            port: 8080
+            health_check:
+              critical_deps: []
+          database:
+            dsn: "postgres://test:test@postgres:5432/maskchain?sslmode=disable"
+            max_conns: 5
+            min_conns: 1
+            max_conn_lifetime: 5m
+          valkey:
+            addr: valkey:6379
+            password: ""
+            ttl_sec: 3600
+          mask:
+            cache_ttl_sec: 60
+          YAML
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Start gateway
+        run: |
+          ./bin/gateway --config-dir /tmp/maskchain-ci &
+          GATEWAY_PID=$!
+          echo "GATEWAY_PID=$GATEWAY_PID" >> $GITHUB_ENV
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
+              echo "Gateway is healthy!"
+              break
+            fi
+            echo "Attempt $i/30: gateway not ready yet..."
+            sleep 2
+          done
+
+      - name: Run API consistency tests
+        run: |
+          go test -tags=integration -race -count=1 -v ./test/integration/...
+
+      - name: Dump gateway logs
+        if: failure()
+        run: |
+          echo "=== Gateway was PID ${{ env.GATEWAY_PID }} ==="
+          curl -sf http://localhost:8080/health || echo "gateway process may have exited"
+
+      - name: Stop gateway
+        if: always()
+        run: kill ${{ env.GATEWAY_PID }} 2>/dev/null || true
+
   smoke:
     name: Smoke
     runs-on: ubuntu-latest
@@ -245,10 +333,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Helm
-        uses: azure/setup-helm@v4
+      - uses: actions/setup-go@v5
         with:
-          version: latest
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
 
       - name: Start services
         run: |
@@ -263,9 +351,9 @@ jobs:
             sleep 2
           done
 
-      - name: Run API consistency smoke tests
+      - name: Run API consistency tests
         run: |
-          SERVER_URL=http://localhost:8080 ../../test/integration/api-consistency.sh
+          SERVER_URL=http://localhost:8080 go test -tags=integration -race -count=1 -v ../../test/integration/
 
       - name: Dump docker logs on failure
         if: failure()

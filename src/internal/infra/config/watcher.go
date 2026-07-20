@@ -13,6 +13,7 @@ import (
 )
 
 // @sk-task config-hot-reload#T1.1: WatchConfigDir with fsnotify + debounce (AC-004)
+//
 // ConfigDirFromArgs extracts --config-dir from os.Args or CONFIG_DIR env.
 func ConfigDirFromArgs() string {
 	if dir := os.Getenv("CONFIG_DIR"); dir != "" {

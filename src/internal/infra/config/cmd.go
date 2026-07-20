@@ -8,6 +8,7 @@ import (
 )
 
 // @sk-task 01-config-bootstrap#T2.1: Implement LoadConfig with cobra root command, viper YAML/ENV/flags binding, required validation (AC-001, AC-002, AC-003, AC-005)
+//
 // NewRootCmd creates the cobra root command with config-related flags.
 // Supports --config (single file), --config-dir (directory of YAML files),
 // and the corresponding env var overrides CONFIG_FILE_PATH / CONFIG_DIR.

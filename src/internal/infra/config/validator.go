@@ -10,6 +10,9 @@ import (
 
 // @sk-task 111-provider-auth-and-config#T2.1: Validate APIKeys required + auth_scheme enum (AC-005)
 // @sk-task ollama-provider#T1.1: Relax api_keys validation for ollama (AC-001)
+//
+// validateProviderAuth validates provider authentication configuration.
+// Required: api_keys for non-ollama providers; auth_scheme must be bearer, api-key, or basic.
 func validateProviderAuth(cfg *Config) error {
 	if cfg.Routing == nil {
 		return nil

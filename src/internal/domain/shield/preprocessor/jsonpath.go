@@ -13,6 +13,9 @@ type jsonPathSegment struct {
 }
 
 // @sk-task 25-shield-preprocessors#T2.2: Implement JSONPath parser and walker (AC-003, AC-004, AC-005)
+//
+// parseJSONPath parses a dot-separated JSONPath into typed segments.
+// Supports bracket notation (items[0], items[*]) and combined segments.
 func parseJSONPath(path string) ([]jsonPathSegment, error) {
 	if path == "" {
 		return nil, fmt.Errorf("empty JSONPath")
@@ -65,6 +68,9 @@ func parseJSONPath(path string) ([]jsonPathSegment, error) {
 }
 
 // @sk-task 25-shield-preprocessors#T2.2: Implement JSONPath walker with wildcard support (AC-003, AC-004, AC-005)
+//
+// walkAndMask recursively walks a parsed JSON structure following path segments.
+// Wildcard segments ([*]) iterate over all array elements; leaf values are replaced with placeholders.
 func walkAndMask(node interface{}, segments []jsonPathSegment, phPrefix string, phIdx *int, replacements map[string]string) interface{} {
 	if len(segments) == 0 {
 		return node

@@ -146,11 +146,33 @@ OpenTelemetry, Prometheus, structured logging, distributed tracing.
   - тесты: `@sk-test <slug>#<TASK_ID>: <TestName> (<AC_ID>)`
   - если одну задачу подтверждают несколько тестов/кейсов, `@sk-test <slug>#<TASK_ID>` должен стоять на каждом таком тесте/кейсе, а не только на одном representative тесте.
 - Правило размещения маркеров:
-  - размещайте trace-маркеры на объявлениях функций/методов/структур/классов (или на заголовках поведенческих блоков), а не на строках полей.
-  - запрещено ставить trace-маркеры на уровень `package`, `import` или file-header comment; маркер должен принадлежать конкретному owning symbol.
-  - если язык поддерживает именованные объявления, ставьте маркер непосредственно над тем объявлением, которое реализует или проверяет поведение.
+  - Маркер ВСЕГДА ставится **над объявлением** символа, которому принадлежит.
+  - Если у символа есть GoDoc, маркер(ы) идут **первыми**, затем **пустая строка** (`//`), затем GoDoc, затем объявление.
+  - Если GoDoc нет, маркер ставится непосредственно над объявлением.
+  - Запрещено ставить trace-маркеры на уровень `package`, `import` или file-header comment.
+  - Маркер всегда относится к нижестоящему символу; если маркеров несколько — все относятся к одному символу.
 - Примеры размещения и стиля по языкам:
-  - Go: `//` непосредственно над `func`, method receiver, `type`, `func Test...`; если несколько `Test...` проверяют одну задачу, `@sk-test` нужен на каждом таком тесте.
+  - Go:
+    ```go
+    // @sk-task slug#T1: description (AC-001)
+    //
+    // FunctionDoc describes what this function does.
+    func DoSomething() { ... }
+
+    // @sk-task slug#T2: description (AC-002)
+    type Config struct { ... }
+
+    // @sk-test slug#T1: TestSomething (AC-001)
+    //
+    // TestSomething проверяет поведение X.
+    func TestSomething(t *testing.T) { ... }
+    ```
+    Без GoDoc:
+    ```go
+    // @sk-task slug#T1: description (AC-001)
+    func Short() { ... }
+    ```
+    Если несколько `Test...` проверяют одну задачу, `@sk-test` нужен на каждом таком тесте.
   - Python: `#` первой строкой внутри тела `def` / `async def` / `class` / `def test_*`; не в module docstring и не над `import`. Если одну задачу покрывают несколько test functions, маркер нужен внутри каждой из них.
   - JavaScript / TypeScript: `//` над `function`, `async function`, class method, `class`; для `test(...)`/`it(...)` — первой строкой внутри callback/body. Если кейсов несколько, маркер нужен в каждом `test/it`.
   - Shell / Bash: `#` над `function name()` или первой строкой именованного behavior/test block; не в file header только ради trace.
@@ -220,11 +242,12 @@ Core domains: shield (content security, PII detection, secrets detection, dictio
 
 ## Метаданные конституции
 
-- Version: 1.1.0
+- Version: 1.2.0
 - Ratified: 2026-07-10
-- Last Amended: 2026-07-15
+- Last Amended: 2026-07-20
 
 ## Последнее обновление
 
 2026-07-10 — начальная версия конституции MaskChain. Фокус: Content Shield (AI DLP), профили справочников, native-only data plane, React UI.
 2026-07-15 — v1.1.0: профили справочников удалены, политики конфигурируются на тенанте (словари, PII-правила, препроцессоры).
+2026-07-20 — v1.2.0: GoDoc clean — правило расположения маркеров: `@sk-task` → пустая строка → GoDoc → объявление. Маркер всегда над объявлением, GoDoc отделён пустой строкой снизу.
