@@ -25,7 +25,9 @@ func parseJSONPath(path string) ([]jsonPathSegment, error) {
 		}
 
 		if strings.HasPrefix(p, "[") {
-			// Bare bracket segment: [*], [0]
+			if len(p) < 3 || p[len(p)-1] != ']' {
+				return nil, fmt.Errorf("invalid bracket segment %q in JSONPath %q", p, path)
+			}
 			inner := p[1 : len(p)-1]
 			if inner == "*" {
 				segments = append(segments, jsonPathSegment{key: "[*]"})
@@ -38,6 +40,9 @@ func parseJSONPath(path string) ([]jsonPathSegment, error) {
 			}
 		} else if idx := strings.Index(p, "["); idx >= 0 {
 			// Combined segment: items[*], items[0]
+			if len(p) < idx+3 || p[len(p)-1] != ']' {
+				return nil, fmt.Errorf("invalid bracket segment %q in JSONPath %q", p, path)
+			}
 			keyPart := p[:idx]
 			if keyPart != "" {
 				segments = append(segments, jsonPathSegment{key: keyPart})

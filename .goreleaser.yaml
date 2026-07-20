@@ -1,0 +1,78 @@
+version: 2
+
+project_name: maskchain
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod verify
+
+builds:
+  - id: gateway
+    binary: gateway
+    main: ./src/cmd/gateway/
+    flags: [-tags=gateway]
+    ldflags:
+      - -s -w
+      - -X github.com/bzdvdn/maskchain/src/pkg/version.Version={{.Version}}
+      - -X github.com/bzdvdn/maskchain/src/pkg/version.Commit={{.Commit}}
+      - -X github.com/bzdvdn/maskchain/src/pkg/version.Date={{.Date}}
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+
+  - id: admin
+    binary: admin
+    main: ./src/cmd/admin/
+    flags: [-tags=admin]
+    ldflags:
+      - -s -w
+      - -X github.com/bzdvdn/maskchain/src/pkg/version.Version={{.Version}}
+      - -X github.com/bzdvdn/maskchain/src/pkg/version.Commit={{.Commit}}
+      - -X github.com/bzdvdn/maskchain/src/pkg/version.Date={{.Date}}
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    hooks:
+      pre: make ui-build
+
+  - id: combined
+    binary: maskchain
+    main: ./src/cmd/all/
+    ldflags:
+      - -s -w
+      - -X github.com/bzdvdn/maskchain/src/pkg/version.Version={{.Version}}
+      - -X github.com/bzdvdn/maskchain/src/pkg/version.Commit={{.Commit}}
+      - -X github.com/bzdvdn/maskchain/src/pkg/version.Date={{.Date}}
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    hooks:
+      pre: make ui-build
+
+archives:
+  - id: binaries
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - LICENSE
+      - README.md
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: bzdvdn
+    name: maskchain
+  draft: true
+  prerelease: auto
+  make_latest: true
