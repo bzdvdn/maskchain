@@ -78,7 +78,7 @@ jobs:
             type=sha,prefix=
 
       - name: Build and push gateway
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile.gateway
@@ -87,7 +87,7 @@ jobs:
           labels: ${{ steps.meta-gateway.outputs.labels }}
 
       - name: Build and push admin
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile.admin
@@ -96,7 +96,7 @@ jobs:
           labels: ${{ steps.meta-admin.outputs.labels }}
 
       - name: Build and push combined
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile.combined
