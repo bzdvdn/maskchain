@@ -3,7 +3,7 @@
 [![Go](https://img.shields.io/badge/Go-1.26.3-00ADD8)](https://go.dev)
 [![Build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/bzdvdn/maskchain/actions)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](https://github.com/bzdvdn/maskchain/actions)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 
 Content shield proxy — PII/PHI/financial/secrets detection, dictionary masking, tenant isolation, and LLM provider routing with circuit breaker.
 
@@ -31,7 +31,7 @@ Content shield proxy — PII/PHI/financial/secrets detection, dictionary masking
 | **OTel Tracing** | ✅ gRPC exporter | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **Binary Size** | ~18 MB (gateway) | ~200 MB+ (Bun+Presidio) | ~15 MB | ~18 MB | ~20 MB | ~15 MB |
 | **Startup Time** | <100ms | ~2-5s | <50ms | <100ms | <100ms | <50ms |
-| **License** | MIT | Apache 2.0 | MIT | Open source | MIT | MIT |
+| **License** | Apache 2.0 | Apache 2.0 | MIT | Open source | MIT | MIT |
 
 MaskChain is the **only Go-native LLM gateway with per-tenant dictionary masking** — PII/PHI/financial/secrets regex detection plus Aho-Corasick dictionary matching (exact/contains/regex/fuzzy) and streaming SSE unmask. Unlike NER-only tools (PasteGuard, CloakPipe), it masks internal business terms — product codenames, patient IDs, trading signals — with deterministic, reversible placeholders. Unlike Python-based solutions (LiteLLM), it starts in under 100ms with a ~18 MB static binary. Unlike PII-only tools (privacy-filter, Bifrost), it's a complete proxy with routing, circuit breaker, rate limiting, tenant isolation, and an admin UI.
 
