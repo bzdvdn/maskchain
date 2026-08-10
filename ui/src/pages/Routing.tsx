@@ -1,4 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useMemo } from 'react'
+import { useAsyncData } from '../hooks/useAsyncData'
+import { Badge, EmptyState, SortHeader, TableSkeleton } from '../components/ui'
+import { useSort, sortRows } from '../hooks/useSort'
 
 interface Provider {
   name: string
@@ -15,6 +18,11 @@ interface Rule {
   providers: string[]
 }
 
+interface RoutingData {
+  providers: Provider[]
+  model_routes: Rule[]
+}
+
 function timeAgo(unix: number | undefined): string {
   if (!unix) return '—'
   const sec = Math.floor((Date.now() / 1000) - unix)
@@ -24,29 +32,36 @@ function timeAgo(unix: number | undefined): string {
   return `${Math.floor(sec / 3600)}h ago`
 }
 
-export function Routing() {
-  const [providers, setProviders] = useState<Provider[]>([])
-  const [rules, setRules] = useState<Rule[]>([])
-  const [loading, setLoading] = useState(true)
+async function fetchRouting(): Promise<RoutingData> {
+  const token = localStorage.getItem('admin_token')
+  const res = await fetch('/api/v1/routing', {
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error('fetch failed')
+  const body = await res.json()
+  const d = body.data ?? body
+  return {
+    providers: Array.isArray(d.providers) ? d.providers : [],
+    model_routes: Array.isArray(d.model_routes) ? d.model_routes : [],
+  }
+}
 
-  useEffect(() => {
-    const token = localStorage.getItem('admin_token')
-    fetch('/api/v1/routing', {
-      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-      credentials: 'include',
-    })
-      .then((r) => {
-        if (!r.ok) throw new Error('fetch failed')
-        return r.json()
-      })
-      .then((body) => {
-        const d = body.data ?? body
-        setProviders(Array.isArray(d.providers) ? d.providers : [])
-        setRules(Array.isArray(d.model_routes) ? d.model_routes : [])
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
+export function Routing() {
+  const { data, loading } = useAsyncData(fetchRouting, [])
+  const providers = data?.providers ?? []
+  const rules = data?.model_routes ?? []
+
+  const provSort = useSort<Provider>('name', 'asc')
+  const provRows = useMemo(() => sortRows(providers, provSort.key, provSort.dir), [providers, provSort])
+  const ruleSort = useSort<Rule>('model', 'asc')
+  const ruleRows = useMemo(() => sortRows(rules, ruleSort.key, ruleSort.dir), [rules, ruleSort])
+
+  const provTh = (k: keyof Provider, label: string, num = false) => (
+    <th className={num ? 'num' : undefined}>
+      <SortHeader active={provSort.key === k} dir={provSort.dir} onClick={() => provSort.toggle(k)}>{label}</SortHeader>
+    </th>
+  )
 
   return (
     <div>
@@ -55,20 +70,27 @@ export function Routing() {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Name</th><th>Type</th><th>Base URL</th><th>Status</th><th>Latency</th><th>Last Check</th></tr>
+              <tr>
+                {provTh('name', 'Name')}
+                {provTh('api_type', 'Type')}
+                <th>Base URL</th>
+                {provTh('status', 'Status')}
+                {provTh('latency_ms', 'Latency', true)}
+                <th>Last Check</th>
+              </tr>
             </thead>
             <tbody>
-              {providers.map((p, i) => (
+              {provRows.map((p, i) => (
                 <tr key={i}>
                   <td>{p.name}</td><td>{p.api_type}</td>
                   <td><code>{p.base_url}</code></td>
-                  <td><span className={`badge ${p.status === 'up' ? 'badge-up' : 'badge-down'}`}>{p.status}</span></td>
-                  <td>{p.latency_ms != null ? `${p.latency_ms}ms` : '—'}</td>
+                  <td><Badge value={p.status} /></td>
+                  <td className="num">{p.latency_ms != null ? `${p.latency_ms}ms` : '—'}</td>
                   <td>{timeAgo(p.last_check)}</td>
                 </tr>
               ))}
-              {!loading && providers.length === 0 && <tr><td colSpan={6} className="text-muted" style={{ padding: 12 }}>No providers configured</td></tr>}
-              {loading && <tr><td colSpan={6} className="text-muted" style={{ padding: 12 }}>Loading...</td></tr>}
+              {!loading && provRows.length === 0 && <tr><td colSpan={6}><EmptyState message="No providers configured" /></td></tr>}
+              {loading && <tr><td colSpan={6}><TableSkeleton rows={4} cols={6} /></td></tr>}
             </tbody>
           </table>
         </div>
@@ -78,18 +100,24 @@ export function Routing() {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Model</th><th>Tenants</th><th>Providers</th></tr>
+              <tr>
+                <th>
+                  <SortHeader active={ruleSort.key === 'model'} dir={ruleSort.dir} onClick={() => ruleSort.toggle('model')}>Model</SortHeader>
+                </th>
+                <th>Tenants</th>
+                <th>Providers</th>
+              </tr>
             </thead>
             <tbody>
-              {rules.map((r, i) => (
+              {ruleRows.map((r, i) => (
                 <tr key={i}>
                   <td><code>{r.model}</code></td>
                   <td>{r.tenants.join(', ')}</td>
                   <td><code>{r.providers.join(', ')}</code></td>
                 </tr>
               ))}
-              {!loading && rules.length === 0 && <tr><td colSpan={3} className="text-muted" style={{ padding: 12 }}>No routing rules</td></tr>}
-              {loading && <tr><td colSpan={3} className="text-muted" style={{ padding: 12 }}>Loading...</td></tr>}
+              {!loading && ruleRows.length === 0 && <tr><td colSpan={3}><EmptyState message="No routing rules" /></td></tr>}
+              {loading && <tr><td colSpan={3}><TableSkeleton rows={4} cols={3} /></td></tr>}
             </tbody>
           </table>
         </div>

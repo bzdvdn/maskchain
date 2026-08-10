@@ -2,10 +2,14 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { getTenant, deleteTenant, type TenantResponse, type DictionaryItem } from '../../api/tenants'
 import { DictionaryModal } from '../../components/DictionaryModal'
+import { ConfirmModal } from '../../components/ConfirmModal'
+import { useToast } from '../../components/Toast'
+import { Spinner } from '../../components/ui'
 
 export function TenantDetail() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
+  const { toast } = useToast()
   const [tenant, setTenant] = useState<TenantResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
@@ -29,8 +33,10 @@ export function TenantDetail() {
     setDeleting(true)
     try {
       await deleteTenant(slug)
+      toast(`Tenant "${slug}" deleted`, 'success')
       navigate('/tenants')
     } catch {
+      toast('Failed to delete tenant', 'error')
       setDeleting(false)
       setShowConfirm(false)
     }
@@ -40,7 +46,7 @@ export function TenantDetail() {
     return keys.map((k) => k.length > 20 ? k.slice(0, 20) + '...' : k).join(', ')
   }
 
-  if (loading) return <div className="loading">Loading tenant...</div>
+  if (loading) return <Spinner label="Loading tenant..." />
 
   if (notFound || !tenant) {
     return (
@@ -85,30 +91,15 @@ export function TenantDetail() {
       </div>
 
       {showConfirm && (
-        <div className="confirm-dialog">
-          <p>
-            Are you sure you want to delete tenant "{tenant.name}"? This
-            action cannot be undone.
-          </p>
-          <div className="confirm-actions">
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setShowConfirm(false)}
-              disabled={deleting}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="btn btn-danger"
-              onClick={handleDelete}
-              disabled={deleting}
-            >
-              {deleting ? 'Deleting...' : 'Confirm Delete'}
-            </button>
-          </div>
-        </div>
+        <ConfirmModal
+          open={showConfirm}
+          title="Delete tenant"
+          message={`Are you sure you want to delete tenant "${tenant.name}"? This action cannot be undone.`}
+          confirmLabel="Delete"
+          busy={deleting}
+          onConfirm={handleDelete}
+          onCancel={() => setShowConfirm(false)}
+        />
       )}
 
       {tenant.pii_config && (

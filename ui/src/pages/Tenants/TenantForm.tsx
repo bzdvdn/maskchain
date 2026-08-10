@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useToast } from '../../components/Toast'
+import { Spinner } from '../../components/ui'
 import {
   createTenant,
   updateTenant,
@@ -35,6 +37,7 @@ const emptyPIIRule = (): PIARule => ({ label: '', type: 'regex', pattern: '', ac
 export function TenantForm() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
+  const { toast } = useToast()
   const isEdit = Boolean(slug)
 
   const [form, setForm] = useState<FormData>({
@@ -112,6 +115,7 @@ export function TenantForm() {
           pii_config: piiCfg,
         }
         await updateTenant(slug, req)
+        toast('Tenant updated', 'success')
         navigate(`/tenants/${slug}`)
       } else {
         const req: CreateTenantRequest = {
@@ -123,6 +127,7 @@ export function TenantForm() {
           pii_config: piiCfg,
         }
         const created = await createTenant(req)
+        toast(`Tenant "${created.slug}" created`, 'success')
         navigate(`/tenants/${created.slug}`)
       }
     } catch (err: any) {
@@ -165,7 +170,7 @@ export function TenantForm() {
     setField('pii_rules', form.pii_rules.filter((_, i) => i !== index))
   }
 
-  if (loading) return <div className="loading">Loading...</div>
+  if (loading) return <Spinner label="Loading tenant..." />
 
   return (
     <div className="profile-form">

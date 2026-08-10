@@ -9,9 +9,11 @@ import (
 // ErrNotFound is returned by Get when a conversation record does not exist.
 var ErrNotFound = errors.New("conversation: not found")
 
-// ConversationFilter narrows List results by tenant and pagination.
+// ConversationFilter narrows List results by tenant, status, model and pagination.
 type ConversationFilter struct {
 	TenantID string
+	Status   ConversationStatus
+	Model    string
 	Page     int
 	PerPage  int
 }

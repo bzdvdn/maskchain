@@ -30,17 +30,25 @@ interface ConversationListResult {
   pagination: { page: number; per_page: number; total: number }
 }
 
+export interface ConversationFilters {
+  tenant_id?: string
+  status?: string
+  model?: string
+}
+
 // @sk-task conversation-logging#T3.2: listConversations fetches metadata-only list (AC-006)
 export async function listConversations(
   page = 1,
   perPage = 20,
-  tenantId?: string
+  filters: ConversationFilters = {},
 ): Promise<ConversationListResult> {
   const params = new URLSearchParams({
     page: String(page),
     per_page: String(perPage),
   })
-  if (tenantId) params.set('tenant_id', tenantId)
+  if (filters.tenant_id) params.set('tenant_id', filters.tenant_id)
+  if (filters.status) params.set('status', filters.status)
+  if (filters.model) params.set('model', filters.model)
   const res = await fetch(`${BASE}?${params.toString()}`, { credentials: 'include' })
   if (!res.ok) throw new Error('failed to load conversations')
   const body = await res.json()

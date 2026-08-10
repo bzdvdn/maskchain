@@ -50,10 +50,10 @@ describe('Conversations list', () => {
     render(<Conversations />)
 
     expect(await screen.findByText(/id-1/)).toBeTruthy()
-    expect(screen.getAllByText('tenant-a').length).toBe(2)
-    expect(screen.getByText('gpt-4o-mini')).toBeTruthy()
-    expect(screen.getByText('blocked')).toBeTruthy()
-    expect(mockList).toHaveBeenCalledWith(1, 20)
+    expect(screen.getAllByText('tenant-a').length).toBe(3)
+    expect(screen.getAllByText('gpt-4o-mini').length).toBe(2)
+    expect(screen.getAllByText('blocked').length).toBe(2)
+    expect(mockList).toHaveBeenCalledWith(1, 20, {})
   })
 
   it('shows empty state when no records', async () => {

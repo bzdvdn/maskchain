@@ -5,10 +5,10 @@ export function Settings() {
         <h3>Server</h3>
         <table>
           <tbody>
-            <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>Port</td><td style={{ padding: '8px 12px' }}><code>8081</code></td></tr>
-            <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>Log Level</td><td style={{ padding: '8px 12px' }}><span className="badge badge-warn">debug</span></td></tr>
-            <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>Shutdown Timeout</td><td style={{ padding: '8px 12px' }}><code>10s</code></td></tr>
-            <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>Tenant Reload</td><td style={{ padding: '8px 12px' }}><code>15s</code></td></tr>
+            <tr><td className="kv-label">Port</td><td className="kv-value"><code>8081</code></td></tr>
+            <tr><td className="kv-label">Log Level</td><td className="kv-value"><span className="badge badge-warn">debug</span></td></tr>
+            <tr><td className="kv-label">Shutdown Timeout</td><td className="kv-value"><code>10s</code></td></tr>
+            <tr><td className="kv-label">Tenant Reload</td><td className="kv-value"><code>15s</code></td></tr>
           </tbody>
         </table>
       </div>
@@ -16,9 +16,9 @@ export function Settings() {
         <h3>Admin</h3>
         <table>
           <tbody>
-            <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>Username</td><td style={{ padding: '8px 12px' }}><code>admin</code></td></tr>
-            <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>Session TTL</td><td style={{ padding: '8px 12px' }}><code>30m</code></td></tr>
-            <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>Debug Enabled</td><td style={{ padding: '8px 12px' }}><span className="badge badge-up">true</span></td></tr>
+            <tr><td className="kv-label">Username</td><td className="kv-value"><code>admin</code></td></tr>
+            <tr><td className="kv-label">Session TTL</td><td className="kv-value"><code>30m</code></td></tr>
+            <tr><td className="kv-label">Debug Enabled</td><td className="kv-value"><span className="badge badge-up">true</span></td></tr>
           </tbody>
         </table>
       </div>

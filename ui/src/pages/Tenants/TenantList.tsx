@@ -1,45 +1,43 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { listTenants, type TenantListItem } from '../../api/tenants'
+import { Badge, EmptyState, Spinner } from '../../components/ui'
+import { useAsyncData } from '../../hooks/useAsyncData'
 
 export function TenantList() {
-  const [tenants, setTenants] = useState<TenantListItem[]>([])
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { data: tenants, loading } = useAsyncData<TenantListItem[]>(
+    listTenants,
+    [],
+    { onError: () => setError('Failed to load tenants. Please try again.') },
+  )
 
   useEffect(() => {
-    setLoading(true)
-    setError(null)
-    listTenants()
-      .then(setTenants)
-      .catch(() => setError('Failed to load tenants. Please try again.'))
-      .finally(() => setLoading(false))
-  }, [])
-
-  if (error) {
-    return <div className="error-banner">{error}</div>
-  }
+    if (!error) return
+    const t = setTimeout(() => setError(null), 4000)
+    return () => clearTimeout(t)
+  }, [error])
 
   if (loading) {
-    return <div className="loading">Loading tenants...</div>
+    return <Spinner label="Loading tenants..." />
   }
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600 }}>All Tenants</h2>
+      <div className="card-header-row" style={{ marginBottom: 16 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>All Tenants</h2>
         <Link to="/tenants/new" className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px' }}>
           Create Tenant
         </Link>
       </div>
 
-      {tenants.length === 0 ? (
-        <div className="empty-state">
-          <p>No tenants yet.</p>
-          <Link to="/tenants/new" className="btn btn-primary" style={{ width: 'auto' }}>
-            Create your first tenant
-          </Link>
-        </div>
+      {error && <div className="error-banner">{error}</div>}
+
+      {!tenants || tenants.length === 0 ? (
+        <EmptyState
+          message="No tenants yet."
+          action={<Link to="/tenants/new" className="btn btn-primary" style={{ width: 'auto' }}>Create your first tenant</Link>}
+        />
       ) : (
         <div className="card">
           <div className="table-wrap">
@@ -61,9 +59,7 @@ export function TenantList() {
                     <td>{t.name}</td>
                     <td><code>{t.api_keys[0]?.slice(0, 12)}...</code></td>
                     <td>
-                      <span className={`badge ${t.pii_config?.enabled ? 'badge-up' : 'badge-warn'}`}>
-                        {t.pii_config?.enabled ? 'On' : 'No rules'}
-                      </span>
+                      <Badge value={t.pii_config?.enabled ? 'On' : 'No rules'} />
                     </td>
                     <td>{t.created_at ? new Date(t.created_at).toLocaleDateString() : '—'}</td>
                     <td>

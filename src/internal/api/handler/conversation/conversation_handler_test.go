@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -51,6 +52,12 @@ func (m *mockConversationStore) List(_ context.Context, filter conversation.Conv
 		if filter.TenantID != "" && l.TenantID != filter.TenantID {
 			continue
 		}
+		if filter.Status != "" && l.Status != filter.Status {
+			continue
+		}
+		if filter.Model != "" && l.Model != filter.Model {
+			continue
+		}
 		all = append(all, l)
 	}
 	// metadata only: strip content
@@ -59,6 +66,9 @@ func (m *mockConversationStore) List(_ context.Context, filter conversation.Conv
 		all[i].Response = nil
 		all[i].Masking = nil
 	}
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].CreatedAt.After(all[j].CreatedAt)
+	})
 	return conversation.ConversationPage{Items: all, Total: len(all)}, nil
 }
 
@@ -162,6 +172,64 @@ func TestConversationHandlerListMetadataOnly(t *testing.T) {
 	}
 	if resp.Data.Items[0].MaskID != "MASK_id-1" {
 		t.Errorf("MaskID = %q, want MASK_id-1", resp.Data.Items[0].MaskID)
+	}
+}
+
+// @sk-test conversation-logging#T3.1: TestConversationHandlerListFilters (AC-006)
+func TestConversationHandlerListFilters(t *testing.T) {
+	store := newMockConversationStore()
+	now := time.Now().UTC()
+	logs := []conversation.ConversationLog{
+		{ID: "ok-gpt", TenantID: "tenant-a", Model: "gpt-4o", Status: conversation.StatusOK, CreatedAt: now},
+		{ID: "err-gpt", TenantID: "tenant-a", Model: "gpt-4o", Status: conversation.StatusError, CreatedAt: now},
+		{ID: "ok-claude", TenantID: "tenant-b", Model: "claude", Status: conversation.StatusOK, CreatedAt: now},
+	}
+	if err := store.SaveBatch(context.Background(), logs); err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	engine := setupConversationTestEngine(t, newTestConversationHandler(t, store))
+
+	cases := []struct {
+		name      string
+		query     string
+		wantLen   int
+		wantFirst string
+	}{
+		{name: "by status", query: "status=error", wantLen: 1, wantFirst: "err-gpt"},
+		{name: "by model", query: "model=claude", wantLen: 1, wantFirst: "ok-claude"},
+		{name: "by tenant and status", query: "tenant_id=tenant-a&status=ok", wantLen: 1, wantFirst: "ok-gpt"},
+		{name: "no match", query: "status=blocked", wantLen: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/conversations?"+tc.query, nil)
+			engine.ServeHTTP(w, req)
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d", w.Code)
+			}
+			var resp struct {
+				Data struct {
+					Items []dtoConversationListItem `json:"items"`
+				} `json:"data"`
+				Pagination struct {
+					Total int `json:"total"`
+				} `json:"pagination"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if len(resp.Data.Items) != tc.wantLen {
+				t.Errorf("len = %d, want %d", len(resp.Data.Items), tc.wantLen)
+			}
+			if tc.wantLen > 0 && resp.Data.Items[0].ID != tc.wantFirst {
+				t.Errorf("first item = %q, want %q", resp.Data.Items[0].ID, tc.wantFirst)
+			}
+			if resp.Pagination.Total != tc.wantLen {
+				t.Errorf("total = %d, want %d", resp.Pagination.Total, tc.wantLen)
+			}
+		})
 	}
 }
 

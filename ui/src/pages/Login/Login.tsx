@@ -8,6 +8,7 @@ interface Props {
 export function Login({ onLogin }: Props) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -42,13 +43,23 @@ export function Login({ onLogin }: Props) {
             autoFocus
           />
           <label htmlFor="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          <div className="password-wrap">
+            <input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <button
+              type="button"
+              className="password-toggle"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              onClick={() => setShowPassword((v) => !v)}
+            >
+              {showPassword ? 'Hide' : 'Show'}
+            </button>
+          </div>
           <button type="submit" className="btn btn-primary" disabled={loading}>
             {loading ? 'Signing in...' : 'Sign in'}
           </button>

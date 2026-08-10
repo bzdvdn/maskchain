@@ -1,20 +1,33 @@
-import { useState, useCallback, useEffect } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
-import { TenantList, TenantDetail, TenantForm } from './pages/Tenants'
-import { Dashboard } from './pages/Dashboard'
-import { Analytics } from './pages/Analytics'
-import { Sessions } from './pages/Sessions'
-import { Conversations } from './pages/Conversations'
-import { Routing } from './pages/Routing'
-import { AuditLog } from './pages/AuditLog'
-import { Settings } from './pages/Settings'
-import { Swagger } from './pages/Swagger'
+import { useState, useCallback, useEffect, lazy, Suspense } from 'react'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Login } from './pages/Login'
 import { Layout } from './components/Layout'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { Spinner } from './components/ui'
 import { getAdminToken, setAdminToken } from './api/admin'
 
 // @sk-task conversation-logging#T3.2: Add /conversations route (AC-005, AC-006)
+const TenantList = lazy(() => import('./pages/Tenants/TenantList').then((m) => ({ default: m.TenantList })))
+const TenantDetail = lazy(() => import('./pages/Tenants/TenantDetail').then((m) => ({ default: m.TenantDetail })))
+const TenantForm = lazy(() => import('./pages/Tenants/TenantForm').then((m) => ({ default: m.TenantForm })))
+const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })))
+const Analytics = lazy(() => import('./pages/Analytics').then((m) => ({ default: m.Analytics })))
+const Sessions = lazy(() => import('./pages/Sessions').then((m) => ({ default: m.Sessions })))
+const Conversations = lazy(() => import('./pages/Conversations').then((m) => ({ default: m.Conversations })))
+const Routing = lazy(() => import('./pages/Routing').then((m) => ({ default: m.Routing })))
+const AuditLog = lazy(() => import('./pages/AuditLog').then((m) => ({ default: m.AuditLog })))
+const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })))
+const Swagger = lazy(() => import('./pages/Swagger').then((m) => ({ default: m.Swagger })))
+
+function PageBoundary({ children }: { children: React.ReactNode }) {
+  const location = useLocation()
+  return (
+    <ErrorBoundary resetKey={location.pathname}>
+      <Suspense fallback={<Spinner label="Loading..." />}>{children}</Suspense>
+    </ErrorBoundary>
+  )
+}
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => !!getAdminToken())
   const [checking, setChecking] = useState(() => !!getAdminToken())
@@ -53,25 +66,23 @@ function App() {
   }
 
   return (
-    <ErrorBoundary>
-      <Layout onLogout={handleLogout}>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/tenants" element={<TenantList />} />
-          <Route path="/tenants/new" element={<TenantForm />} />
-          <Route path="/tenants/:slug/edit" element={<TenantForm />} />
-          <Route path="/tenants/:slug" element={<TenantDetail />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/sessions" element={<Sessions />} />
-          <Route path="/conversations" element={<Conversations />} />
-          <Route path="/routing" element={<Routing />} />
-          <Route path="/audit" element={<AuditLog />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/swagger" element={<Swagger />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Layout>
-    </ErrorBoundary>
+    <Layout onLogout={handleLogout}>
+      <Routes>
+        <Route path="/" element={<PageBoundary><Dashboard /></PageBoundary>} />
+        <Route path="/tenants" element={<PageBoundary><TenantList /></PageBoundary>} />
+        <Route path="/tenants/new" element={<PageBoundary><TenantForm /></PageBoundary>} />
+        <Route path="/tenants/:slug/edit" element={<PageBoundary><TenantForm /></PageBoundary>} />
+        <Route path="/tenants/:slug" element={<PageBoundary><TenantDetail /></PageBoundary>} />
+        <Route path="/analytics" element={<PageBoundary><Analytics /></PageBoundary>} />
+        <Route path="/sessions" element={<PageBoundary><Sessions /></PageBoundary>} />
+        <Route path="/conversations" element={<PageBoundary><Conversations /></PageBoundary>} />
+        <Route path="/routing" element={<PageBoundary><Routing /></PageBoundary>} />
+        <Route path="/audit" element={<PageBoundary><AuditLog /></PageBoundary>} />
+        <Route path="/settings" element={<PageBoundary><Settings /></PageBoundary>} />
+        <Route path="/swagger" element={<PageBoundary><Swagger /></PageBoundary>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Layout>
   )
 }
 

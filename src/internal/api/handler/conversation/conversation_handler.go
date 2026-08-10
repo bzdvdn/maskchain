@@ -43,6 +43,8 @@ func (h *ConversationHandler) HandleList(c *gin.Context) {
 
 	pageResult, err := h.store.List(c.Request.Context(), conversation.ConversationFilter{
 		TenantID: c.Query("tenant_id"),
+		Status:   conversation.ConversationStatus(c.Query("status")),
+		Model:    c.Query("model"),
 		Page:     page,
 		PerPage:  perPage,
 	})

@@ -304,6 +304,7 @@ func writeResponse(c *gin.Context, format string, data interface{}, pg *dto.Pagi
 		writeCSV(c, data)
 		return
 	}
+	c.Set(middleware.EnvelopedKey, true)
 	if pg != nil {
 		c.JSON(http.StatusOK, dto.NewSuccessPaginated(data, pg.Page, pg.PerPage, pg.Total))
 	} else {

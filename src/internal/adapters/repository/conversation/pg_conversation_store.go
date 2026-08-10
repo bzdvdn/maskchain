@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -91,17 +93,29 @@ func (s *PgConversationStore) List(ctx context.Context, filter conversation.Conv
 	}
 	offset := (page - 1) * perPage
 
-	var tenantFilter string
+	var conditions []string
 	var args []any
 	args = append(args, perPage, offset)
 	if filter.TenantID != "" {
-		tenantFilter = `WHERE tenant_id = $3`
+		conditions = append(conditions, `tenant_id = $`+strconv.Itoa(len(args)+1))
 		args = append(args, filter.TenantID)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, `status = $`+strconv.Itoa(len(args)+1))
+		args = append(args, string(filter.Status))
+	}
+	if filter.Model != "" {
+		conditions = append(conditions, `model = $`+strconv.Itoa(len(args)+1))
+		args = append(args, filter.Model)
+	}
+	where := ""
+	if len(conditions) > 0 {
+		where = "WHERE " + strings.Join(conditions, " AND ")
 	}
 
 	rows, err := s.pool.Query(ctx,
 		fmt.Sprintf(`SELECT id, tenant_id, model, status, masked, streamed, mask_id, created_at
-		 FROM conversation_logs %s ORDER BY created_at DESC LIMIT $1 OFFSET $2`, tenantFilter), args...)
+		 FROM conversation_logs %s ORDER BY created_at DESC LIMIT $1 OFFSET $2`, where), args...)
 	if err != nil {
 		return conversation.ConversationPage{}, err
 	}
@@ -124,12 +138,11 @@ func (s *PgConversationStore) List(ctx context.Context, filter conversation.Conv
 	}
 
 	var total int
-	if filter.TenantID != "" {
-		if err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM conversation_logs WHERE tenant_id = $1`,
-			filter.TenantID).Scan(&total); err != nil {
-			return conversation.ConversationPage{}, err
-		}
-	} else if err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM conversation_logs`).Scan(&total); err != nil {
+	countSQL := `SELECT COUNT(*) FROM conversation_logs`
+	if len(conditions) > 0 {
+		countSQL += " " + where
+	}
+	if err := s.pool.QueryRow(ctx, countSQL, args[2:]...).Scan(&total); err != nil {
 		return conversation.ConversationPage{}, err
 	}
 

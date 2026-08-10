@@ -1,22 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import { TimeRangePicker, useRange, defaultRange, type RangeValue } from '../components/TimeRangePicker'
 import { TimeSeriesChart } from '../components/TimeSeriesChart'
-
-interface TokenRecord {
-  tenant_id: string
-  model: string
-  total_input_tokens: number
-  total_output_tokens: number
-}
+import { getAnalyticsTokens, getAnalyticsSeries, type SeriesPoint, type TokenRecord } from '../api/analytics'
 
 interface TokenTotals {
   total_input_tokens: number
   total_output_tokens: number
-}
-
-interface TokensData {
-  records: TokenRecord[]
-  totals: TokenTotals
 }
 
 interface Session {
@@ -32,12 +21,6 @@ interface SessionsData {
   items: Session[]
 }
 
-interface SeriesPoint {
-  bucket: string
-  input_tokens: number
-  output_tokens: number
-}
-
 export function Dashboard() {
   const [range, setRange] = useState<RangeValue>(defaultRange)
   const { from, to } = useRange(range)
@@ -49,13 +32,8 @@ export function Dashboard() {
   const [refreshSec, setRefreshSec] = useState(10)
 
   const fetchTokens = useCallback(() => {
-    fetch(`/api/v1/analytics/tokens?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, { credentials: 'include' })
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to load')
-        return res.json()
-      })
-      .then((envelope) => {
-        const body: TokensData = envelope.data?.data ?? envelope.data ?? envelope
+    getAnalyticsTokens(from, to)
+      .then((body) => {
         setRecords(body.records ?? [])
         setTotals(body.totals ?? { total_input_tokens: 0, total_output_tokens: 0 })
         setError('')
@@ -64,12 +42,8 @@ export function Dashboard() {
   }, [from, to])
 
   const fetchSeries = useCallback(() => {
-    fetch(`/api/v1/analytics/timeseries?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, { credentials: 'include' })
-      .then((r) => r.json())
-      .then((envelope) => {
-        const d = envelope.data?.data ?? envelope.data ?? envelope
-        setSeries(Array.isArray(d.series) ? d.series : [])
-      })
+    getAnalyticsSeries(from, to)
+      .then((d) => setSeries(Array.isArray(d.series) ? d.series : []))
       .catch(() => {})
   }, [from, to])
 

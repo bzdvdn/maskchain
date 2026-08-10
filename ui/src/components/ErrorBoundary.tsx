@@ -2,6 +2,8 @@ import { Component, type ErrorInfo, type ReactNode } from 'react'
 
 interface Props {
   children: ReactNode
+  /** Reset key — when it changes, the boundary clears its error state automatically. */
+  resetKey?: unknown
 }
 
 interface State {
@@ -24,18 +26,33 @@ export class ErrorBoundary extends Component<Props, State> {
     console.error('ErrorBoundary caught:', error, info)
   }
 
+  componentDidUpdate(prevProps: Props) {
+    if (this.props.resetKey !== prevProps.resetKey && this.state.hasError) {
+      this.setState({ hasError: false, error: undefined })
+    }
+  }
+
+  reset = () => {
+    this.setState({ hasError: false, error: undefined })
+  }
+
   render() {
     if (this.state.hasError) {
       return (
         <div className="error-boundary">
           <h1>Something went wrong</h1>
           <p>{this.state.error?.message || 'An unexpected error occurred.'}</p>
-          <button
-            className="btn"
-            onClick={() => window.location.reload()}
-          >
-            Reload page
-          </button>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+            <button className="btn" onClick={this.reset}>
+              Try again
+            </button>
+            <button
+              className="btn"
+              onClick={() => window.location.reload()}
+            >
+              Reload page
+            </button>
+          </div>
         </div>
       )
     }
