@@ -10,6 +10,7 @@ import (
 
 	"github.com/bzdvdn/maskchain/src/cmd/internal/bootstrap"
 	analyticsrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/analytics"
+	conversationrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/conversation"
 	dictionaryrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/dictionary"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
 	sessionrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/session"
@@ -23,12 +24,14 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/resolver"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
+	"github.com/bzdvdn/maskchain/src/internal/infra/crypto"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/valkey-io/valkey-go"
 
 	adminhandler "github.com/bzdvdn/maskchain/src/internal/api/handler/admin"
 	analyticshandler "github.com/bzdvdn/maskchain/src/internal/api/handler/analytics"
+	conversationhandler "github.com/bzdvdn/maskchain/src/internal/api/handler/conversation"
 	"github.com/bzdvdn/maskchain/ui"
 )
 
@@ -181,14 +184,30 @@ func buildAdminServer(
 		srv.RegisterAnalyticsHandler(analyticsHandler, cfg.Debug)
 		logger.Info("analytics handler registered")
 
+		// @sk-task conversation-logging#T3.1: Register conversation read API in combined admin (AC-005, AC-006)
+		if cfg.Conversations != nil && cfg.Conversations.Enabled {
+			key := os.Getenv(crypto.KeyEnvVar)
+			enc, err := crypto.New(key)
+			if err != nil {
+				logger.Error("conversation logging enabled but encryption key unavailable — conversation API disabled",
+					slog.String("env", crypto.KeyEnvVar), slog.String("error", err.Error()))
+			} else {
+				convStore := conversationrepo.NewPgConversationStore(pgPool)
+				srv.RegisterConversationHandler(conversationhandler.NewConversationHandler(convStore, enc))
+				logger.Info("conversation handler registered")
+			}
+		}
+
 		if cfg.Session.CleanupEnabled {
 			cleanupWorker := worker.NewCleanupWorker(sessionUseCase, cfg.Session.CleanupInterval, logger)
+			// Context is intentionally never cancelled: worker runs for the
+			// process lifetime, matching the single-binary bootstrap pattern.
 			cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
+			_ = cleanupCancel
 			go cleanupWorker.Run(cleanupCtx)
 			logger.Info("session cleanup worker registered",
 				slog.Duration("interval", cfg.Session.CleanupInterval),
 			)
-			defer cleanupCancel()
 		} else {
 			logger.Debug("session cleanup worker disabled")
 		}

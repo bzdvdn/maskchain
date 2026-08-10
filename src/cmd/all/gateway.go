@@ -11,6 +11,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/cmd/internal/bootstrap"
 	analyticsrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/analytics"
 	budgetrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/budget"
+	conversationrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/conversation"
 	dictionaryrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/dictionary"
 	maskrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/mask"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
@@ -19,6 +20,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	analyticsapp "github.com/bzdvdn/maskchain/src/internal/app/analytics"
+	conversationapp "github.com/bzdvdn/maskchain/src/internal/app/conversation"
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
 	"github.com/bzdvdn/maskchain/src/internal/app/worker"
 	"github.com/bzdvdn/maskchain/src/internal/domain/analytics"
@@ -30,6 +32,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/resolver"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
+	"github.com/bzdvdn/maskchain/src/internal/infra/crypto"
 	"github.com/bzdvdn/maskchain/src/internal/ports"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -156,8 +159,10 @@ func buildGatewayServer(
 		srv.RegisterAuth(authMw)
 		logger.Info("auth middleware registered", slog.Int("tenants", len(dbTenants)))
 
+		// Context is intentionally never cancelled: reloader runs for the
+		// process lifetime, matching the single-binary bootstrap pattern (cmd/gateway/run.go).
 		reloadCtx, reloadCancel := context.WithCancel(context.Background())
-		defer reloadCancel()
+		_ = reloadCancel
 		go func() {
 			ticker := time.NewTicker(cfg.Server.TenantReloadInterval)
 			defer ticker.Stop()
@@ -217,18 +222,22 @@ func buildGatewayServer(
 
 	if cfg.Session.CleanupEnabled {
 		cleanupWorker := worker.NewCleanupWorker(sessionUseCase, cfg.Session.CleanupInterval, logger)
+		// Context is intentionally never cancelled: worker runs for the process
+		// lifetime, matching the single-binary bootstrap pattern (cmd/gateway/run.go).
 		cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
+		_ = cleanupCancel
 		go cleanupWorker.Run(cleanupCtx)
 		logger.Info("session cleanup worker registered",
 			slog.Duration("interval", cfg.Session.CleanupInterval),
 		)
-		defer cleanupCancel()
 	} else {
 		logger.Debug("session cleanup worker disabled")
 	}
 
+	// Context is intentionally never cancelled: analytics workers run for the
+	// process lifetime, matching the single-binary bootstrap pattern (cmd/gateway/run.go).
 	analyticsCtx, analyticsCancel := context.WithCancel(context.Background())
-	defer analyticsCancel()
+	_ = analyticsCancel
 	if cfg.Analytics != nil && pgPool != nil {
 		costRates := make([]*analytics.CostRate, 0, len(cfg.Analytics.CostRates))
 		for _, cr := range cfg.Analytics.CostRates {
@@ -266,6 +275,38 @@ func buildGatewayServer(
 		logger.Info("analytics cleanup worker started", slog.Duration("retention", retention))
 	} else {
 		logger.Debug("analytics pipeline disabled — no analytics config or no db pool")
+	}
+
+	// @sk-task conversation-logging#T2.3: Bootstrap conversation pipeline in combined binary (AC-008, DEC-002)
+	// Context is intentionally never cancelled: workers run for the process lifetime,
+	// matching the single-binary bootstrap pattern (cmd/gateway/run.go).
+	conversationCtx, conversationCancel := context.WithCancel(context.Background())
+	_ = conversationCancel
+	if cfg.Conversations != nil && cfg.Conversations.Enabled && pgPool != nil {
+		key := os.Getenv(crypto.KeyEnvVar)
+		enc, err := crypto.New(key)
+		if err != nil {
+			logger.Error("conversation logging enabled but encryption key unavailable — failing closed",
+				slog.String("env", crypto.KeyEnvVar), slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+
+		store := conversationrepo.NewPgConversationStore(pgPool)
+		retention := time.Duration(cfg.Conversations.RetentionDays) * 24 * time.Hour
+		if retention <= 0 {
+			retention = 90 * 24 * time.Hour
+		}
+
+		asyncWorker := conversationapp.NewAsyncWorker(store, enc, 1024, 5*time.Second, logger)
+		go asyncWorker.Run(conversationCtx)
+		cleanupWorker := conversationapp.NewCleanupWorker(store, time.Minute, retention, logger)
+		go cleanupWorker.Run(conversationCtx)
+
+		convMw := middleware.NewConversationMiddleware(asyncWorker, logger)
+		srv.RegisterConversationMiddleware(convMw.Handler())
+		logger.Info("conversation logging pipeline started", slog.Int("retention_days", cfg.Conversations.RetentionDays))
+	} else {
+		logger.Debug("conversation logging disabled — no conversations config, disabled, or no db pool")
 	}
 
 	srv.RegisterProxyRoute(middleware.ShieldMiddleware(shieldEngine, cfg.Shield, logger, sessionUseCase), routingHandler)

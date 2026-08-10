@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/detector"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
@@ -27,6 +29,28 @@ type scanHit struct {
 	fragment string
 	startPos int
 	endPos   int
+}
+
+// patternMatches reports whether a detector result of the given type should be
+// kept for a rule whose Pattern names a specific sub-type (e.g. "EMAIL"). An
+// empty, "*" or ".*" pattern is a catch-all and matches everything.
+func patternMatches(pattern, detectorType string) bool {
+	switch pattern {
+	case "", "*", ".*":
+		return true
+	default:
+		return strings.EqualFold(pattern, detectorType)
+	}
+}
+
+func patternHitCount(pattern string, results []detector.DetectorResult) int {
+	n := 0
+	for _, r := range results {
+		if patternMatches(pattern, r.DetectorType) {
+			n++
+		}
+	}
+	return n
 }
 
 // @sk-task remove-audit-incidents#T2.2: Remove incident creation from scan use case (AC-006)
@@ -53,6 +77,9 @@ func (uc *ScanUseCase) Scan(ctx context.Context, req ScanRequest) (*ScanResponse
 		}
 		if len(results) > 0 {
 			for _, r := range results {
+				if !patternMatches(binding.Pattern, r.DetectorType) {
+					continue
+				}
 				hits = append(hits, scanHit{
 					label:    binding.Label,
 					fragment: r.Fragment,
@@ -69,7 +96,7 @@ func (uc *ScanUseCase) Scan(ctx context.Context, req ScanRequest) (*ScanResponse
 				})
 			}
 		}
-		if binding.Severity == value.SeverityCritical && len(results) > 0 {
+		if binding.Severity == value.SeverityCritical && patternHitCount(binding.Pattern, results) > 0 {
 			blocked = true
 		}
 	}

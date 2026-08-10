@@ -15,6 +15,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/api/dto"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/admin"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/analytics"
+	conversationhandler "github.com/bzdvdn/maskchain/src/internal/api/handler/conversation"
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/api/swagger"
@@ -181,6 +182,17 @@ func (s *AdminServer) RegisterAnalyticsHandler(h *analytics.AnalyticsHandler, de
 	summary := group.Group("/tenants/:slug/summary")
 	summary.Use(middleware.AdminAuth(debugCfg))
 	summary.GET("", h.HandleTenantSummary)
+}
+
+// @sk-task conversation-logging#T3.1: Register conversation list/detail routes under admin session (AC-005, AC-006)
+func (s *AdminServer) RegisterConversationHandler(h *conversationhandler.ConversationHandler) {
+	group := s.engine.Group("/api/v1/conversations")
+	if s.adminSessionMw != nil {
+		group.Use(s.adminSessionMw)
+	}
+	group.GET("", h.HandleList)
+	group.GET("/", h.HandleList)
+	group.GET("/:id", h.HandleGet)
 }
 
 // @sk-task 118-api-consistency#T3.5: NoRoute checks Accept:text/html for SPA fallback (AC-009)

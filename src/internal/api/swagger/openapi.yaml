@@ -435,6 +435,43 @@ paths:
         '200':
           $ref: '#/components/responses/SuccessResponse'
 
+  /conversations:
+    get:
+      operationId: listConversations
+      summary: Список диалогов (метаданные, без содержимого)
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+        - in: query
+          name: tenant_id
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/PaginatedResponse'
+
+  /conversations/{id}:
+    get:
+      operationId: getConversation
+      summary: Детали диалога с base64-содержимым
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
 components:
   schemas:
     ErrorInfo:
@@ -488,6 +525,45 @@ components:
           type: 'null'
         pagination:
           $ref: '#/components/schemas/Pagination'
+
+    ConversationListItem:
+      type: object
+      properties:
+        id:
+          type: string
+        tenant_id:
+          type: string
+        model:
+          type: string
+        status:
+          type: string
+        masked:
+          type: boolean
+        streamed:
+          type: boolean
+        mask_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    ConversationPayload:
+      type: object
+      properties:
+        request:
+          type: string
+        response:
+          type: string
+        masking:
+          type: string
+
+    ConversationDetail:
+      allOf:
+        - $ref: '#/components/schemas/ConversationListItem'
+        - type: object
+          properties:
+            payload:
+              $ref: '#/components/schemas/ConversationPayload'
 
     CreateProfileRequest:
       type: object

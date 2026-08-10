@@ -4,6 +4,7 @@ import { TenantList, TenantDetail, TenantForm } from './pages/Tenants'
 import { Dashboard } from './pages/Dashboard'
 import { Analytics } from './pages/Analytics'
 import { Sessions } from './pages/Sessions'
+import { Conversations } from './pages/Conversations'
 import { Routing } from './pages/Routing'
 import { AuditLog } from './pages/AuditLog'
 import { Settings } from './pages/Settings'
@@ -13,6 +14,7 @@ import { Layout } from './components/Layout'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { getAdminToken, setAdminToken } from './api/admin'
 
+// @sk-task conversation-logging#T3.2: Add /conversations route (AC-005, AC-006)
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => !!getAdminToken())
   const [checking, setChecking] = useState(() => !!getAdminToken())
@@ -61,6 +63,7 @@ function App() {
           <Route path="/tenants/:slug" element={<TenantDetail />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/sessions" element={<Sessions />} />
+          <Route path="/conversations" element={<Conversations />} />
           <Route path="/routing" element={<Routing />} />
           <Route path="/audit" element={<AuditLog />} />
           <Route path="/settings" element={<Settings />} />

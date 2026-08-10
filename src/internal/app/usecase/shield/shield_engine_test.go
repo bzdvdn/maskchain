@@ -86,6 +86,38 @@ func TestScanUseCase_EmptyRulesSlice(t *testing.T) {
 	}
 }
 
+// @sk-test conversation-logging#T4.2: Rule Pattern filters detector sub-type (AC-005, AC-009)
+func TestScanUseCase_PatternFiltersSubType(t *testing.T) {
+	ctx := context.Background()
+	registry, piiType := setupRegistry(t)
+	factory := NewScanPipelineFactory(registry)
+	uc := NewScanUseCase(factory)
+
+	text := "reach me at test@example.com or +1-555-123-4567"
+	resp, err := uc.Scan(ctx, ScanRequest{
+		Text: text,
+		Rules: []entity.PIARule{
+			{Label: "email", Type: string(piiType), Pattern: "EMAIL", Action: "block"},
+			{Label: "phone", Type: string(piiType), Pattern: "PHONE", Action: "block"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(resp.Replacements) != 2 {
+		t.Fatalf("expected 2 replacements (email + phone), got %d: %v", len(resp.Replacements), resp.Replacements)
+	}
+	emailPh, ok := resp.Replacements["[[pii.email.0]]"]
+	if !ok || emailPh != "test@example.com" {
+		t.Errorf("expected [[pii.email.0]] -> test@example.com, got %q %v", emailPh, resp.Replacements)
+	}
+	phonePh, ok := resp.Replacements["[[pii.phone.0]]"]
+	if !ok || phonePh != "+1-555-123-4567" {
+		t.Errorf("expected [[pii.phone.0]] -> +1-555-123-4567, got %q %v", phonePh, resp.Replacements)
+	}
+}
+
 // --- test helpers ---
 
 func setupRegistry(t *testing.T) (*detector.DetectorRegistry, entity.DetectorType) {

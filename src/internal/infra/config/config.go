@@ -248,6 +248,14 @@ type AnalyticsConfig struct {
 	BatchInterval string           `mapstructure:"batch_interval" yaml:"batch_interval"`
 }
 
+// @sk-task conversation-logging#T1.1: Add ConversationsConfig section (AC-008)
+//
+// ConversationsConfig represents a domain entity or configuration.
+type ConversationsConfig struct {
+	Enabled       bool `mapstructure:"enabled" yaml:"enabled"`
+	RetentionDays int  `mapstructure:"retention_days" yaml:"retention_days"`
+}
+
 // @sk-task 80-tenant-isolation#T1.2: Add Tenants map to Config struct (AC-001, AC-003, AC-004, AC-005)
 // @sk-task 90-production-hardening#T1.1: Wire Debug into Config (<AC-001>)
 //
@@ -267,6 +275,7 @@ type Config struct {
 	Session         *SessionConfig           `mapstructure:"session" yaml:"session"`
 	DictionaryCache *DictionaryCacheConfig   `mapstructure:"dictionary_cache" yaml:"dictionary_cache"`
 	Analytics       *AnalyticsConfig         `mapstructure:"analytics" yaml:"analytics"`
+	Conversations   *ConversationsConfig     `mapstructure:"conversations" yaml:"conversations"`
 	Tenants         map[string]*TenantConfig `mapstructure:"tenants" yaml:"tenants"`
 	Admin           *AdminConfig             `mapstructure:"admin" yaml:"admin"`
 }

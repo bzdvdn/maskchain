@@ -50,10 +50,13 @@
   - `src/internal/api/handler/admin/` — Tenant CRUD handlers
   - `src/internal/api/dto/` — request/response DTOs (IncidentResponse, TenantResponse, PaginatedResponse)
 - `src/internal/infra/config/` — cobra/viper config loading, validation, defaults (RoutingConfig, ProviderConfig with ProxyURL, RouteConfig, RuleConfig), serialize/diff/watcher
+- `src/internal/infra/crypto/` — AES-256-GCM Encryptor/Decryptor for conversation logging (key from `MASKCHAIN_CONVERSATION_KEY` ENV)
 - `src/internal/infra/telemetry/` — OTel SDK init, TracerProvider, MeterProvider, OTLP exporters
 - `src/internal/infra/metrics/` — Prometheus metric definitions (HTTP, shield), /metrics handler
 - `src/internal/infra/logging/` — slog adapter with OTel trace_id/span_id enrichment
-- `src/internal/adapters/repository/postgres/migrations/` — SQL migrations (dictionary_entries, incidents, tenants, mask_entries)
+- `src/internal/adapters/repository/postgres/migrations/` — SQL migrations (dictionary_entries, incidents, tenants, mask_entries, sessions, analytics, admin_sessions, audit_log, conversation_logs)
+- `src/internal/adapters/repository/conversation/` — PgConversationStore (encrypted conversation_logs persistence; conversation logging pipeline)
+- `src/internal/domain/conversation/` — ConversationLog entity, MaskingEntry (mask-proof mapping), ConversationStore port
 - `deployments/` — Docker, Helm, docker-compose, migrations
   - `deployments/helm/maskchain/` — Helm chart for Kubernetes (Bitnami subcharts, ConfigMap, Ingress/GatewayAPI, ServiceMonitor)
   - `deployments/docker-compose/` — local dev / production compose stacks

@@ -257,6 +257,11 @@ configRuntime:
   #   retention_days: 90
   analytics: {}
 
+  # conversations:
+  #   enabled: true
+  #   retention_days: 90
+  conversations: {}
+
   # tenants:
   #   default:
   #     name: "Default Tenant"
@@ -271,9 +276,10 @@ apiKeys: {}
   # OPENAI_API_KEY: "sk-..."
   # ANTHROPIC_API_KEY: "sk-ant-..."   # required if anthropic provider is configured
   # GEMINI_API_KEY: "..."             # required if gemini provider is configured
-  # GROQ_API_KEY: "gsk-..."           # required if groq (proxy) provider is configured
+  # GROQ_API_KEY: "gsk-..."           # required for groq (proxy) provider is configured
   # ADMIN_PASSWORD: "admin-secret"
   # DEFAULT_API_KEY: "dk-..."
+  # MASKCHAIN_CONVERSATION_KEY: "..." # required if conversations.enabled=true (32 bytes, base64; openssl rand -base64 32)
   # POSTGRES_DSN: "postgres://user:pass@host:5432/db?sslmode=disable"
   # VALKEY_ADDR: "host:6379"
   # VALKEY_PASSWORD: ""

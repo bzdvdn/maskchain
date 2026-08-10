@@ -28,6 +28,16 @@ import (
 
 const maxBodySize = 1 << 20 // 1MB
 
+// conversationMaskKey carries the merged dict+PII mask mapping (placeholder ->
+// original) from the shield middleware to the conversation logger through the
+// gin context (RQ-007, DEC-001).
+const conversationMaskKey = "conversation_mask_mapping"
+
+// @sk-task conversation-logging#T5.1: Carry the dict mask id in gin context (AC-005)
+// conversationMaskIDKey carries the shield dict mask id so the conversation
+// middleware can persist the same mask-id that was sent upstream.
+const conversationMaskIDKey = "conversation_mask_id"
+
 // @sk-task 13-shield-middleware-wiring#T2.3: Custom ResponseWriter for dict unmask (AC-006)
 type dictUnmaskWriter struct {
 	gin.ResponseWriter
@@ -248,6 +258,8 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *slog.Logger
 				newBody, _ := json.Marshal(chatReq)
 				c.Request.Body = io.NopCloser(bytes.NewBuffer(newBody))
 				c.Header("X-Shield-Dict-Mask-ID", dictMaskID)
+				// @sk-task conversation-logging#T5.1: Publish shield dict mask id for conversation logging (AC-005)
+				c.Set(conversationMaskIDKey, dictMaskID)
 			}
 		}
 
@@ -320,6 +332,15 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *slog.Logger
 			if bodyStr != string(bodyBytes) {
 				c.Request.Body = io.NopCloser(strings.NewReader(bodyStr))
 			}
+		}
+
+		// @sk-task conversation-logging#T2.2: Publish merged mask mapping to gin context (RQ-007, DEC-001)
+		if len(dictMaskMapping) > 0 {
+			mapping := make(map[string]string, len(dictMaskMapping))
+			for ph, original := range dictMaskMapping {
+				mapping[ph] = original
+			}
+			c.Set(conversationMaskKey, mapping)
 		}
 
 		duration := time.Since(start)

@@ -17,5 +17,7 @@ data:
 {{ .Values.configRuntime.debug | toYaml | indent 6 }}
     analytics:
 {{ .Values.configRuntime.analytics | toYaml | indent 6 }}
+    conversations:
+{{ .Values.configRuntime.conversations | toYaml | indent 6 }}
     tenants:
 {{ .Values.configRuntime.tenants | toYaml | indent 6 }}

@@ -320,6 +320,46 @@ func TestConfigDirFromArgs_Flag(t *testing.T) {
 	}
 }
 
+// @sk-test conversation-logging#T1.1: TestConversationsConfig_EnvOverride via CONFIG_CONVERSATIONS_* (AC-008)
+func TestConversationsConfig_EnvOverride(t *testing.T) {
+	t.Setenv("CONFIG_CONVERSATIONS_ENABLED", "true")
+	t.Setenv("CONFIG_CONVERSATIONS_RETENTION_DAYS", "7")
+
+	dir := t.TempDir()
+	content := []byte("log:\n  level: debug\nconversations:\n  enabled: false\n  retention_days: 90\n")
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), content, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := ParseAndLoadConfig([]string{"--config", filepath.Join(dir, "config.yaml")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Conversations == nil {
+		t.Fatal("expected Conversations config, got nil")
+	}
+	if !cfg.Conversations.Enabled {
+		t.Error("expected Conversations.Enabled=true from env")
+	}
+	if cfg.Conversations.RetentionDays != 7 {
+		t.Errorf("expected RetentionDays=7, got %d", cfg.Conversations.RetentionDays)
+	}
+}
+
+// @sk-test conversation-logging#T1.1: TestConversationsConfig_Defaults (AC-008)
+func TestConversationsConfig_Defaults(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.Conversations == nil {
+		t.Fatal("expected Conversations defaults, got nil")
+	}
+	if cfg.Conversations.Enabled {
+		t.Error("expected Conversations.Enabled=false by default")
+	}
+	if cfg.Conversations.RetentionDays == 0 {
+		t.Error("expected Conversations.RetentionDays default to be non-zero")
+	}
+}
+
 // @sk-test 30-shield-persistence#T1.3: TestDatabaseConfig_PoolDefaults (AC-005)
 func TestDatabaseConfig_PoolDefaults(t *testing.T) {
 	t.Setenv("CONFIG_LOG_LEVEL", "debug")

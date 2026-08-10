@@ -6,11 +6,13 @@ interface Props {
   onLogout: () => void
 }
 
+// @sk-task conversation-logging#T3.2: Add Conversations menu item in Management section (AC-005, AC-006)
 const navItems = [
   { to: '/', label: 'Dashboard', icon: '◉' },
   { to: '/analytics', label: 'Analytics', icon: '▦' },
   { to: '/tenants', label: 'Tenants', icon: '◆' },
   { to: '/sessions', label: 'Sessions', icon: '◎' },
+  { to: '/conversations', label: 'Conversations', icon: '✎' },
   { to: '/routing', label: 'Routing', icon: '⇄' },
   { to: '/audit', label: 'Audit Log', icon: '☰' },
   { to: '/settings', label: 'Settings', icon: '⚙' },
@@ -19,8 +21,8 @@ const navItems = [
 
 const navSections: { label: string; items: typeof navItems }[] = [
   { label: 'Overview', items: navItems.slice(0, 2) },
-  { label: 'Management', items: navItems.slice(2, 5) },
-  { label: 'System', items: navItems.slice(5) },
+  { label: 'Management', items: navItems.slice(2, 6) },
+  { label: 'System', items: navItems.slice(6) },
 ]
 
 const headerTimes: Record<string, string> = {

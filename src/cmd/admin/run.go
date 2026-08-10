@@ -13,12 +13,14 @@ import (
 
 	"github.com/bzdvdn/maskchain/src/cmd/internal/bootstrap"
 	analyticsrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/analytics"
+	conversationrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/conversation"
 	dictionaryrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/dictionary"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
 	sessionrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/session"
 	"github.com/bzdvdn/maskchain/src/internal/api"
 	"github.com/bzdvdn/maskchain/src/internal/api/handler/admin"
 	analyticshandler "github.com/bzdvdn/maskchain/src/internal/api/handler/analytics"
+	conversationhandler "github.com/bzdvdn/maskchain/src/internal/api/handler/conversation"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/app/worker"
 	"github.com/bzdvdn/maskchain/src/internal/domain/admin_session"
@@ -27,6 +29,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/resolver"
 	shvalue "github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
+	"github.com/bzdvdn/maskchain/src/internal/infra/crypto"
 	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
 	"github.com/bzdvdn/maskchain/src/pkg/version"
 	"github.com/bzdvdn/maskchain/ui"
@@ -119,6 +122,20 @@ func run() {
 		pgUsageStore := analyticsrepo.NewPgUsageStore(b.PGPool)
 		analyticsHandler := analyticshandler.NewAnalyticsHandler(pgUsageStore)
 		srv.RegisterAnalyticsHandler(analyticsHandler, cfg.Debug)
+
+		// @sk-task conversation-logging#T3.1: Register conversation read API in standalone admin (AC-005, AC-006)
+		if cfg.Conversations != nil && cfg.Conversations.Enabled {
+			key := os.Getenv(crypto.KeyEnvVar)
+			enc, err := crypto.New(key)
+			if err != nil {
+				logger.Error("conversation logging enabled but encryption key unavailable — conversation API disabled",
+					slog.String("env", crypto.KeyEnvVar), slog.String("error", err.Error()))
+			} else {
+				convStore := conversationrepo.NewPgConversationStore(b.PGPool)
+				srv.RegisterConversationHandler(conversationhandler.NewConversationHandler(convStore, enc))
+				logger.Info("conversation handler registered")
+			}
+		}
 
 		if cfg.Session.CleanupEnabled {
 			cleanupCtx, cleanupCancel := context.WithCancel(context.Background())

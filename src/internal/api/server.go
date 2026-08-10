@@ -31,6 +31,7 @@ type Server struct {
 	healthHandler     *health.Handler
 	sessionMiddleware gin.HandlerFunc
 	usageMiddleware   gin.HandlerFunc
+	conversationMw    gin.HandlerFunc
 }
 
 // @sk-task 114-real-health-probes#T2.2: Accept healthSvc and replace static handlers (AC-001, AC-005, AC-008)
@@ -102,6 +103,10 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 		if s.sessionMiddleware != nil {
 			chain = append(chain, s.sessionMiddleware)
 		}
+		// conversation must run before shield to capture the original body
+		if s.conversationMw != nil {
+			chain = append(chain, s.conversationMw)
+		}
 		chain = append(chain, shieldMiddleware)
 		if s.usageMiddleware != nil {
 			chain = append(chain, s.usageMiddleware)
@@ -113,6 +118,9 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 		chain := []gin.HandlerFunc{}
 		if s.sessionMiddleware != nil {
 			chain = append(chain, s.sessionMiddleware)
+		}
+		if s.conversationMw != nil {
+			chain = append(chain, s.conversationMw)
 		}
 		chain = append(chain, shieldMiddleware)
 		if s.usageMiddleware != nil {
@@ -146,6 +154,11 @@ func (s *Server) RegisterSessionMiddleware(mw gin.HandlerFunc) {
 // @sk-task 131-analytics-pipeline#T3.3: RegisterUsageMiddleware on gateway Server (AC-006)
 func (s *Server) RegisterUsageMiddleware(mw gin.HandlerFunc) {
 	s.usageMiddleware = mw
+}
+
+// @sk-task conversation-logging#T2.2: RegisterConversationMiddleware on gateway Server (RQ-008, DEC-001)
+func (s *Server) RegisterConversationMiddleware(mw gin.HandlerFunc) {
+	s.conversationMw = mw
 }
 
 func (s *Server) withSessionMiddleware(next gin.HandlerFunc) gin.HandlerFunc {

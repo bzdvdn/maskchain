@@ -16,6 +16,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/adapters/provider"
 	analyticsrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/analytics"
 	budgetrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/budget"
+	conversationrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/conversation"
 	dictionaryrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/dictionary"
 	maskrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/mask"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
@@ -23,6 +24,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/api"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	analyticsapp "github.com/bzdvdn/maskchain/src/internal/app/analytics"
+	conversationapp "github.com/bzdvdn/maskchain/src/internal/app/conversation"
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
 	"github.com/bzdvdn/maskchain/src/internal/app/worker"
 	"github.com/bzdvdn/maskchain/src/internal/domain/analytics"
@@ -34,6 +36,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/resolver"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
+	"github.com/bzdvdn/maskchain/src/internal/infra/crypto"
 	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
 	"github.com/bzdvdn/maskchain/src/internal/ports"
 	"github.com/bzdvdn/maskchain/src/pkg/version"
@@ -112,6 +115,7 @@ func run() {
 
 	runSessionCleanup(cfg, sessionUseCase, logger)
 	runAnalytics(cfg, b.PGPool, srv, logger)
+	runConversations(cfg, b.PGPool, srv, logger)
 
 	srv.RegisterProxyRoute(middleware.ShieldMiddleware(shieldEngine, cfg.Shield, logger, sessionUseCase), routingHandler)
 	logger.Info("proxy routes registered")
@@ -359,6 +363,42 @@ func runAnalytics(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.Server, log
 	retention := time.Duration(cfg.Analytics.RetentionDays) * 24 * time.Hour
 	go analyticsapp.NewCleanupWorker(pgUsageStore, 10*batchInterval, retention, logger).Run(analyticsCtx)
 	logger.Info("analytics pipeline started")
+}
+
+// @sk-task conversation-logging#T2.3: runConversations bootstraps crypto, store, workers and middleware (AC-008, DEC-002)
+func runConversations(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.Server, logger *slog.Logger) {
+	if cfg.Conversations == nil || !cfg.Conversations.Enabled {
+		logger.Debug("conversation logging disabled")
+		return
+	}
+	if pgPool == nil {
+		logger.Warn("conversation logging enabled but no DB pool available — disabled")
+		return
+	}
+
+	key := os.Getenv(crypto.KeyEnvVar)
+	enc, err := crypto.New(key)
+	if err != nil {
+		logger.Error("conversation logging enabled but encryption key unavailable — failing closed",
+			slog.String("env", crypto.KeyEnvVar), slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
+	store := conversationrepo.NewPgConversationStore(pgPool)
+	retention := time.Duration(cfg.Conversations.RetentionDays) * 24 * time.Hour
+	if retention <= 0 {
+		retention = 90 * 24 * time.Hour
+	}
+
+	convCtx, convCancel := context.WithCancel(context.Background())
+	_ = convCancel
+
+	asyncWorker := conversationapp.NewAsyncWorker(store, enc, 1024, 5*time.Second, logger)
+	go asyncWorker.Run(convCtx)
+	go conversationapp.NewCleanupWorker(store, time.Minute, retention, logger).Run(convCtx)
+
+	srv.RegisterConversationMiddleware(middleware.NewConversationMiddleware(asyncWorker, logger).Handler())
+	logger.Info("conversation logging pipeline started", slog.Int("retention_days", cfg.Conversations.RetentionDays))
 }
 
 func initDetectors(log *slog.Logger) *detector.DetectorRegistry {

@@ -45,6 +45,7 @@ const defaultHealthCheckCriticalDeps = "database"
 const defaultTenantReloadInterval = 15 * time.Second
 const defaultAdminSessionTTL = 30 * time.Minute
 const defaultDashboardPollInterval = 5 * time.Second
+const defaultConversationsRetentionDays = 90
 
 // @sk-task 10-gateway-skeleton#T1.2: Set ServerConfig defaults in DefaultConfig (AC-001, AC-005)
 //
@@ -117,6 +118,9 @@ func DefaultConfig() *Config {
 		Analytics: &AnalyticsConfig{
 			RetentionDays: defaultAnalyticsRetentionDays,
 			BatchInterval: defaultAnalyticsBatchInterval,
+		},
+		Conversations: &ConversationsConfig{
+			RetentionDays: defaultConversationsRetentionDays,
 		},
 		Admin: &AdminConfig{
 			SessionTTL:            defaultAdminSessionTTL,

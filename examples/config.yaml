@@ -127,6 +127,12 @@ analytics:
       input_price_per_1k: 0.004
       output_price_per_1k: 0.004
 
+# Conversation logging (AC-008): захват запрос/ответ в conversation_logs.
+# Ключ шифрования задаётся env MASKCHAIN_CONVERSATION_KEY (32 байта, base64) — без него при enabled:true сервис не стартует (fail-closed).
+conversations:
+  enabled: true
+  retention_days: 90
+
 debug:
   enabled: true
   admin_token: "admin-token"

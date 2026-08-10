@@ -17,6 +17,7 @@ type DetectorBinding struct {
 	Interface detector.Detector
 	Type      entity.DetectorType
 	Label     string
+	Pattern   string
 	Severity  value.Severity
 }
 
@@ -54,6 +55,7 @@ func (f *ScanPipelineFactory) BuildFromRules(ctx context.Context, rules []entity
 			Interface: concrete,
 			Type:      entity.DetectorType(rule.Type),
 			Label:     rule.Label,
+			Pattern:   rule.Pattern,
 			Severity:  value.SeverityMedium,
 		})
 	}

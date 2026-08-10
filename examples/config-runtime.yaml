@@ -101,3 +101,16 @@ tenants:
           type: regex
           pattern: SSN
           action: block
+
+# Conversation logging (AC-008): включает захват запрос/ответ в conversation_logs.
+# Ключ шифрования задаётся отдельно через env: MASKCHAIN_CONVERSATION_KEY
+# (32 байта, base64, см. .env.example). Без ключа при enabled:true сервис не стартует (fail-closed).
+conversations:
+  enabled: true
+  retention_days: 90
+
+# Admin auth for web UI and admin API (can be overridden via CONFIG_ADMIN_* env)
+admin:
+  username: admin
+  password: test
+  session_ttl: 30m

@@ -45,6 +45,7 @@ services:
       CONFIG_DATABASE_DSN: postgres://test:test@postgres:5432/maskchain?sslmode=disable
       CONFIG_VALKEY_ADDR: valkey:6379
       CONFIG_OTEL_ENDPOINT: ""
+      MASKCHAIN_CONVERSATION_KEY: ${MASKCHAIN_CONVERSATION_KEY:-}
     env_file:
       - .env
     extra_hosts:

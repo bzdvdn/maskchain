@@ -48,6 +48,7 @@ services:
       CONFIG_ADMIN_USERNAME: admin
       CONFIG_ADMIN_PASSWORD: test
       CONFIG_OTEL_ENDPOINT: ""
+      MASKCHAIN_CONVERSATION_KEY: ${MASKCHAIN_CONVERSATION_KEY:-}
     env_file:
       - .env
     extra_hosts:

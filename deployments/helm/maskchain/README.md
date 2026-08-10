@@ -250,7 +250,7 @@ Config is split into two layers in `values.yaml` — `configBase` (infrastructur
 | Values section | ConfigMap | Contents | Change frequency |
 |----------------|-----------|----------|-----------------|
 | `configBase` | `config-base` | `log`, `server`, `database`, `valkey`, `mask`, `egress`, `session`, `otel`, `ratelimit`, `dictionary_cache` | Rarely (infrastructure) |
-| `configRuntime` | `config-runtime` | `shield`, `routing`, `admin`, `debug`, `analytics`, `tenants` | More often (business logic) |
+| `configRuntime` | `config-runtime` | `shield`, `routing`, `admin`, `debug`, `analytics`, `conversations`, `tenants` | More often (business logic) |
 
 Both are mounted to `/etc/maskchain/conf.d/` in the container. The binary reads all `*.yaml` files from this directory and deep-merges them (last file wins — `99-config-runtime.yaml` overrides `00-config-base.yaml`). This means changing routing or analytics does **not** trigger a Pod restart (the filesystem syncs automatically via ConfigMap volume).
 
@@ -289,11 +289,29 @@ configRuntime:
   #   session_ttl: 30m
   admin: {}
   debug: {}
+
+  # analytics:
+  #   batch_interval: 5s
+  #   retention_days: 90
   analytics: {}
+
+  # conversations:
+  #   enabled: true
+  #   retention_days: 90
+  conversations: {}
+
+  # tenants:
+  #   default:
+  #     name: "Default Tenant"
+  #     auth_header: "Authorization"
+  #     api_keys:
+  #       - "${DEFAULT_API_KEY}"
   tenants: {}
 ```
 
 Sensitive values (`${POSTGRES_DSN}`, `${VALKEY_PASSWORD}`, `${OPENAI_API_KEY}`, `${ADMIN_PASSWORD}`, `${DEFAULT_API_KEY}`) are resolved at runtime from environment variables injected via the `apiKeys` Secret. See [API Keys & Secrets](#api-keys--secrets).
+
+**Conversation logging:** to enable, set `configRuntime.conversations.enabled=true`. The service fails closed (does not start) unless `MASKCHAIN_CONVERSATION_KEY` is provided via `apiKeys` — generate it with `openssl rand -base64 32`.
 
 ---
 
@@ -381,6 +399,7 @@ apiKeys:
   OPENAI_API_KEY: "sk-..."
   ADMIN_PASSWORD: "admin-secret"
   DEFAULT_API_KEY: "dk-..."
+  MASKCHAIN_CONVERSATION_KEY: "..."   # required if configRuntime.conversations.enabled=true (32 bytes, base64)
   # Only needed for external mode (auto-generated for internal):
   POSTGRES_DSN: "postgres://user:pass@host:5432/maskchain?sslmode=disable"
   VALKEY_ADDR: "host:6379"
