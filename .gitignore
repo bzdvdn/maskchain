@@ -9,3 +9,5 @@ ui/node_modules/
 .env
 .opencode/git
 .opencode/server.lock.json
+# Local-only Russian roadmap (public docs are English)
+ROADMAP.ru.md

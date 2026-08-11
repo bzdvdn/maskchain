@@ -104,12 +104,9 @@ func (r *PostgresRegistryRepository) ListRules(ctx context.Context) ([]routingDo
 		r.Routes = append(r.Routes, routingDomain.RouteConfig{Model: f.model, Providers: f.providers})
 	}
 
-	var out []routingDomain.RuleConfig
+	out := make([]routingDomain.RuleConfig, 0, len(order))
 	for _, tenant := range order {
 		out = append(out, *ruleByTenant[tenant])
-	}
-	if out == nil {
-		return []routingDomain.RuleConfig{}, nil
 	}
 	return out, nil
 }

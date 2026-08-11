@@ -1,344 +1,279 @@
-# Roadmap MaskChain
+# MaskChain Roadmap — Self-hosted AI Data Gateway
 
-**Платформа для обратимого маскирования данных в AI — Enterprise AI Gateway.**
+**A platform for reversible data masking in AI traffic — a gateway that sees your data first and releases it last.**
 
 ```
-Текущее:   v1.0 — Content Shield DLP + Routing + Multi-Tenancy ✅
-           v2.0 — Sessions + Analytics + Platform Maturity ✅
-Стратегия: v3.0 — Enterprise AI Gateway (Feature Parity + Differentiation)
+Status:  v1.0 — Content Shield DLP + Routing + Multi-Tenancy ✅
+         v2.0 — Sessions + Analytics + Platform Maturity ✅
+         v3.0 — Virtual Keys + Budgets + Routing CRUD ✅
+Strategy: v4.0 — Depth-first (differentiation in DLP) → Parity (enterprise) → Agent wave
 ```
 
 ---
 
-## Статус: v1.0 + v2.0 — Выполнено ✅
+## Positioning (strategy anchor)
 
-| Домен | Ключевое |
-|---|---|
-| **Content Shield** | PII/PHI/Financial/Secrets/Dictionary детекторы, reversible mask, streaming unmask, Aho-Corasick, реакции block/redact/mask/alert, CSV/JSON препроцессоры |
-| **Routing & Egress** | Provider registry, model→provider mapping, fallback, health-aware routing, circuit breaker, retry, per-provider proxy (HTTP/SOCKS5), SSE streaming, connection pooling |
-| **Multi-Tenancy** | API key → tenant mapping, tenant-scoped политики, словари, PII-правила, rate limiting (Valkey sliding window) |
-| **Observability** | OTel distributed tracing, Prometheus metrics, structured logging, dependency-aware health probes |
-| **Platform** | Go single binary (~18MB), 3 Dockerfile (gateway/admin/combined), Helm chart, GitHub Actions CI/CD, 14 linters |
-| **Admin UI** | React (Vite+TS) management UI: политики, словари, инциденты, тенанты |
-| **Analytics** | Token usage, cost tracking, per-tenant/per-model агрегация, API + Prometheus |
-| **Sessions** | Session tracking per dialog: токены, маски, модель, tenant, TTL, cleanup |
+MaskChain is a **self-hosted AI data gateway**: a single control point for LLM traffic where data protection is the core mission, not a by-product. The foundation is **reversible masking** (reversible mask + streaming unmask + per-tenant dictionaries), on top of which routing, limits, budgets, and analytics are built.
 
----
+Differentiation is built not on provider breadth (where we deliberately trail), but on **depth of data control** — something neither router-gateways, nor enterprise DLP, nor guardrail libraries offer.
 
-## Стратегия: v3.0 — Enterprise AI Gateway
+### Principles (from the constitution, reaffirmed)
 
-**Цель:** Feature parity с LiteLLM в ключевых enterprise-возможностях при сохранении дифференциации в Content Shield DLP.
-
-### Принципы (из конституции)
-
-1. **Content Shield — core domain**: всё новое не должно ослаблять DLP
-2. **Tenant-driven policies**: каждое расширение — tenant-scoped
-3. **Extensibility over hardcoding**: plugins, interfaces, adapters
-4. **Native-only data plane**: Go, никаких external runtime-зависимостей
-5. **AI traffic is network traffic**: passthrough, не translation
-6. **Infrastructure, not chatbot**: никакого agent framework, prompt playground
+1. **Content Shield — core domain**: nothing new may weaken DLP.
+2. **Tenant-driven policies**: every extension is tenant-scoped.
+3. **Extensibility over hardcoding**: plugins, interfaces, adapters.
+4. **Native-only data plane**: Go, no external runtime dependencies.
+5. **AI traffic is network traffic**: passthrough, not translation.
+6. **Infrastructure, not chatbot**: no agent framework, no prompt playground.
+7. **Zero-retention by default**: the "log or don't log" balance is configured per tenant.
 
 ---
 
-## Фаза 1: Identity & Access Management (Virtual Keys)
+## Market: four competitor categories (2026)
 
-**Проблема:** Tenant API keys — raw-ключи без scoping. Невозможно дать доступ "только к GPT-4 с бюджетом $50".
+| Category | Representatives | Strength | Weakness (our niche) |
+|---|---|---|---|
+| **Router gateways** | LiteLLM (100+ providers), Portkey (acquired by Palo Alto), Kong AI Gateway, Higress, TrueFoundry | Provider breadth, integrations, enterprise features | Shallow DLP; masking = NER-redact; no reversible; no streaming unmask; enterprise features paid/closed |
+| **Enterprise DLP** | Nightfall, Strac, Google Cloud DLP | Detection depth, many channels (SaaS, storage) | AI is one channel among many; **no mask-and-restore** (redact only); per-scan pricing; no SSE awareness; heavy integration |
+| **Guardrail libraries** | LLM Guard, Guardrails AI, Lakera Guard | Field-level scanning, code-first | Not a gateway, doesn't watch every path; reasons about "the prompt", not "the stream" |
+| **AI security proxy / privacy-tools** | Bifrost, PasteGuard, CloakPipe, Privacy-filter | Aware of AI traffic | One feature (PII or routing), no full loop: DLP + gateway + BI |
 
-**Конкуренты:** LiteLLM virtual keys — scoped per model, budget, team, metadata.
+### Key 2026 trends shaping the roadmap
 
-### 300-virtual-keys
-
-| Артефакт | Описание |
-|---|---|
-| `VirtualKey` entity | `key_hash`, `tenant_id`, `label`, `allowed_models []string`, `blocked_models []string`, `budget_cap`, `spent`, `expires_at`, `metadata`, `enabled` |
-| `VirtualKeyRepository` port/impl (PG) | CRUD + `FindByKeyHash()` + `ListByTenant()` + soft-delete |
-| `VirtualKeyAuth` middleware | Извлекает ключ из `Authorization`, резолвит tenant, проверяет `enabled`/`expires_at`, добавляет scope в контекст |
-| `ModelAccess` middleware | Проверяет `allowed_models`/`blocked_models` перед routing |
-| Admin API CRUD | `POST/GET /api/v1/admin/keys`, `GET /api/v1/admin/keys/:id`, `DELETE /api/v1/admin/keys/:id` |
-| Admin UI — Key Management | Создание, просмотр, отзыв ключей; копирование ключа один раз при создании |
-| Audit log | Все операции с ключами логируются в audit_trail |
-| Миграция существующих tenant keys | Backfill: создать VirtualKey для каждого существующего tenant API key |
-
-**Зависимости:** 80-tenant-isolation ✅
-
-**Критично:** Virtual keys — фундамент для бюджетов, spend tracking и team management.
+1. **Sovereignty is a first-order axis.** DPDP (India), PDPL (Saudi Arabia), GDPR + self-host/air-gapped are becoming baseline requirements. A self-hosted Go binary with no Python dependencies is a strong position.
+2. **Consolidation into security vendors.** Portkey → Palo Alto. The category is moving upmarket under enterprise sales. Our bet: an independent self-hosted project priced on performance, predictability, and an open roadmap targets the same demand — but from below.
+3. **Mask-and-restore is an unclaimed niche.** Neither DLP (redact-only) nor gateways (NER-only) offer **reversible** masking. This is the lock-in mechanism: once integrated, switching off means losing data.
+4. **Gateways become the gateway to agent infrastructure.** MCP (TrueFoundry native, Kong plugin, Higress) and A2A are growing. Masking data exchanged between agents is a natural extension of our theme.
 
 ---
 
-## Фаза 2: Financial Operations (Spend + Budgets)
+## Already done (verified in code)
 
-**Проблема:** Аналитика есть, но нет enforcement — тенанты могут превысить бюджет без блокировки.
+| Block | Status | Evidence |
+|---|---|---|
+| **Content Shield** — PII/PHI/finance/secrets/dictionary, reversible mask, streaming unmask, Aho-Corasick, block/redact/mask/alert, CSV/JSON preprocessors | ✅ | `src/internal/domain/shield/`, `detector/` |
+| **Prompt injection detector** | ✅ (already present!) | `src/internal/domain/shield/detector/promptinjectiondetector.go` |
+| **Routing & Egress** — provider registry, fallback, health-aware, CB, retry, per-provider proxy, SSE, CRUD API + UI | ✅ | `/api/v1/routing/*`, `provider_health.go` |
+| **Multi-Tenancy** — API key→tenant, tenant policies, rate limiting (Valkey) | ✅ | `src/internal/domain/tenant/`, `middleware/auth.go` |
+| **Virtual Keys** — entity, auth middleware, model access, Admin API, migration backfill | ✅ | `src/internal/domain/virtualkey/`, `middleware/virtualkey_auth.go` |
+| **Budgets + Spend** — entity, Valkey counters, middleware enforcement, webhook alerts, aggregation worker, Admin API + UI (Budgets page) | ✅ | `src/internal/domain/budget/`, `app/budget/agg_worker.go`, `handler/admin/budget_handler.go` |
+| **Cost Rates** — store + Admin API | ✅ | `cost_rate_store.go`, `cost_rate_handler.go` |
+| **Observability** — OTel, Prometheus, structured logs, health probes | ✅ | `61-observability` archived |
+| **Admin UI** — React SPA: tenants, policies, dictionaries, incidents, Routing CRUD, Keys, Budgets | ✅ | `ui/src/pages/` |
+| **Platform** — single Go binary (~18MB), 3 Dockerfiles, Helm, CI/CD, 14 linters, audit trail | ✅ | `deployments/`, `src/internal/api/handler/admin/audit_handler.go` |
 
-**Конкуренты:** LiteLLM spend tracking per key/user/team + hard/soft budgets + alerts.
-
-### 301-budget-enforcement
-
-| Артефакт | Описание |
-|---|---|
-| `Budget` entity | `id`, `tenant_id`, `virtual_key_id` (optional), `scope` (tenant|key|model), `type` (monthly|daily|custom), `soft_limit`, `hard_limit`, `currency`, `notify_at []float64` (проценты) |
-| `BudgetRepository` port/impl (PG + Valkey) | Valkey counter `budget:{scope}:{period}`, PG для persistence и истории |
-| `BudgetMiddleware` | После завершения запроса: инкремент spent + проверка превышения hard_limit → 429/403 |
-| `BudgetAlert` | При превышении `notify_at` → webhook + лог |
-| `SpendAggregation` | Materialized hourly/daily spend per key + tenant + model |
-| Admin API | `POST/GET /api/v1/admin/budgets`, `GET /api/v1/admin/budgets/:id/history` |
-| Admin UI — Budget Dashboard | Прогресс-бары, уведомления, история spend |
-
-**Зависимости:** 300-virtual-keys, 132-analytics-api ✅
-
-### 302-cost-rates-auto
-
-| Артефакт | Описание |
-|---|---|
-| `CostRateRegistry` | Автоматическое обновление цен моделей (из community provider defs или встроенной таблицы) |
-| `CostRate` entity | `model`, `provider`, `input_price_per_1k`, `output_price_per_1k`, `currency`, `updated_at` |
-| Fallback cost estimation | Если модели нет в таблице — fallback по `input_price`/`output_price` из конфига провайдера |
-
-**Зависимости:** 301-budget-enforcement, 110-provider-adapters ✅
+**Conclusion:** phases 1–2 of the old v3.0 roadmap (Virtual Keys, Budgets, Cost Rates) are effectively shipped in code. The next line forms wave 4.0.
 
 ---
 
-## Фаза 3: Provider Ecosystem
+## Gap analysis: what's missing
 
-**Проблема:** 6 провайдеров vs 100+ у LiteLLM. Каждый новый провайдер — hardcode.
+Next to each row — where competitors have it (source: 2026 market monitoring).
 
-**Конкуренты:** LiteLLM — 100+ provider definitions в Python + community contributions.
-
-### 310-provider-registry-plugin
-
-| Артефакт | Описание |
-|---|---|
-| `ProviderDefinition` entity | `name`, `api_type`, `base_url_pattern`, `auth_scheme`, `supported_endpoints []string`, `models []ModelDef`, `cost_rates` |
-| Community provider definitions | YAML-файлы в `providers/` или external репозиторий. Регистрация через `routing.providers.definitions_path` в конфиге |
-| `DynamicProviderClient` adapter | Passthrough-клиент, конфигурируемый `ProviderDefinition` (endpoints, auth, headers) |
-| Provider health probe per definition | Generic health check: `GET {base_url}/health` или `HEAD {base_url}` |
-| Fallback cost estimation | Если модели нет в таблице — fallback по `input_price`/`output_price` из конфига |
-| CLI tool | `maskchain provider add <name> --api-type openai --base-url ...` |
-
-**Дизайн-решение:** MaskChain — passthrough, не translation. DynamicProviderClient не конвертирует форматы (кроме уже реализованных gemini/bedrock). Все неподдерживаемые форматы — raw passthrough с заголовками из конфига. Это в 100x упрощает добавление новых провайдеров.
-
-**Зависимости:** 110-provider-adapters ✅, 111-provider-auth-config ✅
-
-### 311-more-api-endpoints
-
-| Артефакт | Описание |
-|---|---|
-| `POST /v1/embeddings` | Passthrough handler + optional shield scan |
-| `POST /v1/images/generations` | Passthrough handler + shield scan для prompt |
-| `POST /v1/audio/transcriptions` | Passthrough handler |
-| `POST /v1/audio/speech` | Passthrough handler |
-| `POST /v1/completions` | Legacy completions passthrough |
-| `POST /v1/models` | Proxy: aggregator моделей от всех активных провайдеров |
-| Generic passthrough route | `POST /v1/:provider/*path` — raw proxy для любого provider-specific endpoint |
-
-**Дизайн:** Каждый новый endpoint — 20-30 строк handler + route registration. Никакого translation. Content Shield применяется только к текстовым полям.
-
-**Зависимости:** 310-provider-registry-plugin (для discovery supported endpoints)
+| Gap | Where competitors have it | Priority |
+|---|---|---|
+| **Semantic cache over masked data** | Portkey, Higress, TrueFoundry, LiteLLM (kπcache) | 🔴 diff+ops |
+| **Compliance packs (HIPAA/PCI/GDPR presets)** | Nightfall (20+ frameworks), Strac | 🔴 diff+sales |
+| **Zero-retention mode** | Grepture/Prompt Security, TrueFoundry air-gap | 🔴 diff (regulated) |
+| **Moderation detector (hate/sexual/violence)** | LiteLLM guardrails, OpenAI Moderation API | 🟠 diff |
+| **Context-aware NER** (full prompt + history, not fragments) | NER engines (spaCy/Presidio in PasteGuard) | 🟠 diff |
+| **Hierarchical RBAC (admin/ops/viewer), teams** | TrueFoundry, Kong Konnect, LiteLLM enterprise | 🟠 adoption |
+| **SSO / OIDC (Keycloak, Azure AD, Okta)** | LiteLLM enterprise, Kong Konnect, TrueFoundry | 🟠 adoption |
+| **Log export (Langfuse, S3/GCS, Datadog, webhook)** | LiteLLM (15+), Portkey, Higress | 🟠 adoption |
+| **Provider registry (YAML definitions, community)** | LiteLLM (100+), Higress | 🟠 ecosystem |
+| **Embeddings / vision / audio endpoints** | LiteLLM, Portkey, Kong | 🟠 parity |
+| **Weighted routing, A/B, traffic mirroring** | LiteLLM, Higress | 🟢 advanced |
+| **Config hot-reload / dynamic routing (zero-downtime)** | Higress (Envoy, ms-level), Kong | 🟢 ops |
+| **MCP / A2A gateway (agent data protection)** | TrueFoundry (native), Kong (plugin), Higress | 🟢 agent wave |
+| **Cost-rates auto-update** | LiteLLM community defs | 🟢 ecosystem |
+| **Multi-region / HA** | TrueFoundry, Kong | 🟢 scale |
 
 ---
 
-## Фаза 4: Advanced Routing
+## Roadmap v4.0 — Depth-first
 
-**Проблема:** Только sequential fallback. Нет weighted routing, A/B testing, traffic mirroring.
+Order: **differentiation (4.0) → parity (4.1) → agent wave (4.2)**. The parity block runs in parallel in the background as capacity allows.
 
-**Конкуренты:** LiteLLM weighted routing, traffic mirroring, A/B testing, router plugins.
+### Wave 4.0 — Depth (diff-first). Priority: 🔴🟠
 
-### 320-weighted-routing
-
-| Артефакт | Описание |
+#### 400-semantic-cache-masked
+**Problem:** repeated requests cost tokens and budget; competitors already cache.
+**Insight:** we cache **masked data** — masking and caching are compatible (placeholders are deterministic), which competitors can't do.
+| Artifact | Description |
 |---|---|
-| `weight` field в provider config | `providers[].weight` (int, default 1) |
-| `WeightedRouteSelector` | Weighted random selection (reservoir sampling) |
-| Fallback chain per weight group | Если выбранный упал — следующий по весу, не по порядку |
-| Metrics | `maskchain_route_selected{tenant,model,provider}` с тегом выбора |
+| `SemanticCache` entity | Index by masked embedding (vector) or exact masked-query hash |
+| Embedding source | Self-contained (statistical/online) or OpenAI-compatible — configurable |
+| `SemanticCacheMiddleware` | Check on ingress; serve from cache only when masks match and policy allows caching |
+| TTL, per-tenant enable, budget-safe (no caching when limit is close) | — |
+| Metrics | `maskchain_cache_hit_rate`, token savings |
 
-**Зависимости:** 70-routing-engine ✅
-
-### 321-traffic-mirroring
-
-| Артефакт | Описание |
+#### 401-compliance-packs
+**Problem:** regulated customers (HIPAA/PCI/GDPR) expect ready-made rule sets; today everything is configured by hand.
+| Artifact | Description |
 |---|---|
-| `MirrorConfig` в route config | `mirror: { provider: "openai", sample_rate: 0.1, headers: {...} }` |
-| `MirroringClient` adapter | Оборачивает `ProviderClient`. После успешного Call/Stream — fire-and-forget к mirror-провайдеру в отдельной горутине |
-| Metrics | `maskchain_mirror_sent{primary_provider,mirror_provider}` |
-| Логирование | Результаты mirror записываются в `mirror_log` (PG или S3), не влияют на response клиенту |
+| `CompliancePack` YAML | "HIPAA", "PCI DSS", "GDPR", "Legal" — presets: which detectors, reactions, resolutions, masking |
+| UI | Apply a pack to a tenant in one click; customize on top |
+| Reports | Compliance check per pack: which rules are active/deviated |
 
-**Зависимости:** 320-weighted-routing
-
-### 322-router-plugins
-
-| Артефакт | Описание |
+#### 402-zero-retention-mode
+**Problem:** regulated customers require "don't store prompts at all".
+| Artifact | Description |
 |---|---|
-| `RoutingPlugin` port interface | `Process(ctx *RoutingContext) error` — может сужать список кандидатов, добавлять сигналы в метаданные |
-| `RoutingPluginRegistry` | Pipeline в `RouteSelector.Select()`: plugin[0] → plugin[1] → ... → final selection |
-| Plugin sources | Встроенные (language-detector, cost-optimizer, latency-prioritizer) + WASM-hosted (`wasmtime-go`) |
-| Built-in plugin: `cost-optimizer` | Выбирает дешёвого провайдера для модели, если не задан explicit routing |
-| Built-in plugin: `latency-prioritizer` | Выбирает провайдера с наименьшей latency (исторической, из метрик) |
-| Config | `routing.plugins: [{name: "cost-optimizer", config: {...}}]` |
+| Tenant mode `retention: none` | Prompts/responses are not written to session/log; only aggregated counters (tokens, masks, redirects) |
+| Fallback logging | Blocking anomalies logged with anonymized facts only (detector, category, nothing more) |
+| Config | `data.retention: {mode: full|meta|none}` per tenant |
 
-**Зависимости:** 70-routing-engine ✅
-
-**Дизайн-решение:** WASM-host для community plugins — кроссплатформенный, безопасный (sandbox), работает с любой версией Go. Встроенные плагины — нативные Go-структуры.
-
----
-
-## Фаза 5: Observability & Compliance
-
-**Проблема:** Только OTel + Prometheus. Нет интеграции с внешними observability-платформами.
-
-**Конкуренты:** LiteLLM — 15+ logging integrations (Langfuse, LangSmith, Datadog, S3, GCS, Azure, etc.).
-
-### 330-log-exporters
-
-| Артефакт | Описание |
+#### 403-moderation-detector
+| Artifact | Description |
 |---|---|
-| `LogExporter` port interface | `Export(ctx, *AuditRecord) error` |
-| `WebhookLogExporter` | POST JSON на внешний endpoint (batch или per-event) |
-| `S3LogExporter` | Периодическая загрузка batch-файлов в S3-compatible storage (JSON Lines / Parquet) |
-| `DatadogLogExporter` | Datadog API logs intake |
-| `LogExporterRegistry` | per-tenant: какие exporter включены, с каким sampling rate |
-| Audit record enrichment | `X-Request-ID`, `X-Session-ID`, virtual key label, route decision, shield verdict |
-| Sampling | Per-exporter `sample_rate` для high-volume логов (список разрешённых событий всегда 100%) |
-| Config | `logging.exporters: [{type: webhook, url: ..., sample_rate: 0.1}]` |
-
-**Зависимости:** 61-observability ✅
-
-### 331-jwt-oidc-auth
-
-| Артефакт | Описание |
-|---|---|
-| `JWTValidator` middleware | Парсинг и валидация JWT (RS256/ES256), проверка `iss`, `aud`, `exp` |
-| `OIDCProvider` | Discovery URL → JWKS → кэширование ключей |
-| OIDC integration для Admin UI | Login через external IdP (Keycloak, Azure AD, Okta) |
-| `AdminSession` JWT bridge | JWT → внутренняя admin сессия (для совместимости с существующим session store) |
-| Config | `auth.jwt: { jwks_url: ..., audience: ..., issuer: ... }` |
-
-**Дизайн-решение:** MaskChain НЕ становится identity provider — это external. SSO/SAML — через oauth2-proxy перед admin, не в ядро. Принцип **Infrastructure, Not Chatbot** (III).
-
-**Зависимости:** 80-tenant-isolation ✅
-
----
-
-## Фаза 6: Agent Infrastructure (PostMVP → Active)
-
-**Проблема:** Клиенты хотят проксировать MCP/A2A трафик через MaskChain для DLP-сканирования.
-
-### 340-mcp-gateway
-
-| Артефакт | Описание |
-|---|---|
-| MCP protocol detection | Content-Type `application/vnd.mcp+json` или path prefix `/mcp/` |
-| MCP proxy handler | Passthrough с shield scan для текстового содержимого tool calls |
-| MCP tool discovery blocking | Blacklist/whitelist тулов per-tenant (через словари — названия тулов как dictionary entries с action=block) |
-| `@sk-masked` аннотация | MCP tool response может содержать masked данные — автоматический unmask при возврате клиенту |
-
-**Зависимости:** 51-shield-gateway-integration ✅, 24-shield-dictionaries ✅
-
-### 341-a2a-gateway
-
-| Артефакт | Описание |
-|---|---|
-| A2A agent registration | Статическая конфигурация: `agents: [{agent_name, url, capabilities}]` |
-| A2A proxy handler | Proxy A2A запросов с shield scan на границе |
-| Agent-to-agent DLP | Сканирование данных, которыми обмениваются агенты (body A2A messages) |
-
-**Дизайн-решение:** MCP и A2A — это протоколы, а не agent framework. MaskChain не запускает агентов, а проксирует их трафик с DLP. Принцип **Infrastructure, Not Chatbot** соблюдается.
-
-**Зависимости:** 340-mcp-gateway
-
----
-
-## Фаза 7: Shield Deepening (Content Differentiation)
-
-**Проблема:** LiteLLM guardrails поверхностные. MaskChain должен углубить отрыв в DLP.
-
-### 350-moderation-detector
-
-| Артефакт | Описание |
-|---|---|
-| `ModerationDetector` | Вызов OpenAI Moderation API (или self-hosted) как Detector в pipeline |
+| `ModerationDetector` | OpenAI Moderation API (or self-hosted) as a Detector in the pipeline |
 | Policy action per category | `action_on_hate: block`, `action_on_sexual: mask` |
-| Config | `shield.detectors.moderation: { provider: openai, api_key: ..., categories: [hate, harassment, self-harm, sexual, violence] }` |
+| Enables | Content safety without building our own NER pipeline |
 
-**Зависимости:** 21-shield-detectors ✅
-
-### 351-context-aware-detectors
-
-| Артефакт | Описание |
+#### 404-context-aware-nlp
+| Artifact | Description |
 |---|---|
-| `ContextAwareDetector` | Анализирует не фрагмент, а весь prompt + предыдущие turn-ы (из session history) |
-| Sliding window context | Последние N токенов диалога для выявления data leakage через контекст |
-| NLP-based PII | Использование spaGO или внешнего ONNX-early для NER |
+| `ContextAwareDetector` | Analysis of the full prompt + previous turns (session history) |
+| Sliding window N tokens | Data leakage through context |
+| NLP-based PII | spaGO / external NER (optional, off by default) — not in the hot data-plane path |
 
-**Зависимости:** 21-shield-detectors ✅, sessions ✅
+### Wave 4.1 — Parity (adoption). Priority: 🟠🟢
+
+#### 410-sso-oidc
+| Artifact | Description |
+|---|---|
+| `JWTValidator` + `OIDCProvider` | RS256/ES256, JWKS cache, `iss/aud/exp` |
+| Admin UI login via IdP | Keycloak, Azure AD, Okta |
+| Design | MaskChain is NOT an IdP; SAML via oauth2-proxy optionally (principle 6) |
+
+#### 411-rbac-teams
+| Artifact | Description |
+|---|---|
+| `Role` entity | admin / ops / viewer (per tenant) |
+| Rights model | Restrict CRUD endpoints by role; audit of role changes |
+| Teams | Group tenants; grant permissions on the group |
+
+#### 412-log-exporters
+| Artifact | Description |
+|---|---|
+| `LogExporter` port | webhook, S3/GCS (batch, JSONL/Parquet), Datadog, Langfuse-compatible |
+| Sampling | per-exporter `sample_rate`; sanctioned events always 100% |
+| Enrichment | X-Request-ID, session, virtual key label, route decision, shield verdict |
+
+#### 413-provider-registry-plugin
+| Artifact | Description |
+|---|---|
+| `ProviderDefinition` YAML | api_type, base_url, auth_scheme, supported endpoints, models |
+| `DynamicProviderClient` | Passthrough client driven by metadata (no translation — principle 5) |
+| Community defs | `providers/` + `routing.providers.definitions_path` |
+| CLI | `maskchain provider add <name> --api-type openai --base-url ...` |
+
+#### 414-more-api-endpoints
+| Artifact | Description |
+|---|---|
+| `/v1/embeddings`, `/v1/images/generations`, `/v1/audio/*` | Passthrough + optional shield scan of text fields |
+| `/v1/completions` | ✅ (already present) — extend with a model aggregator |
+| `/v1/models` | Proxy aggregating models of active providers |
+
+#### 415-routing-advanced
+| Artifact | Description |
+|---|---|
+| Weighted routing | `providers[].weight`, reservoir sampling |
+| Traffic mirroring | `mirror: {provider, sample_rate}` → fire-and-forget + mirror_log |
+| Router plugins | `RoutingPlugin` pipeline: cost-optimizer, latency-prioritizer, WASM-host |
+
+#### 416-config-hot-reload
+| Artifact | Description |
+|---|---|
+| Dynamic reload | routing/config without restart (SIGHUP + FS watch) |
+| Validate before apply | atomic config swap |
+
+#### 417-cost-rates-auto
+| Artifact | Description |
+|---|---|
+| Community price tables | Update cost-rates from external defs |
+| Fallback | Estimate from `input_price/output_price` in provider config |
+
+### Wave 4.2 — Agent & Scale. Priority: 🟢
+
+#### 420-mcp-gateway
+| Artifact | Description |
+|---|---|
+| MCP detection | Content-Type `application/vnd.mcp+json`, path `/mcp/` |
+| Proxy + shield | Tool-call content scanned; per-tenant tool blacklist/whitelist |
+| Unmask on egress | Tool responses carry `@sk-masked` — auto-restore for the client |
+
+#### 421-a2a-gateway
+| Artifact | Description |
+|---|---|
+| A2A registration | `agents: [{agent_name, url, capabilities}]` |
+| Body DLP | Scan data exchanged between agents at the boundary |
+
+#### 422-ha-multiregion
+| Artifact | Description |
+|---|---|
+| Stateless layer | Gateway replicas, shared Valkey/PG |
+| Leader election for workers | Aggregation/cleanup workers run on one replica |
+| Load test | Public benchmark (gateway path latency overhead) |
 
 ---
 
-## Порядок разработки
+## Development order
 
 ```
-v3.0 Enterprise AI Gateway:
+v4.0 Depth-first (now):
+  400-semantic-cache-masked ─── key diff+ops win, fast payoff
+  401-compliance-packs      ─── diff+sales, quick demos
+  402-zero-retention-mode   ─── required for regulated (sales)
+  403-moderation-detector   ─── optional, cheap
+  404-context-aware-nlp     ─── after 403 (shared pipeline)
 
-Фаза 1: Identity & Access
-  300-virtual-keys ──── foundation, нет внешних зависимостей
+v4.1 Parity (in background, as ready):
+  410-sso-oidc  →  411-rbac-teams  →  412-log-exporters
+  413-provider-registry → 414-more-api-endpoints
+  415-routing-advanced  →  416-config-hot-reload  →  417-cost-rates-auto
 
-Фаза 2: Financial Operations
-  301-budget-enforcement ─── после 300 (virtual keys) + 132 ✅ (analytics)
-  302-cost-rates-auto    ─── параллельно 301
-
-Фаза 3: Provider Ecosystem
-  310-provider-registry-plugin ─── после 110 ✅
-  311-more-api-endpoints       ─── после 310 (discovery)
-
-Фаза 4: Advanced Routing
-  320-weighted-routing  ─── после 70 ✅
-  321-traffic-mirroring ─── после 320
-  322-router-plugins    ─── после 320
-
-Фаза 5: Observability & Compliance
-  330-log-exporters ─── после 61 ✅
-  331-jwt-oidc-auth ─── после 80 ✅, optional external
-
-Фаза 6: Agent Infrastructure (PostMVP → Active)
-  340-mcp-gateway  ─── после 51 ✅
-  341-a2a-gateway  ─── после 340
-
-Фаза 7: Shield Deepening
-  350-moderation-detector     ─── после 21 ✅
-  351-context-aware-detectors ─── после sessions ✅
+v4.2 Agent & Scale:
+  420-mcp-gateway → 421-a2a-gateway
+  422-ha-multiregion (on demand)
 ```
 
-Приоритет: **Фаза 1 → Фаза 2 → Фаза 3** (core enterprise adoption).  
-Фазы 4-7 — параллельно по готовности.
+Priority: **400 → 401 → 402** (sales + diff). In parallel a minimal parity block (410, 413) so we don't lose adoption in LiteLLM comparisons.
 
 ---
 
-## Отстройка от LiteLLM (Differentiation Strategy)
+## Differentiation strategy
 
-| Область | MaskChain advantage | Действие |
+| Area | MaskChain advantage | Action |
 |---|---|---|
-| **Content Shield DLP** | Reversible mask, streaming unmask, Aho-Corasick dictionary | Углублять (Фаза 7) |
-| **Performance** | Go binary, <100ms startup, ~18MB | Сохранять |
-| **Tenant isolation** | Словари + PII-правила per-tenant | Virtual keys (Фаза 1) усилит |
-| **Streaming unmask** | Уникальная фича | Маркетинг |
-| **Ecosystem** | Отставание (6 vs 100+ providers) | Provider registry (Фаза 3) |
+| **Reversible mask + streaming unmask** | Unique in the category | Deepen (400, 401, 402) |
+| **Per-tenant dictionary (4 match modes)** | No one replicates it | Marketing |
+| **Self-hosted Go, ~18MB, <100ms** | No Python dependencies, air-gap ready | Preserve |
+| **Prompt injection detector (native)** | Already present, rare in gateways | Surface in marketing |
+| **Virtual keys + budgets + cost-rates** | Enterprise features free in OSS | Preserve |
+| **Ecosystem (providers)** | Lagging 6 vs 100+ | Parity 413, 417 |
+| **Zero-retention / compliance** | Regulated niche | 401, 402 |
 
-### Что НЕ делаем (сознательное no-go)
+### Deliberate no-gos
 
-- Translation между форматами провайдеров (кроме gemini/bedrock) — passthrough только
-- Agent framework / agent runtime — только проксирование протоколов
-- Prompt playground / chatbot UI — инфраструктурный продукт
-- SSO/SAML в ядре — external proxy
-- Low-code / visual workflow
+- Translation between provider formats (except gemini/bedrock) — passthrough only.
+- Agent framework / agent runtime — protocol proxying only.
+- Prompt playground / chatbot UI — infrastructure product.
+- SSO/SAML in the core — SAML via external proxy.
+- Low-code / visual workflow.
+- Custom NER in the hot data-plane path without justification.
 
 ---
 
-## Метрики успеха v3.0
+## v4.0 success metrics
 
-| Метрика | Цель | Фаза |
+| Metric | Target | Wave |
 |---|---|---|
-| Virtual keys created | >80% tenant используют | Фаза 1 |
-| Budget enforcement | 100% тенантов с active budget | Фаза 2 |
-| Provider coverage | 50+ provider definitions | Фаза 3 |
-| Log exporters | 4+ exporter types | Фаза 5 |
-| Community providers | 10+ contributed provider YAML | Фаза 3 |
-| MCP integration | E2E working MCP proxy | Фаза 6 |
+| Semantic cache hit rate | ≥40% on repeat requests | 4.0 |
+| Spend savings via cache | ≥25% of repeat traffic | 4.0 |
+| Tenants with compliance pack | 100% new, ≥50% existing | 4.0 |
+| Zero-retention usage | ≥1 regulated case (demo) | 4.0 |
+| Provider coverage | 50+ definitions | 4.1 |
+| SSO enabled | ≥1 IdP (Keycloak) in CI/demo | 4.1 |
+| MCP e2e | Working MCP proxy with unmask | 4.2 |
+| Gateway latency | Overhead <15% at p95 | 4.2 |
