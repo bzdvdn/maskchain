@@ -16,6 +16,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/adapters/provider"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
 	"github.com/bzdvdn/maskchain/src/internal/api"
+	routingDomain "github.com/bzdvdn/maskchain/src/internal/domain/routing"
 	routingSvc "github.com/bzdvdn/maskchain/src/internal/domain/routing/service"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
@@ -51,31 +52,13 @@ func run() {
 		)
 	}
 
-	registry, err := routingSvc.NewProviderRegistry(toDomainRoutingConfig(cfg.Routing))
-	if err != nil {
-		logger.Error("failed to create provider registry", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-	selector := routingSvc.NewRouteSelector(registry)
-	clients := make(map[string]ports.ProviderClient)
-	if cfg.Egress != nil && cfg.Routing != nil {
-		for i := range cfg.Routing.Providers {
-			pcfg := &cfg.Routing.Providers[i]
-			client, err := provider.NewProviderClient(pcfg, cfg.Egress)
-			if err != nil {
-				logger.Error("failed to create provider client", slog.String("provider", pcfg.Name), slog.String("error", err.Error()))
-				os.Exit(1)
-			}
-			clients[pcfg.Name] = client
-			logger.Info("provider client created",
-				slog.String("provider", pcfg.Name),
-				slog.String("api_type", pcfg.APIType),
-				slog.String("base_url", pcfg.BaseURL),
-			)
-		}
-	}
-	fallbackHandler := routingSvc.NewFallbackHandler(clients)
-	routingHandler := api.NewRoutingProxyHandler(selector, fallbackHandler)
+	var (
+		registry        *routingSvc.ProviderRegistry
+		selector        *routingSvc.RouteSelector
+		clients         map[string]ports.ProviderClient
+		fallbackHandler *routingSvc.FallbackHandler
+	)
+	routingHandler := (*api.RoutingProxyHandler)(nil)
 
 	// @sk-task config-hot-reload#T3.1: Start config watcher for runtime hot-reload in combined binary (AC-001)
 	if cfgDir := config.ConfigDirFromArgs(); cfgDir != "" {
@@ -121,14 +104,6 @@ func run() {
 		})
 	}
 
-	healthCtx, healthCancel := context.WithCancel(context.Background())
-	defer healthCancel()
-	if cfg.Routing != nil {
-		healthChecker := routingSvc.NewHealthChecker(registry, nil)
-		go healthChecker.Start(healthCtx, 30*time.Second)
-		logger.Info("provider health checker started")
-	}
-
 	serviceName := "maskchain"
 	if cfg.OTel != nil && cfg.OTel.ServiceName != "" {
 		serviceName = cfg.OTel.ServiceName
@@ -172,6 +147,42 @@ func run() {
 			logger.Error("failed to run migrations", slog.String("error", err.Error()))
 			os.Exit(1)
 		}
+	}
+
+	loadCtx, loadCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	providers, rules := bootstrap.LoadRoutingFromDB(loadCtx, cfg.Routing, pgPool, logger)
+	loadCancel()
+	registry, err = routingSvc.NewProviderRegistry(&routingDomain.RoutingConfig{Providers: providers, Rules: rules})
+	if err != nil {
+		logger.Error("failed to create provider registry", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	selector = routingSvc.NewRouteSelector(registry)
+	clients = make(map[string]ports.ProviderClient)
+	if cfg.Egress != nil {
+		for _, p := range fromDomainProviders(providers) {
+			client, clientErr := provider.NewProviderClient(&p, cfg.Egress)
+			if clientErr != nil {
+				logger.Error("failed to create provider client", slog.String("provider", p.Name), slog.String("error", clientErr.Error()))
+				continue
+			}
+			clients[p.Name] = client
+			logger.Info("provider client created",
+				slog.String("provider", p.Name),
+				slog.String("api_type", p.APIType),
+				slog.String("base_url", p.BaseURL),
+			)
+		}
+	}
+	fallbackHandler = routingSvc.NewFallbackHandler(clients)
+	routingHandler = api.NewRoutingProxyHandler(selector, fallbackHandler)
+
+	healthCtx, healthCancel := context.WithCancel(context.Background())
+	defer healthCancel()
+	if len(providers) > 0 {
+		healthChecker := routingSvc.NewHealthChecker(registry, nil)
+		go healthChecker.Start(healthCtx, 30*time.Second)
+		logger.Info("provider health checker started")
 	}
 
 	vkClient, err := bootstrap.InitValkey(cfg.Valkey, logger)

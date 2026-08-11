@@ -20,6 +20,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	analyticsapp "github.com/bzdvdn/maskchain/src/internal/app/analytics"
+	budgetapp "github.com/bzdvdn/maskchain/src/internal/app/budget"
 	conversationapp "github.com/bzdvdn/maskchain/src/internal/app/conversation"
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
 	"github.com/bzdvdn/maskchain/src/internal/app/worker"
@@ -155,9 +156,18 @@ func buildGatewayServer(
 		}
 
 		tenantProvider := middleware.NewTenantProvider(dbTenants)
-		authMw := middleware.Auth(tenantProvider)
-		srv.RegisterAuth(authMw)
-		logger.Info("auth middleware registered", slog.Int("tenants", len(dbTenants)))
+		if pgPool != nil {
+			bootstrap.BackfillVirtualKeys(context.Background(), cfg, pgPool, logger)
+			vkRepo := bootstrap.NewVirtualKeyRepo(pgPool)
+			authMw := middleware.VirtualKeyAuth(vkRepo, tenantProvider)
+			srv.RegisterAuth(authMw)
+			srv.RegisterModelAccess(middleware.ModelAccess())
+			logger.Info("virtual key auth middleware registered", slog.Int("tenants", len(dbTenants)))
+		} else {
+			authMw := middleware.Auth(tenantProvider)
+			srv.RegisterAuth(authMw)
+			logger.Info("in-memory auth middleware registered (no db)", slog.Int("tenants", len(dbTenants)))
+		}
 
 		// Context is intentionally never cancelled: reloader runs for the
 		// process lifetime, matching the single-binary bootstrap pattern (cmd/gateway/run.go).
@@ -239,15 +249,7 @@ func buildGatewayServer(
 	analyticsCtx, analyticsCancel := context.WithCancel(context.Background())
 	_ = analyticsCancel
 	if cfg.Analytics != nil && pgPool != nil {
-		costRates := make([]*analytics.CostRate, 0, len(cfg.Analytics.CostRates))
-		for _, cr := range cfg.Analytics.CostRates {
-			rate, err := analytics.NewCostRate(cr.Model, cr.InputPricePer1K, cr.OutputPricePer1K)
-			if err != nil {
-				logger.Warn("analytics: invalid cost rate, skipping", slog.String("model", cr.Model), slog.String("error", err.Error()))
-				continue
-			}
-			costRates = append(costRates, rate)
-		}
+		costRates := bootstrap.LoadCostRatesFromDB(context.Background(), cfg, pgPool, logger)
 		costRegistry := analytics.NewCostRateRegistry(costRates)
 		logger.Info("cost rate registry created", slog.Int("rates", len(costRates)))
 
@@ -307,6 +309,31 @@ func buildGatewayServer(
 		logger.Info("conversation logging pipeline started", slog.Int("retention_days", cfg.Conversations.RetentionDays))
 	} else {
 		logger.Debug("conversation logging disabled — no conversations config, disabled, or no db pool")
+	}
+
+	// @sk-task 301-budget-enforcement#T2.4: Wire budget middleware and aggregation worker in combined binary (AC-004, AC-005)
+	budgetCtx, budgetCancel := context.WithCancel(context.Background())
+	_ = budgetCancel
+	if cfg.Budgets != nil && pgPool != nil && vkClient != nil {
+		costRates := bootstrap.LoadCostRatesFromDB(context.Background(), cfg, pgPool, logger)
+		budgetRepo := bootstrap.NewBudgetRepo(pgPool)
+		counter := bootstrap.NewBudgetCounter(vkClient)
+		vkRepo := bootstrap.NewVirtualKeyRepo(pgPool)
+		notifier := budgetapp.NewWebhookNotifier(cfg.Budgets.AlertWebhookURL, logger)
+
+		budgetMw := middleware.NewBudgetMiddleware(budgetRepo, counter,
+			analytics.NewCostRateRegistry(costRates), vkRepo, notifier, logger)
+		srv.RegisterBudgetMiddleware(budgetMw.Handler())
+		logger.Info("budget enforcement middleware registered")
+
+		interval, _ := time.ParseDuration(bootstrap.BudgetAggregationInterval(cfg))
+		if interval <= 0 {
+			interval = 5 * time.Minute
+		}
+		go budgetapp.NewAggregationWorker(budgetRepo, interval, logger).Run(budgetCtx)
+		logger.Info("budget aggregation worker started", slog.Duration("interval", interval))
+	} else {
+		logger.Debug("budget enforcement disabled — no budgets config, no db pool, or no valkey")
 	}
 
 	srv.RegisterProxyRoute(middleware.ShieldMiddleware(shieldEngine, cfg.Shield, logger, sessionUseCase), routingHandler)

@@ -262,6 +262,11 @@ configRuntime:
   #   retention_days: 90
   conversations: {}
 
+  # budgets:
+  #   alert_webhook_url: "${BUDGET_WEBHOOK_URL}"
+  #   aggregation_interval: 5m
+  budgets: {}
+
   # tenants:
   #   default:
   #     name: "Default Tenant"

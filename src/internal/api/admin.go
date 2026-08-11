@@ -159,6 +159,7 @@ func (s *AdminServer) RegisterAuditHandler(h *admin.AuditHandler) {
 }
 
 // @sk-task admin-ui-design#T3.1: Register routing data endpoint (AC-006)
+// @sk-task 150-admin-routing-crud#T2.3: Register routing CRUD routes (AC-001)
 func (s *AdminServer) RegisterRoutingHandler(h *admin.RoutingHandler) {
 	group := s.engine.Group("/api/v1/routing")
 	if s.adminSessionMw != nil {
@@ -166,6 +167,27 @@ func (s *AdminServer) RegisterRoutingHandler(h *admin.RoutingHandler) {
 	}
 	group.GET("", h.HandleRouting)
 	group.GET("/", h.HandleRouting)
+	group.GET("/providers", h.ListProviders)
+	group.PUT("/providers", h.UpsertProvider)
+	group.DELETE("/providers/:name", h.DeleteProvider)
+	group.GET("/routes", h.ListRoutes)
+	group.PUT("/routes", h.UpsertRoute)
+	group.DELETE("/routes", h.DeleteRoute)
+}
+
+// @sk-task 300-virtual-keys#T3.1: Register virtual key CRUD routes (AC-001)
+func (s *AdminServer) RegisterVirtualKeyHandler(h *admin.VirtualKeyHandler) {
+	group := s.engine.Group("/api/v1/keys")
+	if s.adminSessionMw != nil {
+		group.Use(s.adminSessionMw)
+	}
+	group.POST("", h.Create)
+	group.GET("", h.List)
+	group.GET("/", h.List)
+	group.GET("/:id", h.Get)
+	group.PATCH("/:id", h.Update)
+	group.DELETE("/:id", h.Delete)
+	group.GET("/tenants/:slug", h.ListByTenant)
 }
 
 // @sk-task 118-api-consistency#T3.5: NoRoute checks Accept:text/html for SPA fallback (AC-009)
@@ -184,6 +206,18 @@ func (s *AdminServer) RegisterAnalyticsHandler(h *analytics.AnalyticsHandler, de
 	summary.GET("", h.HandleTenantSummary)
 }
 
+// @sk-task 150-admin-routing-crud#T2.3: Register cost rate CRUD routes (AC-002)
+func (s *AdminServer) RegisterCostRateHandler(h *admin.CostRateHandler) {
+	group := s.engine.Group("/api/v1/analytics/cost-rates")
+	if s.adminSessionMw != nil {
+		group.Use(s.adminSessionMw)
+	}
+	group.GET("", h.List)
+	group.GET("/", h.List)
+	group.PUT("", h.Upsert)
+	group.DELETE("/:model", h.Delete)
+}
+
 // @sk-task conversation-logging#T3.1: Register conversation list/detail routes under admin session (AC-005, AC-006)
 func (s *AdminServer) RegisterConversationHandler(h *conversationhandler.ConversationHandler) {
 	group := s.engine.Group("/api/v1/conversations")
@@ -193,6 +227,22 @@ func (s *AdminServer) RegisterConversationHandler(h *conversationhandler.Convers
 	group.GET("", h.HandleList)
 	group.GET("/", h.HandleList)
 	group.GET("/:id", h.HandleGet)
+}
+
+// @sk-task 301-budget-enforcement#T3.2: Register budget CRUD and history routes (AC-006)
+func (s *AdminServer) RegisterBudgetHandler(h *admin.BudgetHandler) {
+	group := s.engine.Group("/api/v1/budgets")
+	if s.adminSessionMw != nil {
+		group.Use(s.adminSessionMw)
+	}
+	group.POST("", h.Create)
+	group.GET("", h.List)
+	group.GET("/", h.List)
+	group.GET("/tenants/:slug", h.ListByTenant)
+	group.GET("/:id", h.Get)
+	group.PATCH("/:id", h.Update)
+	group.DELETE("/:id", h.Delete)
+	group.GET("/:id/history", h.History)
 }
 
 // @sk-task 118-api-consistency#T3.5: NoRoute checks Accept:text/html for SPA fallback (AC-009)

@@ -18,9 +18,12 @@
   - `ui/embed.go` — Go embed для встраивания статики в admin (не gateway)
   - `ui/src/pages/Profiles/` — ProfileList, ProfileDetail, ProfileForm
   - `ui/src/pages/Incidents/` — IncidentList, IncidentDetail
+  - `ui/src/pages/Keys.tsx` — Virtual Keys admin page
+  - `ui/src/pages/Budgets.tsx` — Budget dashboard (progress bars, create/edit, history)
   - `ui/src/components/` — DictionaryEditor, PreprocessorEditor, ErrorBoundary
   - `ui/src/api/profiles.ts` — API client для `/api/v1/profiles/*`
   - `ui/src/api/incidents.ts` — API client для `/api/v1/incidents/*`
+  - `ui/src/api/keys.ts`, `ui/src/api/budgets.ts` — API clients для virtual keys/budgets
 - `specs/active/` — active spec artifacts (speckeep-managed)
 - `deployments/` — Docker, migrations, docker-compose configs
 
@@ -47,16 +50,23 @@
   - `src/internal/api/health/` — health check endpoints (liveness/readiness probes), service status aggregation
 - `src/internal/api/admin.go` — admin router setup (AdminServer), static files, incident/tenant handlers
   - `src/internal/api/handler/incident/` — Incident read/export handlers (list, get, export CSV/JSON)
-  - `src/internal/api/handler/admin/` — Tenant CRUD handlers
-  - `src/internal/api/dto/` — request/response DTOs (IncidentResponse, TenantResponse, PaginatedResponse)
+  - `src/internal/api/handler/admin/` — Tenant CRUD, VirtualKey, CostRate, Budget handlers (audit-logged admin API)
+  - `src/internal/api/handler/admin/budget_handler.go` — Budget CRUD + history (`/api/v1/budgets`, under adminSessionMw)
+  - `src/internal/api/dto/` — request/response DTOs (IncidentResponse, TenantResponse, PaginatedResponse, budget/virtual_key DTOs)
+- `src/internal/api/middleware/budget.go` — BudgetMiddleware (hard-limit 429 before request, spend increment + RecordSpend + alerts after non-streaming response)
 - `src/internal/infra/config/` — cobra/viper config loading, validation, defaults (RoutingConfig, ProviderConfig with ProxyURL, RouteConfig, RuleConfig), serialize/diff/watcher
 - `src/internal/infra/crypto/` — AES-256-GCM Encryptor/Decryptor for conversation logging (key from `MASKCHAIN_CONVERSATION_KEY` ENV)
 - `src/internal/infra/telemetry/` — OTel SDK init, TracerProvider, MeterProvider, OTLP exporters
 - `src/internal/infra/metrics/` — Prometheus metric definitions (HTTP, shield), /metrics handler
 - `src/internal/infra/logging/` — slog adapter with OTel trace_id/span_id enrichment
-- `src/internal/adapters/repository/postgres/migrations/` — SQL migrations (dictionary_entries, incidents, tenants, mask_entries, sessions, analytics, admin_sessions, audit_log, conversation_logs)
+- `src/internal/adapters/repository/postgres/migrations/` — SQL migrations (dictionary_entries, incidents, tenants, mask_entries, sessions, analytics, admin_sessions, audit_log, conversation_logs, routing_registry, virtual_keys, budgets)
 - `src/internal/adapters/repository/conversation/` — PgConversationStore (encrypted conversation_logs persistence; conversation logging pipeline)
+- `src/internal/adapters/repository/budget/` — ValkeySpendCounter (INCRBYFLOAT budget spend counter, budget-enforcement)
 - `src/internal/domain/conversation/` — ConversationLog entity, MaskingEntry (mask-proof mapping), ConversationStore port
+- `src/internal/domain/virtualkey/` — VirtualKey entity, KeyHash, VirtualKeyRepository port, Spend accumulation (virtual keys)
+- `src/internal/domain/budget/` — Budget entity (scope tenant|key|model, type monthly|daily|custom), PeriodKey/CounterKey, SpendCounter/AlertNotifier ports (budget enforcement)
+- `src/internal/domain/analytics/` — CostRate entity, CostRateRepository port, CostRateRegistry (per-model cost lookup for budget/analytics)
+- `src/internal/app/budget/` — WebhookNotifier (budget threshold alerts), AggregationWorker (materialized daily spend)
 - `deployments/` — Docker, Helm, docker-compose, migrations
   - `deployments/helm/maskchain/` — Helm chart for Kubernetes (Bitnami subcharts, ConfigMap, Ingress/GatewayAPI, ServiceMonitor)
   - `deployments/docker-compose/` — local dev / production compose stacks
@@ -73,6 +83,7 @@
 ## Where To Edit
 - New domain logic — `src/internal/domain/`
 - New use case / feature — `src/internal/app/` + `src/internal/ports/` + `src/internal/adapters/`
+- Budget/spend changes — `src/internal/domain/budget/` + `src/internal/adapters/repository/budget/` + `src/internal/app/budget/` + `src/internal/api/middleware/budget.go`
 - New API endpoint — `src/internal/api/` + `src/internal/ports/` (inbound interface)
 - Health check changes — `src/internal/api/health/`
 - Egress/proxy changes — `src/internal/adapters/egress/` (proxy dialer, pool, retry, CB)

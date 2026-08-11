@@ -16,6 +16,7 @@ export interface CostRecord {
   model: string
   total_cost: number
   request_count: number
+  currency?: string
   period_start: string
   period_end: string
 }

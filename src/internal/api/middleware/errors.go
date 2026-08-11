@@ -20,6 +20,8 @@ const (
 	// @sk-task rate-limiting-budgets#T2.2: Add rate limit error codes (AC-001)
 	ErrorCodeRateLimitExceeded   ErrorCode = "RATE_LIMIT_EXCEEDED"
 	ErrorCodeTokenBudgetExceeded ErrorCode = "TOKEN_BUDGET_EXCEEDED"
+	// @sk-task 301-budget-enforcement#T2.1: Add budget exceeded error code (AC-002)
+	ErrorCodeBudgetExceeded ErrorCode = "BUDGET_EXCEEDED"
 )
 
 // @sk-task 40-profiles-api#T1.1: Implement error middleware and helpers (AC-011)

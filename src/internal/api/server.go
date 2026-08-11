@@ -32,6 +32,8 @@ type Server struct {
 	sessionMiddleware gin.HandlerFunc
 	usageMiddleware   gin.HandlerFunc
 	conversationMw    gin.HandlerFunc
+	modelAccessMw     gin.HandlerFunc
+	budgetMw          gin.HandlerFunc
 }
 
 // @sk-task 114-real-health-probes#T2.2: Accept healthSvc and replace static handlers (AC-001, AC-005, AC-008)
@@ -100,6 +102,9 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 	primary := s.engine.Group("/api/v1")
 	if routingHandler != nil {
 		chain := []gin.HandlerFunc{middleware.WrapSSE()}
+		if s.modelAccessMw != nil {
+			chain = append(chain, s.modelAccessMw)
+		}
 		if s.sessionMiddleware != nil {
 			chain = append(chain, s.sessionMiddleware)
 		}
@@ -111,11 +116,17 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 		if s.usageMiddleware != nil {
 			chain = append(chain, s.usageMiddleware)
 		}
+		if s.budgetMw != nil {
+			chain = append(chain, s.budgetMw)
+		}
 		chain = append(chain, routingHandler.HandleChatCompletion)
 		primary.POST("/chat/completions", chain...)
 		primary.POST("/messages", chain...)
 	} else {
 		chain := []gin.HandlerFunc{}
+		if s.modelAccessMw != nil {
+			chain = append(chain, s.modelAccessMw)
+		}
 		if s.sessionMiddleware != nil {
 			chain = append(chain, s.sessionMiddleware)
 		}
@@ -125,6 +136,9 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 		chain = append(chain, shieldMiddleware)
 		if s.usageMiddleware != nil {
 			chain = append(chain, s.usageMiddleware)
+		}
+		if s.budgetMw != nil {
+			chain = append(chain, s.budgetMw)
 		}
 		chain = append(chain, ProxyChatCompletionHandler)
 		primary.POST("/chat/completions", chain...)
@@ -159,6 +173,16 @@ func (s *Server) RegisterUsageMiddleware(mw gin.HandlerFunc) {
 // @sk-task conversation-logging#T2.2: RegisterConversationMiddleware on gateway Server (RQ-008, DEC-001)
 func (s *Server) RegisterConversationMiddleware(mw gin.HandlerFunc) {
 	s.conversationMw = mw
+}
+
+// @sk-task 300-virtual-keys#T2.2: Register model access middleware on proxy routes (AC-002)
+func (s *Server) RegisterModelAccess(mw gin.HandlerFunc) {
+	s.modelAccessMw = mw
+}
+
+// @sk-task 301-budget-enforcement#T2.2: Register budget middleware on proxy routes (AC-002)
+func (s *Server) RegisterBudgetMiddleware(mw gin.HandlerFunc) {
+	s.budgetMw = mw
 }
 
 func (s *Server) withSessionMiddleware(next gin.HandlerFunc) gin.HandlerFunc {

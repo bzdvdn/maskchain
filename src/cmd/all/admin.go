@@ -23,6 +23,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/resolver"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
+	"github.com/bzdvdn/maskchain/src/internal/domain/virtualkey"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 	"github.com/bzdvdn/maskchain/src/internal/infra/crypto"
 	"github.com/gin-gonic/gin"
@@ -136,43 +137,51 @@ func buildAdminServer(
 		defer auditLogStore.Shutdown()
 		auditAdapter := &auditLogAdapter{store: auditLogStore}
 
+		backfillCtx, backfillCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		bootstrap.BackfillVirtualKeys(backfillCtx, cfg, pgPool, logger)
+		backfillCancel()
+
 		pgTenantRepo := postgres.NewPostgresTenantRepo(pgPool, txMgr)
 		dictCache := dictionaryrepo.NewValkeyDictionaryCache(vkClient, 5*time.Minute)
 		tenantHandler := adminhandler.NewTenantHandler(pgTenantRepo, dictCache, auditAdapter)
+		vkRepo := postgres.NewPostgresVirtualKeyRepository(pgPool)
 		tenantMw := middleware.AdminSessionOrTokenAuth(adminSessionUC, cfg.Debug, func(ctx context.Context, apiKey string) bool {
-			tenants, err := pgTenantRepo.List(ctx)
-			if err != nil {
-				logger.Warn("tenant list for API key check", slog.String("error", err.Error()))
+			if apiKey == "" {
 				return false
 			}
-			for _, t := range tenants {
-				for _, k := range t.APIKeys() {
-					if k == apiKey {
-						return true
-					}
-				}
-			}
-			return false
+			vk, err := vkRepo.FindByKeyHash(ctx, virtualkey.KeyHash(apiKey))
+			return err == nil && vk != nil
 		})
 		srv.RegisterTenantHandler(tenantHandler, tenantMw)
+
+		vkHandler := adminhandler.NewVirtualKeyHandler(vkRepo, auditAdapter)
+		srv.RegisterVirtualKeyHandler(vkHandler)
 
 		auditHandler := adminhandler.NewAuditHandler(auditAdapter)
 		srv.RegisterAuditHandler(auditHandler)
 
 		healthChecker := adminhandler.NewProviderHealthChecker(5 * time.Second)
-		if cfg.Routing != nil {
-			var targets []adminhandler.ProviderTarget
-			for _, p := range cfg.Routing.Providers {
-				targets = append(targets, adminhandler.ProviderTarget{
-					Name: p.Name, BaseURL: p.BaseURL, HealthEndpoint: p.HealthEndpoint,
-				})
-			}
-			if len(targets) > 0 {
-				healthChecker.StartBackgroundRefresh(context.Background(), 30*time.Second, targets)
-			}
+		loadCtx, loadCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		registryProviders, _ := bootstrap.LoadRoutingFromDB(loadCtx, cfg.Routing, pgPool, logger)
+		loadCancel()
+		var targets []adminhandler.ProviderTarget
+		for _, p := range registryProviders {
+			targets = append(targets, adminhandler.ProviderTarget{
+				Name: p.Name, BaseURL: p.BaseURL, HealthEndpoint: p.HealthEndpoint,
+			})
 		}
-		routingHandler := adminhandler.NewRoutingHandler(cfg.Routing, healthChecker)
+		if len(targets) > 0 {
+			healthChecker.StartBackgroundRefresh(context.Background(), 30*time.Second, targets)
+		}
+		routingHandler := adminhandler.NewRoutingHandler(postgres.NewPostgresRegistryRepository(pgPool), healthChecker, auditAdapter)
 		srv.RegisterRoutingHandler(routingHandler)
+
+		costRateHandler := adminhandler.NewCostRateHandler(analyticsrepo.NewPostgresCostRateStore(pgPool), auditAdapter)
+		srv.RegisterCostRateHandler(costRateHandler)
+
+		// @sk-task 301-budget-enforcement#T3.3: Register budget CRUD handler (AC-006)
+		budgetHandler := adminhandler.NewBudgetHandler(postgres.NewPostgresBudgetRepository(pgPool), bootstrap.NewBudgetCounter(vkClient), auditAdapter)
+		srv.RegisterBudgetHandler(budgetHandler)
 
 		sessionStore := sessionrepo.NewPostgresSessionStore(pgPool)
 		sessionUseCase := session.NewSessionUseCase(sessionStore)
@@ -180,7 +189,7 @@ func buildAdminServer(
 		srv.RegisterSessionHandler(sessionHandler)
 
 		pgUsageStore := analyticsrepo.NewPgUsageStore(pgPool)
-		analyticsHandler := analyticshandler.NewAnalyticsHandler(pgUsageStore)
+		analyticsHandler := analyticshandler.NewAnalyticsHandlerWithCostRates(pgUsageStore, analyticsrepo.NewPostgresCostRateStore(pgPool))
 		srv.RegisterAnalyticsHandler(analyticsHandler, cfg.Debug)
 		logger.Info("analytics handler registered")
 

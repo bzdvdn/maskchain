@@ -263,6 +263,7 @@ Binary endpoints expose version info via `GET /api/v1/version`.
 
 - [Examples](examples/README.md) — tenant setup, test flows, config reference
 - [Tutorial](docs/TUTORIAL.md) — 5-minute walkthrough
+- [Virtual Keys & Budgets](docs/ACCESS_AND_BUDGETS.md) — scoped keys and spend enforcement
 - [Deployment Guide](docs/DEPLOYMENT.md) — Docker Compose + Helm + bare binary
 - [Shield Architecture](docs/SHIELD.md) — deep-dive into content shield
 - [Performance](docs/PERFORMANCE.md) — benchmarks and tuning

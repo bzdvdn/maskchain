@@ -37,6 +37,10 @@ analytics:
   batch_interval: 5s
   retention_days: 90
 
+# budgets:
+#   alert_webhook_url: "${BUDGET_WEBHOOK_URL}"
+#   aggregation_interval: 5m
+
 tenants:
   default:
     name: "Default Tenant"

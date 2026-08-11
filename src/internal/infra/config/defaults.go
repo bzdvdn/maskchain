@@ -46,6 +46,7 @@ const defaultTenantReloadInterval = 15 * time.Second
 const defaultAdminSessionTTL = 30 * time.Minute
 const defaultDashboardPollInterval = 5 * time.Second
 const defaultConversationsRetentionDays = 90
+const defaultBudgetAggregationInterval = "5m"
 
 // @sk-task 10-gateway-skeleton#T1.2: Set ServerConfig defaults in DefaultConfig (AC-001, AC-005)
 //
@@ -121,6 +122,9 @@ func DefaultConfig() *Config {
 		},
 		Conversations: &ConversationsConfig{
 			RetentionDays: defaultConversationsRetentionDays,
+		},
+		Budgets: &BudgetsConfig{
+			AggregationInterval: defaultBudgetAggregationInterval,
 		},
 		Admin: &AdminConfig{
 			SessionTTL:            defaultAdminSessionTTL,

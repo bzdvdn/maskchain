@@ -256,6 +256,16 @@ type ConversationsConfig struct {
 	RetentionDays int  `mapstructure:"retention_days" yaml:"retention_days"`
 }
 
+// @sk-task 301-budget-enforcement#T1.4: Add BudgetsConfig section (AC-003)
+//
+// BudgetsConfig represents a domain entity or configuration.
+type BudgetsConfig struct {
+	// AlertWebhookURL receives budget threshold notifications.
+	AlertWebhookURL string `mapstructure:"alert_webhook_url" yaml:"alert_webhook_url"`
+	// AggregationInterval is how often daily spend is materialized.
+	AggregationInterval string `mapstructure:"aggregation_interval" yaml:"aggregation_interval"`
+}
+
 // @sk-task 80-tenant-isolation#T1.2: Add Tenants map to Config struct (AC-001, AC-003, AC-004, AC-005)
 // @sk-task 90-production-hardening#T1.1: Wire Debug into Config (<AC-001>)
 //
@@ -276,6 +286,7 @@ type Config struct {
 	DictionaryCache *DictionaryCacheConfig   `mapstructure:"dictionary_cache" yaml:"dictionary_cache"`
 	Analytics       *AnalyticsConfig         `mapstructure:"analytics" yaml:"analytics"`
 	Conversations   *ConversationsConfig     `mapstructure:"conversations" yaml:"conversations"`
+	Budgets         *BudgetsConfig           `mapstructure:"budgets" yaml:"budgets"`
 	Tenants         map[string]*TenantConfig `mapstructure:"tenants" yaml:"tenants"`
 	Admin           *AdminConfig             `mapstructure:"admin" yaml:"admin"`
 }

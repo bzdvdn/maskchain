@@ -20,6 +20,11 @@ func toDomainRoutingConfig(cfg *config.RoutingConfig) *routingDomain.RoutingConf
 			HealthEndpoint: p.HealthEndpoint,
 			Timeout:        p.Timeout,
 			Priority:       p.Priority,
+			APIType:        p.APIType,
+			APIKeys:        p.APIKeys,
+			AuthScheme:     p.AuthScheme,
+			AuthHeader:     p.AuthHeader,
+			AuthPrefix:     p.AuthPrefix,
 		}
 	}
 	for _, r := range cfg.Rules {
@@ -36,4 +41,30 @@ func toDomainRoutingConfig(cfg *config.RoutingConfig) *routingDomain.RoutingConf
 		})
 	}
 	return domainCfg
+}
+
+// fromDomainProviders converts registry provider configs into config-level
+// provider configs suitable for building provider clients.
+func fromDomainProviders(providers []routingDomain.ProviderConfig) []config.ProviderConfig {
+	out := make([]config.ProviderConfig, 0, len(providers))
+	for _, p := range providers {
+		out = append(out, config.ProviderConfig{
+			Name:               p.Name,
+			BaseURL:            p.BaseURL,
+			HealthEndpoint:     p.HealthEndpoint,
+			Timeout:            p.Timeout,
+			Priority:           p.Priority,
+			APIType:            p.APIType,
+			APIKeys:            p.APIKeys,
+			AuthScheme:         p.AuthScheme,
+			AuthHeader:         p.AuthHeader,
+			AuthPrefix:         p.AuthPrefix,
+			AdditionalHeaders:  p.AdditionalHeaders,
+			ProxyURL:           p.ProxyURL,
+			AWSRegion:          p.AWSRegion,
+			AWSAccessKeyID:     p.AWSAccessKeyID,
+			AWSSecretAccessKey: p.AWSSecretAccessKey,
+		})
+	}
+	return out
 }

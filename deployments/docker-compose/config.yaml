@@ -94,6 +94,10 @@ analytics:
   batch_interval: 5s
   retention_days: 90
 
+budgets:
+  alert_webhook_url: "${BUDGET_WEBHOOK_URL}"
+  aggregation_interval: 5m
+
 dictionary_cache:
   valkey_ttl_sec: 300
   lru_size: 10000

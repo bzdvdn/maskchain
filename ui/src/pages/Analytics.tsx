@@ -82,22 +82,23 @@ export function Analytics() {
   }
 
   const merged: Record<string, {
-    input: number; output: number; cost: number; requests: number; tenants: Set<string>
+    input: number; output: number; cost: number; requests: number; tenants: Set<string>; currency: string
   }> = {}
   for (const r of tokenRecords) {
-    if (!merged[r.model]) merged[r.model] = { input: 0, output: 0, cost: 0, requests: 0, tenants: new Set() }
+    if (!merged[r.model]) merged[r.model] = { input: 0, output: 0, cost: 0, requests: 0, tenants: new Set(), currency: 'USD' }
     merged[r.model].input += r.total_input_tokens
     merged[r.model].output += r.total_output_tokens
     merged[r.model].tenants.add(r.tenant_id)
   }
   for (const r of costRecords) {
-    if (!merged[r.model]) merged[r.model] = { input: 0, output: 0, cost: 0, requests: 0, tenants: new Set() }
+    if (!merged[r.model]) merged[r.model] = { input: 0, output: 0, cost: 0, requests: 0, tenants: new Set(), currency: 'USD' }
     merged[r.model].cost += r.total_cost
     merged[r.model].requests += r.request_count
     merged[r.model].tenants.add(r.tenant_id)
+    if (r.currency) merged[r.model].currency = r.currency
   }
 
-  interface ModelRow { model: string; tenants: number; input: number; output: number; total: number; requests: number; cost: number }
+  interface ModelRow { model: string; tenants: number; input: number; output: number; total: number; requests: number; cost: number; currency: string }
   const modelRows: ModelRow[] = Object.entries(merged).map(([model, m]) => ({
     model,
     tenants: m.tenants.size,
@@ -106,6 +107,7 @@ export function Analytics() {
     total: m.input + m.output,
     requests: m.requests,
     cost: m.cost,
+    currency: m.currency,
   }))
   const sort = useSort<ModelRow>('total', 'desc')
   const rows = useMemo(() => sortRows(modelRows, sort.key, sort.dir), [modelRows, sort])
@@ -248,6 +250,7 @@ export function Analytics() {
                 {th('total', 'Total', true)}
                 {th('requests', 'Requests', true)}
                 {th('cost', 'Cost', true)}
+                <th>Currency</th>
               </tr>
             </thead>
             <tbody>
@@ -259,11 +262,12 @@ export function Analytics() {
                   <td className="num">{fmtTokens(m.output)}</td>
                   <td className="num">{fmtTokens(m.total)}</td>
                   <td className="num">{m.requests}</td>
-                  <td className="num">${m.cost.toFixed(2)}</td>
+                  <td className="num">{m.currency === 'USD' ? '$' : ''}{m.cost.toFixed(2)} {m.currency !== 'USD' ? m.currency : ''}</td>
+                  <td>{m.currency}</td>
                 </tr>
               ))}
-              {!loading && Object.keys(merged).length === 0 && <tr><td colSpan={7}><EmptyState message="No data" /></td></tr>}
-              {loading && <tr><td colSpan={7}><TableSkeleton rows={4} cols={7} /></td></tr>}
+              {!loading && Object.keys(merged).length === 0 && <tr><td colSpan={8}><EmptyState message="No data" /></td></tr>}
+              {loading && <tr><td colSpan={8}><TableSkeleton rows={4} cols={8} /></td></tr>}
             </tbody>
           </table>
         </div>

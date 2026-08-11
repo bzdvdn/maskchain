@@ -2,6 +2,9 @@ package analytics
 
 import "fmt"
 
+// DefaultCurrency is applied when a cost rate has no explicit currency set.
+const DefaultCurrency = "USD"
+
 // @sk-task 130-analytics-domain#T1.1: Implement CostRate value object (AC-004)
 //
 // CostRate represents a domain entity or configuration.
@@ -9,9 +12,16 @@ type CostRate struct {
 	Model            string
 	InputPricePer1K  float64
 	OutputPricePer1K float64
+	Currency         string
+	// Source records provenance: "yaml" (seeded at startup) or "ui" (edited via admin).
+	Source string
 }
 
 func NewCostRate(model string, inputPricePer1K, outputPricePer1K float64) (*CostRate, error) {
+	return NewCostRateWithCurrency(model, inputPricePer1K, outputPricePer1K, DefaultCurrency)
+}
+
+func NewCostRateWithCurrency(model string, inputPricePer1K, outputPricePer1K float64, currency string) (*CostRate, error) {
 	if model == "" {
 		return nil, fmt.Errorf("model must not be empty")
 	}
@@ -21,10 +31,14 @@ func NewCostRate(model string, inputPricePer1K, outputPricePer1K float64) (*Cost
 	if outputPricePer1K < 0 {
 		return nil, fmt.Errorf("output price must not be negative")
 	}
+	if currency == "" {
+		currency = DefaultCurrency
+	}
 	return &CostRate{
 		Model:            model,
 		InputPricePer1K:  inputPricePer1K,
 		OutputPricePer1K: outputPricePer1K,
+		Currency:         currency,
 	}, nil
 }
 
@@ -52,7 +66,7 @@ func NewCostRateRegistry(rates []*CostRate) *CostRateRegistry {
 func (r *CostRateRegistry) Lookup(model string) *CostRate {
 	cr, ok := r.rates[model]
 	if !ok {
-		return &CostRate{Model: model, InputPricePer1K: 0, OutputPricePer1K: 0}
+		return &CostRate{Model: model, InputPricePer1K: 0, OutputPricePer1K: 0, Currency: DefaultCurrency}
 	}
 	return cr
 }

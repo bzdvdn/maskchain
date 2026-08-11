@@ -12,6 +12,8 @@ import {
   FileJson,
   Search,
   CornerDownLeft,
+  KeyRound,
+  Wallet,
 } from 'lucide-react'
 import { listTenants } from '../api/tenants'
 import { listConversations } from '../api/conversations'
@@ -30,6 +32,8 @@ const NAV: NavEntry[] = [
   { to: '/sessions', label: 'Sessions', keywords: 'sessions active live', icon: Radio },
   { to: '/conversations', label: 'Conversations', keywords: 'conversations messages chat', icon: MessageSquare },
   { to: '/routing', label: 'Routing', keywords: 'routing providers rules models', icon: Route },
+  { to: '/keys', label: 'Keys', keywords: 'keys api virtual scoped models access', icon: KeyRound },
+  { to: '/budgets', label: 'Budgets', keywords: 'budgets spend limits cap cost enforce', icon: Wallet },
   { to: '/audit', label: 'Audit Log', keywords: 'audit log events admin', icon: ScrollText },
   { to: '/settings', label: 'Settings', keywords: 'settings config', icon: Settings },
   { to: '/swagger', label: 'Swagger', keywords: 'swagger api docs openapi', icon: FileJson },

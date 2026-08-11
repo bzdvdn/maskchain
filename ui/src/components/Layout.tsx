@@ -15,6 +15,8 @@ import {
   Moon,
   Sun,
   Search,
+  KeyRound,
+  Wallet,
 } from 'lucide-react'
 import { logout } from '../api/admin'
 import { useTheme } from '../hooks/useTheme'
@@ -33,6 +35,8 @@ const navItems = [
   { to: '/sessions', label: 'Sessions', icon: Radio },
   { to: '/conversations', label: 'Conversations', icon: MessageSquare },
   { to: '/routing', label: 'Routing', icon: Route },
+  { to: '/keys', label: 'Keys', icon: KeyRound },
+  { to: '/budgets', label: 'Budgets', icon: Wallet },
   { to: '/audit', label: 'Audit Log', icon: ScrollText },
   { to: '/settings', label: 'Settings', icon: Settings },
   { to: '/swagger', label: 'Swagger', icon: FileJson },
@@ -40,8 +44,8 @@ const navItems = [
 
 const navSections: { label: string; items: typeof navItems }[] = [
   { label: 'Overview', items: navItems.slice(0, 2) },
-  { label: 'Management', items: navItems.slice(2, 6) },
-  { label: 'System', items: navItems.slice(6) },
+  { label: 'Management', items: navItems.slice(2, 8) },
+  { label: 'System', items: navItems.slice(8) },
 ]
 
 const headerTimes: Record<string, string> = {

@@ -9,6 +9,8 @@
 - Per-tenant isolation with API key auth
 - Rate limiting (sliding window, Valkey-backed) + token budgets
 - Cost tracking and usage analytics
+- Virtual keys: DB-first scoped API keys (per-tenant, allowed/blocked models, budget cap, expiry, metadata) with admin CRUD + UI
+- Budget enforcement: Budget entity (scope tenant|key|model, monthly|daily|custom), Valkey spend counters, hard-limit 429 via BudgetMiddleware, soft-limit webhook alerts, spend history + aggregation, admin CRUD + dashboard UI
 - Session tracking with TTL-based cleanup
 - Admin management API + React SPA (profiles, incidents, tenants, dictionaries)
 - Hot-reload configuration (YAML + ENV + CLI flags)

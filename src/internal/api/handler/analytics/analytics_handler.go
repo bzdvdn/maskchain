@@ -1,6 +1,7 @@
 package analytics
 
 import (
+	"context"
 	"encoding/csv"
 	"fmt"
 	"math"
@@ -20,11 +21,18 @@ import (
 //
 // AnalyticsHandler represents a domain entity or configuration.
 type AnalyticsHandler struct {
-	store analytics.UsageStore
+	store     analytics.UsageStore
+	costRates analytics.CostRateRepository
 }
 
 func NewAnalyticsHandler(store analytics.UsageStore) *AnalyticsHandler {
 	return &AnalyticsHandler{store: store}
+}
+
+// NewAnalyticsHandlerWithCostRates attaches a cost rate repository so cost
+// responses can carry the configured currency per model.
+func NewAnalyticsHandlerWithCostRates(store analytics.UsageStore, costRates analytics.CostRateRepository) *AnalyticsHandler {
+	return &AnalyticsHandler{store: store, costRates: costRates}
 }
 
 const maxPerPage = 1000
@@ -72,6 +80,8 @@ func (h *AnalyticsHandler) HandleCost(c *gin.Context) {
 	}
 	records = filterByModel(records, q.Model)
 
+	currencyByModel := h.currencyByModel(c.Request.Context())
+
 	var resp dto.CostResponse
 	for _, r := range records {
 		resp.Records = append(resp.Records, dto.CostRecord{
@@ -79,6 +89,7 @@ func (h *AnalyticsHandler) HandleCost(c *gin.Context) {
 			Model:        r.Model,
 			TotalCost:    r.TotalCost,
 			RequestCount: r.RequestCount,
+			Currency:     currencyByModel[r.Model],
 			PeriodStart:  r.PeriodStart,
 			PeriodEnd:    r.PeriodEnd,
 		})
@@ -90,6 +101,27 @@ func (h *AnalyticsHandler) HandleCost(c *gin.Context) {
 	resp.Records = paginated.([]dto.CostRecord)
 
 	writeResponse(c, q.Format, resp, pg)
+}
+
+// currencyByModel returns the configured currency per model, defaulting to USD
+// when no cost rate repo is attached or a model has no rate.
+func (h *AnalyticsHandler) currencyByModel(ctx context.Context) map[string]string {
+	out := map[string]string{}
+	if h.costRates == nil {
+		return out
+	}
+	rates, err := h.costRates.List(ctx)
+	if err != nil {
+		return out
+	}
+	for _, r := range rates {
+		cur := r.Currency
+		if cur == "" {
+			cur = "USD"
+		}
+		out[r.Model] = cur
+	}
+	return out
 }
 
 func (h *AnalyticsHandler) HandleTimeSeries(c *gin.Context) {

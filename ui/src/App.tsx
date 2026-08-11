@@ -15,6 +15,8 @@ const Analytics = lazy(() => import('./pages/Analytics').then((m) => ({ default:
 const Sessions = lazy(() => import('./pages/Sessions').then((m) => ({ default: m.Sessions })))
 const Conversations = lazy(() => import('./pages/Conversations').then((m) => ({ default: m.Conversations })))
 const Routing = lazy(() => import('./pages/Routing').then((m) => ({ default: m.Routing })))
+const Keys = lazy(() => import('./pages/Keys').then((m) => ({ default: m.Keys })))
+const Budgets = lazy(() => import('./pages/Budgets').then((m) => ({ default: m.Budgets })))
 const AuditLog = lazy(() => import('./pages/AuditLog').then((m) => ({ default: m.AuditLog })))
 const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })))
 const Swagger = lazy(() => import('./pages/Swagger').then((m) => ({ default: m.Swagger })))
@@ -77,6 +79,8 @@ function App() {
         <Route path="/sessions" element={<PageBoundary><Sessions /></PageBoundary>} />
         <Route path="/conversations" element={<PageBoundary><Conversations /></PageBoundary>} />
         <Route path="/routing" element={<PageBoundary><Routing /></PageBoundary>} />
+        <Route path="/keys" element={<PageBoundary><Keys /></PageBoundary>} />
+        <Route path="/budgets" element={<PageBoundary><Budgets /></PageBoundary>} />
         <Route path="/audit" element={<PageBoundary><AuditLog /></PageBoundary>} />
         <Route path="/settings" element={<PageBoundary><Settings /></PageBoundary>} />
         <Route path="/swagger" element={<PageBoundary><Swagger /></PageBoundary>} />

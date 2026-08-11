@@ -24,6 +24,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/api"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	analyticsapp "github.com/bzdvdn/maskchain/src/internal/app/analytics"
+	budgetapp "github.com/bzdvdn/maskchain/src/internal/app/budget"
 	conversationapp "github.com/bzdvdn/maskchain/src/internal/app/conversation"
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
 	"github.com/bzdvdn/maskchain/src/internal/app/worker"
@@ -59,7 +60,7 @@ func run() {
 		}
 	}
 
-	provDeps, err := initProviders(cfg.Routing, cfg.Egress)
+	provDeps, err := initProviders(cfg.Routing, cfg.Egress, b.PGPool, logger)
 	if err != nil {
 		logger.Error("failed to init providers", slog.String("error", err.Error()))
 		os.Exit(1)
@@ -116,6 +117,7 @@ func run() {
 	runSessionCleanup(cfg, sessionUseCase, logger)
 	runAnalytics(cfg, b.PGPool, srv, logger)
 	runConversations(cfg, b.PGPool, srv, logger)
+	runBudgets(cfg, b.PGPool, b.ValkeyClient, srv, logger)
 
 	srv.RegisterProxyRoute(middleware.ShieldMiddleware(shieldEngine, cfg.Shield, logger, sessionUseCase), routingHandler)
 	logger.Info("proxy routes registered")
@@ -271,8 +273,16 @@ func initTenants(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.Server, dict
 	}
 
 	tenantProvider := middleware.NewTenantProvider(dbTenants)
-	srv.RegisterAuth(middleware.Auth(tenantProvider))
-	logger.Info("auth middleware registered", slog.Int("tenants", len(dbTenants)))
+	if pgPool != nil {
+		bootstrap.BackfillVirtualKeys(context.Background(), cfg, pgPool, logger)
+		vkRepo := bootstrap.NewVirtualKeyRepo(pgPool)
+		srv.RegisterAuth(middleware.VirtualKeyAuth(vkRepo, tenantProvider))
+		srv.RegisterModelAccess(middleware.ModelAccess())
+		logger.Info("virtual key auth middleware registered", slog.Int("tenants", len(dbTenants)))
+	} else {
+		srv.RegisterAuth(middleware.Auth(tenantProvider))
+		logger.Info("in-memory auth middleware registered (no db)", slog.Int("tenants", len(dbTenants)))
+	}
 
 	reloadCtx, reloadCancel := context.WithCancel(context.Background())
 	_ = reloadCancel
@@ -334,15 +344,7 @@ func runAnalytics(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.Server, log
 	analyticsCtx, analyticsCancel := context.WithCancel(context.Background())
 	_ = analyticsCancel
 
-	costRates := make([]*analytics.CostRate, 0, len(cfg.Analytics.CostRates))
-	for _, cr := range cfg.Analytics.CostRates {
-		rate, err := analytics.NewCostRate(cr.Model, cr.InputPricePer1K, cr.OutputPricePer1K)
-		if err != nil {
-			logger.Warn("analytics: invalid cost rate, skipping", slog.String("model", cr.Model), slog.String("error", err.Error()))
-			continue
-		}
-		costRates = append(costRates, rate)
-	}
+	costRates := bootstrap.LoadCostRatesFromDB(context.Background(), cfg, pgPool, logger)
 
 	pgUsageStore := analyticsrepo.NewPgUsageStore(pgPool)
 	batchInterval, _ := time.ParseDuration(cfg.Analytics.BatchInterval)
@@ -399,6 +401,47 @@ func runConversations(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.Server,
 
 	srv.RegisterConversationMiddleware(middleware.NewConversationMiddleware(asyncWorker, logger).Handler())
 	logger.Info("conversation logging pipeline started", slog.Int("retention_days", cfg.Conversations.RetentionDays))
+}
+
+// @sk-task 301-budget-enforcement#T2.4: runBudgets wires budget middleware and aggregation worker (AC-004, AC-005)
+func runBudgets(cfg *config.Config, pgPool *pgxpool.Pool, vkClient valkey.Client, srv *api.Server, logger *slog.Logger) {
+	if pgPool == nil || vkClient == nil {
+		logger.Debug("budget enforcement disabled (requires database and valkey)")
+		return
+	}
+	cfgBudgets := cfg.Budgets
+	enabled := cfgBudgets == nil || cfgBudgets.AggregationInterval != ""
+	if !enabled {
+		logger.Debug("budget enforcement disabled by config")
+		return
+	}
+
+	budgetCtx, budgetCancel := context.WithCancel(context.Background())
+	_ = budgetCancel
+
+	costRates := bootstrap.LoadCostRatesFromDB(context.Background(), cfg, pgPool, logger)
+	budgetRepo := bootstrap.NewBudgetRepo(pgPool)
+	counter := bootstrap.NewBudgetCounter(vkClient)
+	vkRepo := bootstrap.NewVirtualKeyRepo(pgPool)
+
+	webhookURL := ""
+	if cfgBudgets != nil {
+		webhookURL = cfgBudgets.AlertWebhookURL
+	}
+	notifier := budgetapp.NewWebhookNotifier(webhookURL, logger)
+
+	mw := middleware.NewBudgetMiddleware(budgetRepo, counter,
+		analytics.NewCostRateRegistry(costRates), vkRepo, notifier, logger)
+	srv.RegisterBudgetMiddleware(mw.Handler())
+	logger.Info("budget enforcement middleware registered")
+
+	interval, _ := time.ParseDuration(bootstrap.BudgetAggregationInterval(cfg))
+	if interval <= 0 {
+		interval = 5 * time.Minute
+	}
+	aggWorker := budgetapp.NewAggregationWorker(budgetRepo, interval, logger)
+	go aggWorker.Run(budgetCtx)
+	logger.Info("budget aggregation worker started", slog.Duration("interval", interval))
 }
 
 func initDetectors(log *slog.Logger) *detector.DetectorRegistry {

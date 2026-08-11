@@ -80,6 +80,14 @@ th.num .sort-header { margin-left: auto; }
 }
 .btn-copy:hover { color: var(--accent); }
 
+.copy-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.copy-row code {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 100%;
+}
+
 /* Stats grid */
 .stats-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -379,3 +387,16 @@ section h2 { font-size: 16px; margin-bottom: 0.75rem; }
   gap: 16px;
   margin-bottom: 24px;
 }
+
+/* Spend progress */
+.spend-cell { min-width: 130px; display: flex; flex-direction: column; gap: 4px; }
+.progress {
+  height: 6px; border-radius: 3px; overflow: hidden;
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.progress-fill {
+  height: 100%; border-radius: 3px;
+  background: var(--accent);
+}
+.progress-fill.warn { background: var(--orange); }
+.progress-fill.danger { background: var(--red); }

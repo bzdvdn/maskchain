@@ -39,6 +39,7 @@ type CostRecord struct {
 	Model        string    `json:"model"`
 	TotalCost    float64   `json:"total_cost"`
 	RequestCount int64     `json:"request_count"`
+	Currency     string    `json:"currency"`
 	PeriodStart  time.Time `json:"period_start"`
 	PeriodEnd    time.Time `json:"period_end"`
 }
