@@ -47,6 +47,12 @@ const defaultAdminSessionTTL = 30 * time.Minute
 const defaultDashboardPollInterval = 5 * time.Second
 const defaultConversationsRetentionDays = 90
 const defaultBudgetAggregationInterval = "5m"
+const defaultDataCacheTTL = 3600
+const defaultDataCacheSimilarity = 0.90
+const defaultDataCacheBudgetGuardPercent = 5
+const defaultDataCacheMaxEntryBytes = 1 << 20
+const defaultDataCacheEmbeddingSource = "external"
+const defaultDataCacheEmbeddingTimeout = 3
 
 // @sk-task 10-gateway-skeleton#T1.2: Set ServerConfig defaults in DefaultConfig (AC-001, AC-005)
 //
@@ -125,6 +131,19 @@ func DefaultConfig() *Config {
 		},
 		Budgets: &BudgetsConfig{
 			AggregationInterval: defaultBudgetAggregationInterval,
+		},
+		Data: &DataConfig{
+			Cache: &CacheConfig{
+				Enabled:             false,
+				TTLSec:              defaultDataCacheTTL,
+				SimilarityThreshold: defaultDataCacheSimilarity,
+				BudgetGuardPercent:  defaultDataCacheBudgetGuardPercent,
+				MaxEntryBytes:       defaultDataCacheMaxEntryBytes,
+				Embedding: &EmbeddingConfig{
+					Source:     defaultDataCacheEmbeddingSource,
+					TimeoutSec: defaultDataCacheEmbeddingTimeout,
+				},
+			},
 		},
 		Admin: &AdminConfig{
 			SessionTTL:            defaultAdminSessionTTL,

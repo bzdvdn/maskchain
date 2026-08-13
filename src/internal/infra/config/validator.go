@@ -13,6 +13,42 @@ import (
 //
 // validateProviderAuth validates provider authentication configuration.
 // Required: api_keys for non-ollama providers; auth_scheme must be bearer, api-key, or basic.
+// @sk-task semantic-cache-masked#T1.2: validate data.cache config (AC-004)
+//
+// validateDataCache validates semantic cache thresholds and embedding source.
+func validateDataCache(cfg *Config) error {
+	c := cfg.Data
+	if c == nil || c.Cache == nil || !c.Cache.Enabled {
+		return nil
+	}
+	cacheCfg := c.Cache
+	if cacheCfg.TTLSec <= 0 {
+		return fmt.Errorf("data.cache.ttl: must be > 0, got %d", cacheCfg.TTLSec)
+	}
+	if cacheCfg.SimilarityThreshold < 0 || cacheCfg.SimilarityThreshold >= 1 {
+		return fmt.Errorf("data.cache.similarity_threshold: must be in [0,1), got %f", cacheCfg.SimilarityThreshold)
+	}
+	if cacheCfg.BudgetGuardPercent < 0 || cacheCfg.BudgetGuardPercent > 100 {
+		return fmt.Errorf("data.cache.budget_guard_percent: must be in [0,100], got %f", cacheCfg.BudgetGuardPercent)
+	}
+	if cacheCfg.MaxEntryBytes <= 0 {
+		return fmt.Errorf("data.cache.max_entry_bytes: must be > 0, got %d", cacheCfg.MaxEntryBytes)
+	}
+	if cacheCfg.Embedding == nil {
+		return fmt.Errorf("data.cache.embedding: required")
+	}
+	switch cacheCfg.Embedding.Source {
+	case "external":
+		if cacheCfg.Embedding.ExternalURL == "" {
+			return fmt.Errorf("data.cache.embedding.external_url: required when source=external")
+		}
+	case "self-contained":
+	default:
+		return fmt.Errorf("data.cache.embedding.source: must be external|self-contained, got %q", cacheCfg.Embedding.Source)
+	}
+	return nil
+}
+
 func validateProviderAuth(cfg *Config) error {
 	if cfg.Routing == nil {
 		return nil
@@ -40,6 +76,9 @@ func validateProviderAuth(cfg *Config) error {
 }
 
 func validateConfig(cfg *Config, v *viper.Viper) error {
+	if err := validateDataCache(cfg); err != nil {
+		return err
+	}
 	if err := validateProviderAuth(cfg); err != nil {
 		return err
 	}

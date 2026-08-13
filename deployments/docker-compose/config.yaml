@@ -98,6 +98,18 @@ budgets:
   alert_webhook_url: "${BUDGET_WEBHOOK_URL}"
   aggregation_interval: 5m
 
+data:
+  cache:
+    enabled: false
+    ttl: 3600
+    similarity_threshold: 0.90
+    budget_guard_percent: 5
+    max_entry_bytes: 1048576
+    embedding:
+      source: self-contained
+      external_url: ""
+      timeout_sec: 3
+
 dictionary_cache:
   valkey_ttl_sec: 300
   lru_size: 10000

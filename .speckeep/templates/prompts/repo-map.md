@@ -1,26 +1,28 @@
-# SpecKeep Repository Map
+# SpecKeep Repo-Map Prompt (compact)
 
-Обновить `REPOSITORY_MAP.md` — компактный, code-only навигационный индекс.
+You act as a **codebase cartographer**. Keep the map compact, accurate, and cheap to navigate — never let index maintenance grow into documentation.
+
+Update `REPOSITORY_MAP.md` — a compact, code-only navigation index.
 
 ## Phase Contract
 
-Inputs: состояние файловой системы проекта (spec не требуется).
-Outputs: обновлённый `REPOSITORY_MAP.md` в корне проекта.
-Stop if: структурных изменений нет (сначала проверьте чеклист триггеров).
+Inputs: project filesystem state (no spec required).
+Outputs: updated `REPOSITORY_MAP.md` at project root.
+Stop if: no structural changes detected (check trigger checklist first).
 
-## Политика
+## Policy
 
-- Держите `REPOSITORY_MAP.md` компактным и code-only (пути + короткие роли).
-- Language-agnostic: определяйте стек по маркерам репозитория (напр. `go.mod`, `package.json`, `pyproject.toml`, `Cargo.toml`, `pom.xml`, `*.csproj`) и адаптируйте секции под найденный стек.
-- Не предполагайте Go-структуру для не-Go проектов.
-- Жесткий лимит размера: целевой объем до 180 строк; если карта растет — сжимайте, а не расширяйте prose.
-- Обновляйте in-place (минимальный diff): сохраняйте неизменные строки/порядок и правьте только затронутые записи/секции.
-- Не переписывайте файл целиком, если изменилась только часть карты.
-- Если `REPOSITORY_MAP.md` отсутствует — создайте по шаблону; если существует — патчите существующее содержимое.
-- Исключайте из индексации: `src/internal/agents/**`, `.speckeep/**`, `specs/archived/**`, `.git/**`, `bin/**`, `demo/**`, `docs/**`, `TESTS/**`, `node_modules/**`, `vendor/**`, `dist/**`, `build/**`, `coverage/**`.
-- Важно: проектные настройки уже читаются из `.speckeep/speckeep.yaml`; не дублируйте этот конфиг в карте.
+- Keep `REPOSITORY_MAP.md` compact and code-only (paths + short role descriptions).
+- Language-agnostic: detect stack from repository markers (e.g. `go.mod`, `package.json`, `pyproject.toml`, `Cargo.toml`, `pom.xml`, `*.csproj`) and adapt sections to the detected stack.
+- Do not assume Go-specific layout in non-Go projects.
+- Hard size cap: keep the map short (target up to 180 lines); if it grows, compress instead of expanding prose.
+- Update in place (minimal diff): preserve unchanged lines/order and edit only impacted entries/sections.
+- Do not rewrite the whole file if only a subset changed.
+- If `REPOSITORY_MAP.md` does not exist, create it from template; otherwise patch existing content.
+- Exclude from indexing: `src/internal/agents/**`, `.speckeep/**`, `specs/archived/**`, `.git/**`, `bin/**`, `demo/**`, `docs/**`, `TESTS/**`, `node_modules/**`, `vendor/**`, `dist/**`, `build/**`, `coverage/**`.
+- Note: project settings are already sourced from `.speckeep/speckeep.yaml`; do not duplicate that config in the map.
 
-## Шаблон
+## Template
 
 ```md
 # Repository Map
@@ -41,9 +43,9 @@ Stop if: структурных изменений нет (сначала про
 - `<glob>` — `excluded from indexing`
 ```
 
-## Ожидаемый вывод
+## Output expectations
 
-- Перечислите изменённые/добавленные/удалённые записи.
-- Подтвердите, что карта актуальна и укладывается в лимит размера.
-- Включите компактный summary: `Slug`, `Status`, `Artifacts`, `Blockers`.
-- Финальная строка: `Готово к: <следующая фаза>`.
+- List changed/added/removed entries.
+- Confirm the map is up to date and within the size cap.
+- Include a short summary block: `Slug`, `Status`, `Artifacts`, `Blockers`.
+- Final line: `Ready for: /spk.implement <slug>` (resume the phase that requested the map update).

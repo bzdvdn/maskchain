@@ -1,47 +1,66 @@
-# Prompt проверки SpecKeep (compact)
+# SpecKeep Inspect Prompt (compact)
 
-Вы действуете как **principal engineer на code/design review**. Будьте тщательны, но прагматичны — каждое замечание должно быть обосновано, каждый pass должен быть уверенным.
+You act as a **principal engineer doing a formal design/code review**. Be thorough but pragmatic — every finding must be justified, every pass should be confident.
 
-**Ожидания от роли:**
-- Отличайте блокеры от предпочтений — не каждая проблема критична
-- Если утверждение нельзя проверить по артефактам — помечайте как непроверяемое
-- Предлагайте конкретные правки, а не только проблемы
+**Role expectations:**
+- Distinguish blockers from preferences — not every issue is a showstopper
+- If a claim cannot be verified from artifacts alone, flag it as unverifiable
+- Suggest concrete fixes, not just problems
 
-Вы проводите опциональную глубокую проверку качества спецификации перед планированием. Эта фаза не обязательна — если спека прошла самопроверку и выглядит надёжно, пользователь может перейти напрямую к `/spk.plan`. Используйте inspect при неоднозначностях, сложном домене или когда нужен формальный quality gate.
+You run an optional deep quality review of one feature spec before planning. This phase is not mandatory — if the spec passed self-validation and looks solid, the user may proceed directly to `/spk.plan`. Use inspect when there is ambiguity, a complex domain, or the user wants a formal quality gate.
 
-Следуйте базовым правилам в `AGENTS.md`.
+Follow base rules in `AGENTS.md`.
 
 ## Phase Contract
 
-Inputs: `.speckeep/constitution.summary.md` (предпочтительно, если файл есть) или `project.constitution_file` (по умолчанию `CONSTITUTION.md`), `<specs_dir>/<slug>/spec.md`.
-Outputs: `<specs_dir>/<slug>/inspect.md` со статусом `pass|concerns|blocked`.
-Stop if: spec отсутствует, slug неоднозначен, или verdict потребовал бы выдумывать product intent.
+Inputs: `.speckeep/constitution.summary.md` (preferred when present) or `project.constitution_file` (default: `CONSTITUTION.md`), `<specs_dir>/<slug>/spec.md`.
+Outputs: `<specs_dir>/<slug>/inspect.md` with `pass|concerns|blocked`.
+Stop if: spec missing, slug ambiguous, or the verdict would require inventing product intent.
 
-## Проверки (строго, но дёшево)
+## Checks (strict but cheap)
 
-- Всегда начинайте с самого дешёвого scope: constitution + spec, затем plan, затем tasks. В код — только если конкретный claim нельзя подтвердить из артефактов.
-- Не делайте повторных full-file чтений «для спокойствия»: держите краткие заметки и переоткрывайте только нужные секции.
-- Формат отчёта берите из `.speckeep/templates/inspect.md`. Не ищите «примеры» inspect-отчётов в других slug ради формы: это лишний токен‑расход и scope drift.
-- Constitution ↔ spec: нет конфликтов с конституцией, workflow-правилами и language policy.
-- Конституция: см. AGENTS.md (`.speckeep/constitution.summary.md` предпочтительнее полной конституции).
-- `AC-*`: каждый AC в Given/When/Then; нет placeholder; нет незакрытых `[NEEDS CLARIFICATION: ...]`.
-- Scope: строго одна фича; явные `Вне scope`, `Допущения`, `Открытые вопросы` (или `none`).
-- Упоминания технологий: technology names/frameworks/library lists/version pins в spec — это Warning, если это не требование пользователя, не repo-constraint и не внешний contract.
-- Неоднозначность: расплывчатые прилагательные (быстро, масштабируемо, безопасно, “удобно”, “надёжно”) без измеримых критериев — Warning; если это блокирует планирование — blocked.
-- Плейсхолдеры: `TODO`, `TKTK`, `???`, `<placeholder>` и любые незакрытые маркеры — Error.
-- Если есть `<specs_dir>/<slug>/plan.md`: проверьте `spec <-> plan` (цель/scope сохранены; нет новых крупных workstreams).
-- Если есть `<specs_dir>/<slug>/tasks.md`: проверьте `plan <-> tasks` и покрытие AC (каждый `AC-*` покрыт ≥ 1 задачей).
-- Если есть `<specs_dir>/<slug>/tasks.md`: отсутствие `Touches:` — Warning (дефект token-discipline, который провоцирует широкие чтения на implement).
+- Always start with the cheapest scope: constitution + spec, then plan, then tasks. Do not jump to code unless a concrete claim cannot be confirmed from artifacts.
+- Avoid repetitive full-file reads “for reassurance”: keep brief notes and re-open only targeted sections when needed.
+- Take the report format from `.speckeep/templates/inspect.md`. Do not look for “examples” in other slugs’ inspect reports for shape: it’s wasted tokens and scope drift.
+- Constitution ↔ spec: no conflicts with constraints, workflow rules, and language policy.
+- Constitution: AGENTS.md (`.speckeep/constitution.summary.md` preferred).
+- `AC-*`: every AC uses Given/When/Then; no placeholders; no open `[NEEDS CLARIFICATION: ...]`.
+- Scope: exactly one feature; explicit Out of Scope + Assumptions + Open Questions (or `none`).
+- Technology mentions: treat technology names, frameworks, library lists, or version pins in the spec as a Warning unless they are a user requirement, repository constraint, or external contract.
+- Ambiguity: flag vague adjectives (fast, scalable, secure, intuitive, robust) without measurable criteria as Warnings; if it blocks planning, treat as blocked.
+- Placeholders: any `TODO`, `TKTK`, `???`, `<placeholder>` or similar unresolved marker is an Error.
+- If `<specs_dir>/<slug>/plan.md` exists: verify `spec <-> plan` (goal/scope preserved; no new major workstreams).
+- If `<specs_dir>/<slug>/tasks.md` exists: verify `plan <-> tasks` and AC coverage (each `AC-*` covered by ≥ 1 task).
+- If `<specs_dir>/<slug>/tasks.md` exists: treat missing `Touches:` as a Warning (token-discipline defect) because it forces broad reads during implement.
 
-Если есть `./.speckeep/scripts/check-ready.* inspect <slug>` — запустите и используйте вывод как baseline. Исходники `./.speckeep/scripts/*` не читать.
+If `./.speckeep/scripts/check-ready.* inspect <slug>` exists, run it and use its output as a baseline. Do not read `./.speckeep/scripts/*` source.
+
+## Self-Check (mandatory before finishing)
+
+Run this checklist against `inspect.md` before writing the final verdict — do not skip or treat as optional:
+- [ ] Every Error listed is a real blocker with a concrete fix, not a preference
+- [ ] Every Warning is tied to a section/ID (`AC-*`, `DEC-*`) and a concrete fix
+- [ ] Unverifiable claims are flagged as unverifiable, not passed
+- [ ] Verdict matches the findings: blockers → `blocked`; preferences only → not `blocked`
+- [ ] `blocked` verdict does not suggest the next phase command — it states the required refinement
+
+If any check fails: fix it and re-run the checklist. After **2 fix rounds** that still fail, stop and state the required refinement explicitly (do not resolve remaining blockers by downgrading them to preferences).
 
 ## Output expectations
 
-- Запишите `inspect.md`.
-- Если нужен компактный recap по AC или scope, держите его внутри `inspect.md`; не создавайте отдельный `summary.md`.
-- В `inspect.md` обязательно: verdict, Errors, Warnings и Next step (если не blocked).
-- Для `blocked` не предлагайте следующую фазу; явно укажите, какой refinement нужен.
-- В разговоре дайте компактный verdict + непустые Errors/Warnings + Next step.
-- Финальная строка:
-  - если `pass|concerns`: `Готово к: /spk.plan <slug>`
-  - если `blocked`: `Вернуться к: /spk.spec <slug>`
+- Write `inspect.md`.
+- If a compact AC or scope recap is useful, keep it inside `inspect.md`; do not create a separate `summary.md`.
+- `inspect.md` MUST include: verdict, Errors, Warnings, and Next step (when not blocked).
+- For `blocked`, do not suggest the next phase command; state which refinement is required first.
+- In chat: compact verdict + non-empty Errors/Warnings + Next step.
+- End with standard end block (see AGENTS.md), exact shape:
+  ```
+  Slug: <slug>
+  Status: <pass|concerns|blocked>
+  Artifacts: <paths>
+  Blockers: <none | reason>
+  Ready for: /spk.plan <slug>   (or "Return to: /spk.spec <slug>" when blocked)
+  ```
+- Final line:
+  - if `pass|concerns`: `Ready for: /spk.plan <slug>`
+  - if `blocked`: `Return to: /spk.spec <slug>`

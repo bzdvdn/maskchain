@@ -10,9 +10,9 @@ paths:
     templates_dir: .speckeep/templates
     scripts_dir: .speckeep/scripts
 language:
-    default: ru
-    docs: ru
-    agent: ru
+    default: en
+    docs: en
+    agent: en
     comments: en
 agents:
     update_agents_md: true

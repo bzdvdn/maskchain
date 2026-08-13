@@ -34,6 +34,7 @@ type Server struct {
 	conversationMw    gin.HandlerFunc
 	modelAccessMw     gin.HandlerFunc
 	budgetMw          gin.HandlerFunc
+	cacheMw           gin.HandlerFunc
 }
 
 // @sk-task 114-real-health-probes#T2.2: Accept healthSvc and replace static handlers (AC-001, AC-005, AC-008)
@@ -113,6 +114,9 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 			chain = append(chain, s.conversationMw)
 		}
 		chain = append(chain, shieldMiddleware)
+		if s.cacheMw != nil {
+			chain = append(chain, s.cacheMw)
+		}
 		if s.usageMiddleware != nil {
 			chain = append(chain, s.usageMiddleware)
 		}
@@ -134,6 +138,9 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 			chain = append(chain, s.conversationMw)
 		}
 		chain = append(chain, shieldMiddleware)
+		if s.cacheMw != nil {
+			chain = append(chain, s.cacheMw)
+		}
 		if s.usageMiddleware != nil {
 			chain = append(chain, s.usageMiddleware)
 		}
@@ -183,6 +190,11 @@ func (s *Server) RegisterModelAccess(mw gin.HandlerFunc) {
 // @sk-task 301-budget-enforcement#T2.2: Register budget middleware on proxy routes (AC-002)
 func (s *Server) RegisterBudgetMiddleware(mw gin.HandlerFunc) {
 	s.budgetMw = mw
+}
+
+// @sk-task semantic-cache-masked#T2.2: Register cache middleware on proxy routes (AC-001)
+func (s *Server) RegisterCacheMiddleware(mw gin.HandlerFunc) {
+	s.cacheMw = mw
 }
 
 func (s *Server) withSessionMiddleware(next gin.HandlerFunc) gin.HandlerFunc {

@@ -119,6 +119,16 @@ func run() {
 	runConversations(cfg, b.PGPool, srv, logger)
 	runBudgets(cfg, b.PGPool, b.ValkeyClient, srv, logger)
 
+	if cfg.Data != nil && cfg.Data.Cache != nil && cfg.Data.Cache.Enabled {
+		svc := bootstrap.NewSemanticCacheService(cfg.Data.Cache, b.ValkeyClient, logger)
+		if svc != nil {
+			guard := bootstrap.NewBudgetWriteGuard(bootstrap.NewBudgetRepo(b.PGPool), bootstrap.NewBudgetCounter(b.ValkeyClient), cfg.Data.Cache.BudgetGuardPercent)
+			svc.WithGuard(guard)
+			srv.RegisterCacheMiddleware(middleware.NewSemanticCacheMiddleware(svc, cfg.Data.Cache, logger).Handler())
+			logger.Info("semantic cache middleware registered")
+		}
+	}
+
 	srv.RegisterProxyRoute(middleware.ShieldMiddleware(shieldEngine, cfg.Shield, logger, sessionUseCase), routingHandler)
 	logger.Info("proxy routes registered")
 

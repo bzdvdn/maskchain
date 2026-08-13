@@ -3,19 +3,19 @@ description: Create or update one feature spec
 argument-hint: [request]
 ---
 
-Следуйте файлу ".speckeep/templates/prompts/spec.md".
+Follow ".speckeep/templates/prompts/spec.md".
 
-Команда: `/spk.spec [request]`
+Command: `/spk.spec [request]`
 
-Аргументы пользователя:
+User arguments:
 {{arguments}}
 
-Требования:
-- сначала прочитайте project.constitution_file (по умолчанию CONSTITUTION.md), если это требуется prompt-файлом
-- Если в фазе нужна конституция, сначала загрузите `.speckeep/constitution.summary.md`, если файл существует; только при его отсутствии переходите к `project.constitution_file`.
-- Trace placement: никогда не ставьте `@sk-task`/`@sk-test` на уровень `package`, `import` или file-header comment; размещайте маркер непосредственно над owning function/method/test/type declaration (или над явным behavioral block header, если в языке нет таких объявлений).
-- используйте только минимально нужный контекст репозитория
-- Строго сохраните точную финальную строку из prompt-файла: `Готово к: ...` или `Вернуться к: ...` без перефразирования и без пропуска.
-- Для `/spk.spec`: до записи любого файла обязательно переключиться/создать feature-ветку `feature/<slug>` (или явное значение `--branch`). Если git недоступен или вы в detached HEAD — остановитесь и сообщите причину.
-- Scripts для выполнения (запускать через shell):
+Requirements:
+- read project.constitution_file (default: CONSTITUTION.md) first when the prompt requires it
+- If the phase needs constitution context, load `.speckeep/constitution.summary.md` first when it exists; fall back to `project.constitution_file` only when the summary is absent.
+- Evidence: every completed task in `tasks.md` must carry a `Proof:` line (format `Proof: kind path anchor`, e.g. `Proof: test src/tests/export_test.go TestRunExport`). A task without `Proof` is not complete; `speckeep trace` and archive gates read exactly these records.
+- use only the minimum repository context needed
+- Preserve the exact final line from the prompt file: `Ready for: ...` or `Return to: ...` with no paraphrase and no omission.
+- For `/spk.spec`: before writing any file, you must switch/create the feature branch `feature/<slug>` (or the explicit `--branch` value). If git is unavailable or you are in detached HEAD, stop and report the reason.
+- Scripts to execute:
   - `./.speckeep/scripts/check-ready.sh spec`

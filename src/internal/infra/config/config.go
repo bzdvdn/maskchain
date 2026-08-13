@@ -266,6 +266,40 @@ type BudgetsConfig struct {
 	AggregationInterval string `mapstructure:"aggregation_interval" yaml:"aggregation_interval"`
 }
 
+// @sk-task semantic-cache-masked#T1.2: CacheConfig for semantic cache (AC-004)
+//
+// CacheConfig configures the masked semantic response cache.
+type CacheConfig struct {
+	// Enabled turns the semantic cache on. Disabled by default.
+	Enabled bool `mapstructure:"enabled" yaml:"enabled"`
+	// TTLSec is the per-entry time-to-live in seconds.
+	TTLSec int `mapstructure:"ttl" yaml:"ttl"`
+	// SimilarityThreshold is the cosine similarity required for a cache hit [0,1).
+	SimilarityThreshold float64 `mapstructure:"similarity_threshold" yaml:"similarity_threshold"`
+	// BudgetGuardPercent is the fraction of the hard limit (in percent) that
+	// stops new cache writes once spent reaches (100 - guard)% of the limit.
+	BudgetGuardPercent float64 `mapstructure:"budget_guard_percent" yaml:"budget_guard_percent"`
+	// MaxEntryBytes skips entries larger than this during writes.
+	MaxEntryBytes int64 `mapstructure:"max_entry_bytes" yaml:"max_entry_bytes"`
+	// Embedding selects the embedding source.
+	Embedding *EmbeddingConfig `mapstructure:"embedding" yaml:"embedding"`
+}
+
+// EmbeddingConfig configures masked-text embedding.
+type EmbeddingConfig struct {
+	// Source is "external" (OpenAI-compatible API) or "self-contained".
+	Source string `mapstructure:"source" yaml:"source"`
+	// ExternalURL is the OpenAI-compatible /embeddings endpoint (external source).
+	ExternalURL string `mapstructure:"external_url" yaml:"external_url"`
+	// TimeoutSec bounds a single embedding call.
+	TimeoutSec int `mapstructure:"timeout_sec" yaml:"timeout_sec"`
+}
+
+// DataConfig groups data-plane feature configuration.
+type DataConfig struct {
+	Cache *CacheConfig `mapstructure:"cache" yaml:"cache"`
+}
+
 // @sk-task 80-tenant-isolation#T1.2: Add Tenants map to Config struct (AC-001, AC-003, AC-004, AC-005)
 // @sk-task 90-production-hardening#T1.1: Wire Debug into Config (<AC-001>)
 //
@@ -287,6 +321,7 @@ type Config struct {
 	Analytics       *AnalyticsConfig         `mapstructure:"analytics" yaml:"analytics"`
 	Conversations   *ConversationsConfig     `mapstructure:"conversations" yaml:"conversations"`
 	Budgets         *BudgetsConfig           `mapstructure:"budgets" yaml:"budgets"`
+	Data            *DataConfig              `mapstructure:"data" yaml:"data"`
 	Tenants         map[string]*TenantConfig `mapstructure:"tenants" yaml:"tenants"`
 	Admin           *AdminConfig             `mapstructure:"admin" yaml:"admin"`
 }

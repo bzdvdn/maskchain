@@ -30,6 +30,11 @@ func RegisterMetrics(reg *prometheus.Registry) {
 	reg.MustRegister(TokensTotal)
 	reg.MustRegister(CostTotal)
 	reg.MustRegister(RequestTotal)
+	reg.MustRegister(CacheHitsTotal)
+	reg.MustRegister(CacheMissesTotal)
+	reg.MustRegister(CacheErrorsTotal)
+	reg.MustRegister(CacheWriteBlockedTotal)
+	reg.MustRegister(CacheKeysTotal)
 }
 
 // @sk-task 90-production-hardening#T3.2: Register PG pool metrics collector (<AC-003>)
@@ -197,6 +202,52 @@ var (
 			Help:      "Total number of LLM requests by tenant and model",
 		},
 		[]string{"tenant", "model"},
+	)
+
+	// @sk-task semantic-cache-masked#T2.3: cache metrics (AC-001)
+	CacheHitsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "cache_hit_total",
+			Help:      "Total number of semantic cache hits",
+		},
+		[]string{"tenant"},
+	)
+
+	CacheMissesTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "cache_miss_total",
+			Help:      "Total number of semantic cache misses",
+		},
+		[]string{"tenant"},
+	)
+
+	CacheErrorsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "cache_error_total",
+			Help:      "Total number of semantic cache errors (degraded to passthrough)",
+		},
+		[]string{"tenant"},
+	)
+
+	CacheWriteBlockedTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "cache_write_blocked_total",
+			Help:      "Total number of cache writes blocked by the budget guard",
+		},
+		[]string{"tenant"},
+	)
+
+	CacheKeysTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "cache_key_total",
+			Help:      "Total number of distinct cache keys seen per tenant",
+		},
+		[]string{"tenant"},
 	)
 )
 

@@ -336,6 +336,18 @@ func buildGatewayServer(
 		logger.Debug("budget enforcement disabled — no budgets config, no db pool, or no valkey")
 	}
 
+	// @sk-task semantic-cache-masked#T2.2: Register cache middleware in combined binary (AC-001, AC-007)
+	// @sk-task semantic-cache-masked#T3.2: Attach budget-aware write guard (AC-008)
+	if cfg.Data != nil && cfg.Data.Cache != nil && cfg.Data.Cache.Enabled {
+		svc := bootstrap.NewSemanticCacheService(cfg.Data.Cache, vkClient, logger)
+		if svc != nil {
+			guard := bootstrap.NewBudgetWriteGuard(bootstrap.NewBudgetRepo(pgPool), bootstrap.NewBudgetCounter(vkClient), cfg.Data.Cache.BudgetGuardPercent)
+			svc.WithGuard(guard)
+			srv.RegisterCacheMiddleware(middleware.NewSemanticCacheMiddleware(svc, cfg.Data.Cache, logger).Handler())
+			logger.Info("semantic cache middleware registered")
+		}
+	}
+
 	srv.RegisterProxyRoute(middleware.ShieldMiddleware(shieldEngine, cfg.Shield, logger, sessionUseCase), routingHandler)
 	logger.Info("gateway routes registered")
 

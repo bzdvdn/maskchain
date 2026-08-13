@@ -54,6 +54,7 @@
   - `src/internal/api/handler/admin/budget_handler.go` — Budget CRUD + history (`/api/v1/budgets`, under adminSessionMw)
   - `src/internal/api/dto/` — request/response DTOs (IncidentResponse, TenantResponse, PaginatedResponse, budget/virtual_key DTOs)
 - `src/internal/api/middleware/budget.go` — BudgetMiddleware (hard-limit 429 before request, spend increment + RecordSpend + alerts after non-streaming response)
+- `src/internal/api/middleware/cache.go` — SemanticCacheMiddleware (post-shield masked prompt embedding, Valkey hit serve / miss store, budget-guard writes, streaming+disabled passthrough)
 - `src/internal/infra/config/` — cobra/viper config loading, validation, defaults (RoutingConfig, ProviderConfig with ProxyURL, RouteConfig, RuleConfig), serialize/diff/watcher
 - `src/internal/infra/crypto/` — AES-256-GCM Encryptor/Decryptor for conversation logging (key from `MASKCHAIN_CONVERSATION_KEY` ENV)
 - `src/internal/infra/telemetry/` — OTel SDK init, TracerProvider, MeterProvider, OTLP exporters
@@ -62,11 +63,14 @@
 - `src/internal/adapters/repository/postgres/migrations/` — SQL migrations (dictionary_entries, incidents, tenants, mask_entries, sessions, analytics, admin_sessions, audit_log, conversation_logs, routing_registry, virtual_keys, budgets)
 - `src/internal/adapters/repository/conversation/` — PgConversationStore (encrypted conversation_logs persistence; conversation logging pipeline)
 - `src/internal/adapters/repository/budget/` — ValkeySpendCounter (INCRBYFLOAT budget spend counter, budget-enforcement)
+- `src/internal/adapters/repository/cache/` — ValkeyCacheStore (GET/SET with TTL, write size guard, semantic-cache persistence)
 - `src/internal/domain/conversation/` — ConversationLog entity, MaskingEntry (mask-proof mapping), ConversationStore port
 - `src/internal/domain/virtualkey/` — VirtualKey entity, KeyHash, VirtualKeyRepository port, Spend accumulation (virtual keys)
 - `src/internal/domain/budget/` — Budget entity (scope tenant|key|model, type monthly|daily|custom), PeriodKey/CounterKey, SpendCounter/AlertNotifier ports (budget enforcement)
+- `src/internal/domain/cache/` — CacheKey (cache:<tenant>:<sha256(masked-embedding)>), CacheEntry serialization/expiry, Embedder/Store ports (semantic cache over masked data)
 - `src/internal/domain/analytics/` — CostRate entity, CostRateRepository port, CostRateRegistry (per-model cost lookup for budget/analytics)
 - `src/internal/app/budget/` — WebhookNotifier (budget threshold alerts), AggregationWorker (materialized daily spend)
+- `src/internal/app/cache/` — SemanticCacheService (lookup/store), ExternalEmbedder, SelfContained/FallbackEmbedder, BudgetWriteGuard (budget-safe writes)
 - `deployments/` — Docker, Helm, docker-compose, migrations
   - `deployments/helm/maskchain/` — Helm chart for Kubernetes (Bitnami subcharts, ConfigMap, Ingress/GatewayAPI, ServiceMonitor)
   - `deployments/docker-compose/` — local dev / production compose stacks
@@ -83,6 +87,7 @@
 ## Where To Edit
 - New domain logic — `src/internal/domain/`
 - New use case / feature — `src/internal/app/` + `src/internal/ports/` + `src/internal/adapters/`
+- Semantic cache changes — `src/internal/domain/cache/` + `src/internal/app/cache/` + `src/internal/adapters/repository/cache/` + `src/internal/api/middleware/cache.go` + `src/cmd/internal/bootstrap/cache.go` + `data.cache.*` in `src/internal/infra/config/`
 - Budget/spend changes — `src/internal/domain/budget/` + `src/internal/adapters/repository/budget/` + `src/internal/app/budget/` + `src/internal/api/middleware/budget.go`
 - New API endpoint — `src/internal/api/` + `src/internal/ports/` (inbound interface)
 - Health check changes — `src/internal/api/health/`

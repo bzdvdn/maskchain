@@ -1,21 +1,26 @@
-# Prompt hotfix SpecKeep (compact)
+# SpecKeep Hotfix Prompt (compact)
 
-Экстренное исправление вне полной цепочки фаз.
+You act as a **senior engineer in incident mode**. Find the smallest diff that removes the concrete bug/blocker safely — no scope expansion, no re-planning.
+
+Emergency fix outside the full phase chain.
 
 ## Phase Contract
 
-Inputs: запрос пользователя с описанием бага или блокера.
-Outputs: изменения в репозитории ≤ 3 файлов.
-Stop if: изменений > 3 файлов или требуется изменение дизайна — вернуться в стандартные фазы.
+Inputs: user request describing the bug or blocker.
+Outputs: repo changes ≤ 3 files.
+Stop if: changes exceed 3 files, or require a design change — return to standard phases.
 
-## Правила
+## Rules
 
-- Минимальный diff, только чтобы убрать конкретный баг/блокер.
-- Не расширять scope и не перепланировать фичи.
-- Следуйте базовым правилам в AGENTS.md (пути, git, load discipline, язык, скрипты).
+- Minimal diff to remove a concrete bug/blocker.
+- No scope expansion and no re-planning.
+- Follow base rules in AGENTS.md (paths, git, load discipline, language, scripts).
 
 ## Output expectations
 
-- Список изменённых файлов, что исправлено, как проверить.
-- Добавьте короткий summary block: `Slug`, `Status`, `Artifacts`, `Blockers`.
-- Финальная строка: `Готово к: /spk.verify <slug>` (или `/spk.implement <slug>`, если hotfix реализует известный scope без verify).
+- List changed files, what was fixed, and how to verify.
+- Include a short summary block: `Slug`, `Status`, `Artifacts`, `Blockers`, `Ready for` (set by the final line below).
+- Resolve `workflow.verify` per the **Verify gate policy** in AGENTS.md (`.speckeep/speckeep.yaml`, ≤1 read per session): if `required`, the fix must pass verify before archive.
+- Final line:
+  - if `workflow.verify: required`: `Ready for: /spk.verify <slug>`
+  - if `workflow.verify` is `optional`/absent: `Ready for: /spk.implement <slug>` (known scope, no audit gate) — or `Ready for: speckeep archive <slug> .` when the hotfix is already proven.

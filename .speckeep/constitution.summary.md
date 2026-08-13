@@ -1,6 +1,6 @@
-- `Purpose:` Production-grade AI gateway с Content Shield (AI DLP) и управлением политиками безопасности на уровне тенантов
-- `Non-negotiables:` Content Shield — core domain, а не opt-in; тенанты (словари, PII-правила, препроцессоры) хранятся в PostgreSQL; native-only data plane (Envoy — PostMVP); React UI — только для управления тенантами и логов; система должна работать в enterprise-сетях с outbound proxy; профили справочников удалены
-- `Stack/Architecture:` Go + Gin + cobra/viper (backend); React + TypeScript + Vite (UI); PostgreSQL + Valkey; DDD + Clean Architecture; Microsoft Presidio для PII detection
-- `Workflow/DoD:` spec → plan → tasks → implement → verify → archive; каждый AC требует observable proof; trace-маркеры @sk-task/@sk-test над owning declaration; запрещены маркеры на package/import/file-header; repo-map обновляется только при существенных изменениях структуры
-- `Branching:` feature/<slug>; spec-фаза создаёт ветку
-- `Languages:` docs=ru, agent=ru, comments=en
+- `Purpose:` Production-grade AI gateway with Content Shield (AI DLP) and tenant-level security policy management
+- `Non-negotiables:` Content Shield is a core domain, not opt-in; tenants (dictionaries, PII rules, preprocessors) are stored in PostgreSQL; native-only data plane (Envoy — PostMVP); React UI is only for tenant management and logs; the system MUST run in enterprise networks with an outbound proxy; dictionary profiles are removed
+- `Stack/Architecture:` Go + Gin + cobra/viper (backend); React + TypeScript + Vite (UI); PostgreSQL + Valkey; DDD + Clean Architecture; Microsoft Presidio for PII detection
+- `Workflow/DoD:` spec → plan → tasks → implement → verify → archive; every AC requires observable proof; trace markers @sk-task/@sk-test above the owning declaration; markers on package/import/file-header are forbidden; repo-map updates only on significant structural changes
+- `Branching:` feature/<slug>; the spec phase creates the branch
+- `Languages:` docs=en, agent=en, comments=en

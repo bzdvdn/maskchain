@@ -1,93 +1,93 @@
-# Конституция проекта MaskChain
+# MaskChain Project Constitution
 
-## Назначение
+## Purpose
 
-Построение production-grade платформы для маршрутизации, обеспечения безопасности (Content Shield) и управления AI-трафиком с управлением политиками безопасности на уровне тенантов.
+Building a production-grade platform for routing, securing (Content Shield) and managing AI traffic with tenant-level security policy management.
 
-Миссия — предоставить организациям единый gateway для AI-трафика с встроенным Content Shield (AI DLP): обнаружение и реагирование на PII, secrets, финансовые данные в промптах и ответах. Тенанты являются контейнером политик обнаружения: словари, PII-правила, препроцессоры конфигурируются непосредственно на тенанте.
+The mission is to provide organizations with a single gateway for AI traffic with a built-in Content Shield (AI DLP): detection and reaction to PII, secrets, and financial data in prompts and responses. Tenants are the container of detection policies: dictionaries, PII rules, and preprocessors are configured directly on the tenant.
 
-## Ключевые принципы
+## Core Principles
 
 ### I. Content Shield — Core Domain
 
-Content Shield (AI DLP) — основной домен системы, а не дополнительная функция. Gateway обязан перехватывать AI-запросы и ответы и анализировать их на наличие:
-- PII (персональные данные: email, телефон, SSN, паспортные данные)
+Content Shield (AI DLP) is the core domain of the system, not an add-on feature. The gateway MUST intercept AI requests and responses and analyze them for:
+- PII (personal data: email, phone, SSN, passport data)
 - Secrets (API keys, private keys, JWT, tokens)
-- Финансовых данных (номера карт с Luhn, IBAN, SWIFT)
+- Financial data (card numbers with Luhn, IBAN, SWIFT)
 - Protected health information (PHI)
 
-Действия при обнаружении: block, redact, mask, alert. Политики настраиваются через тенантов.
+Reactions on detection: block, redact, mask, alert. Policies are configured through tenants.
 
 ### II. Tenant-Driven Policy Management
 
-Политики Content Shield управляются через тенантов — каждый тенант содержит словари (dictionaries), PII-правила (piiConfig) и препроцессоры. Тенанты хранятся в PostgreSQL, управляются через REST API и React UI. Профили справочников удалены; вся конфигурация политик инкапсулирована в тенанте.
+Content Shield policies are managed through tenants — each tenant contains dictionaries, PII rules (piiConfig), and preprocessors. Tenants are stored in PostgreSQL, managed via REST API and React UI. Dictionary profiles are removed; all policy configuration is encapsulated in the tenant.
 
 ### III. Infrastructure, Not Chatbot
 
-Проект — инфраструктурный gateway, а не chatbot, prompt playground, AI IDE или low-code workflow. Фокус: networking, security, traffic management, policy enforcement, observability.
+The project is an infrastructure gateway, not a chatbot, prompt playground, AI IDE, or low-code workflow. Focus: networking, security, traffic management, policy enforcement, observability.
 
 ### IV. AI Traffic Is Network Traffic
 
-AI-запросы обрабатываются как HTTP/gRPC трафик с пониманием AI-семантики: token economics, prompt semantics, provider health, inference latency, model capabilities, compliance.
+AI requests are handled as HTTP/gRPC traffic with an understanding of AI semantics: token economics, prompt semantics, provider health, inference latency, model capabilities, compliance.
 
 ### V. Runtime Before Platform
 
-Runtime гейтвея должен существовать до Kubernetes-абстракций. Порядок разработки: Runtime → Routing → Shield → Policies → Egress → API → UI → Operator. Envoy-режим — PostMVP.
+The gateway runtime must exist before Kubernetes abstractions. Development order: Runtime → Routing → Shield → Policies → Egress → API → UI → Operator. Envoy mode is PostMVP.
 
 ### VI. Native-Only Data Plane (MVP)
 
-Текущий data plane — встроенный Go runtime (native). Один бинарник: Gin HTTP server + `http.Client` + egress dialers. Никаких external зависимостей для обработки запросов. Envoy-режим — PostMVP (не планируется до стабилизации native-режима).
+The current data plane is the built-in Go runtime (native). One binary: Gin HTTP server + `http.Client` + egress dialers. No external dependencies for request processing. Envoy mode is PostMVP (not planned until native mode is stabilized).
 
 ### VII. Local Development Matters
 
-Каждая major feature запускаема локально через Docker Compose. React UI — через dev-режим (Vite/HMR) или compose-сервис. Native-режим runtime — основной deployment для локальной разработки.
+Every major feature MUST be runnable locally via Docker Compose. React UI runs via dev mode (Vite/HMR) or as a compose service. Native runtime mode is the primary deployment for local development.
 
-### VIII. Streaming — обязательное требование
+### VIII. Streaming — Mandatory Requirement
 
-SSE, chunk forwarding, streaming retries, cancellation propagation, low-latency token delivery. Streaming должен быть стабильным через retries, failover, observability.
+SSE, chunk forwarding, streaming retries, cancellation propagation, low-latency token delivery. Streaming MUST be stable across retries, failover, and observability.
 
-### IX. Наблюдаемость обязательна
+### IX. Observability Is Mandatory
 
-Каждый запрос должен быть наблюдаем: distributed traces, metrics, structured logs, token accounting, shield visibility, provider health. Никаких чёрных ящиков.
+Every request MUST be observable: distributed traces, metrics, structured logs, token accounting, shield visibility, provider health. No black boxes.
 
 ### X. Extensibility Over Hardcoding
 
-Предпочтение: plugins, interfaces, adapters, declarative policies, расширяемые детекторы для Content Shield. Избегать: provider-specific hacks, giant monolith logic, tightly coupled integrations.
+Preference: plugins, interfaces, adapters, declarative policies, extensible detectors for Content Shield. Avoid: provider-specific hacks, giant monolith logic, tightly coupled integrations.
 
-## Непересматриваемые правила
+## Non-Negotiable Rules
 
-- Реализация `MUST` идти по активным spec/plan/tasks и оставаться в заявленном scope.
-- Работа `MUST NOT` продолжаться из неоднозначных требований или placeholder-контента.
-- Изменения публичного поведения `MUST` отражаться в spec/tasks до merge.
-- Если реализация конфликтует с конституцией, сначала обновляется конституция.
+- Implementation `MUST` follow active spec/plan/tasks and stay within the stated scope.
+- Work `MUST NOT` continue from ambiguous requirements or placeholder content.
+- Changes to public behavior `MUST` be reflected in spec/tasks before merge.
+- If implementation conflicts with the constitution, the constitution is updated first.
 
-## Ограничения
+## Constraints
 
-- Content Shield — обязательная возможность gateway, а не opt-in.
-- Тенанты (словари, PII-правила, препроцессоры) хранятся в PostgreSQL; Valkey — только для кэширования.
-- React UI — только для управления тенантами и просмотра логов/инцидентов; не является панелью управления AI-трафиком в реальном времени.
-- Профили справочников удалены и не должны возвращаться; вся конфигурация политик — на уровне тенанта.
-- Envoy-режим — PostMVP; native-режим единственный до стабилизации core-доменов.
+- Content Shield is a mandatory gateway capability, not opt-in.
+- Tenants (dictionaries, PII rules, preprocessors) are stored in PostgreSQL; Valkey is only for caching.
+- React UI is only for tenant management and viewing logs/incidents; it is not a real-time AI traffic control panel.
+- Dictionary profiles are removed and MUST NOT return; all policy configuration lives at the tenant level.
+- Envoy mode is PostMVP; native mode is the only option until core domains are stabilized.
 - No chatbot UI, no prompt playground, no agent framework, no low-code platform.
-- Система должна работать в enterprise-сетях с outbound proxy и air-gapped окружениями.
-- Gateway и возможный будущий Operator — раздельные компоненты.
-- Каждая major feature должна быть запускаема локально (Docker Compose).
+- The system MUST run in enterprise networks with outbound proxy and air-gapped environments.
+- The gateway and a possible future Operator are separate components.
+- Every major feature MUST be runnable locally (Docker Compose).
 
-## Технологический стек
+## Tech Stack
 
-- **Язык:** Go (backend)
+- **Language:** Go (backend)
 - **Web framework:** Gin
 - **Config:** viper + cobra
-- **Архитектура:** DDD, Clean Architecture (ports/adapters)
+- **Architecture:** DDD, Clean Architecture (ports/adapters)
 - **UI:** React (TypeScript, Vite)
 - **Data Plane:** Native (Go, in-process). Envoy — PostMVP.
 - **Content Shield / AI DLP:** Microsoft Presidio (PII detection), custom patterns engine (secrets, API keys, financial data)
 - **Observability:** OpenTelemetry, Prometheus, Grafana, Loki, Tempo
 - **Persistence:** PostgreSQL (tenants, audit, incidents)
 - **Cache:** Valkey (Redis-compatible)
-- **Локальная разработка:** Docker Compose, mock-провайдеры
+- **Local development:** Docker Compose, mock providers
 
-## Основная архитектура
+## Core Architecture
 
 ```
 Client → Gateway Runtime → Shield Engine → Routing → Egress → AI Providers
@@ -98,17 +98,17 @@ Client → Gateway Runtime → Shield Engine → Routing → Egress → AI Provi
 ```
 
 ### Gateway Runtime
-HTTP API, streaming, retries, failover, routing execution, observability. In-process Go: Gin HTTP server, `http.Client` с egress dialer wrappers, in-process SSE streaming. Single binary, zero external dependencies.
+HTTP API, streaming, retries, failover, routing execution, observability. In-process Go: Gin HTTP server, `http.Client` with egress dialer wrappers, in-process SSE streaming. Single binary, zero external dependencies.
 
 ### Shield Engine
-Content inspection pipeline: PII redaction, secrets detection, AI DLP. Проверяет входящие промпты и исходящие ответы. Управляется конфигурацией тенанта (словари, PII-правила) через Tenant Repository.
+Content inspection pipeline: PII redaction, secrets detection, AI DLP. Inspects inbound prompts and outbound responses. Driven by tenant configuration (dictionaries, PII rules) through the Tenant Repository.
 
 ### Tenant Repository
-Хранилище тенантов для Content Shield:
-- Tenants: именованные контейнеры политик
-- Dictionaries: списки сущностей для точного детектирования
-- PII Config: regex-правила детекции PII, secrets, financial, PHI
-- Preprocessors: CSV/JSON препроцессоры для структурированных данных
+Tenant storage for Content Shield:
+- Tenants: named policy containers
+- Dictionaries: entity lists for precise detection
+- PII Config: regex rules for PII, secrets, financial, PHI detection
+- Preprocessors: CSV/JSON preprocessors for structured data
 - Reactions: block, redact, mask, alert
 
 ### Routing Engine
@@ -121,37 +121,37 @@ Outbound proxy routing, retry orchestration, timeout management.
 OpenTelemetry, Prometheus, structured logging, distributed tracing.
 
 ### React UI
-Управление тенантами (словари, PII-правила), просмотр инцидентов Shield, логи аудита.
+Tenant management (dictionaries, PII rules), Shield incident viewing, audit logs.
 
-## Языковая политика
+## Language Policy
 
-- Язык документации: русский
-- Язык общения с агентом: русский
-- Язык комментариев в коде: английский
+- Documentation language: English
+- Agent communication language: English
+- Code comment language: English
 
-## Процесс разработки
+## Development Workflow
 
-- Каждая фича ДОЛЖНА разрабатываться в отдельной git-ветке.
-- Именование веток SHOULD следовать `feature/<slug>`.
-- Реализация SHOULD начинаться с явной спецификации до начала кодинга.
-- Планы и задачи SHOULD выводиться из актуальной спецификации и оставаться с ней согласованными.
-- Реализация, спецификации, планы и задачи ДОЛЖНЫ соответствовать этой конституции.
-- Если работа выявляет конфликт с этой конституцией, конституция ДОЛЖНА быть изменена до продолжения несовместимой реализации.
+- Each feature MUST be developed in a separate git branch.
+- Branch naming SHOULD follow `feature/<slug>`.
+- Implementation SHOULD start with an explicit specification before coding.
+- Plans and tasks SHOULD derive from the current specification and stay consistent with it.
+- Implementation, specifications, plans, and tasks MUST comply with this constitution.
+- If work reveals a conflict with this constitution, the constitution MUST be changed before continuing incompatible implementation.
 
 ## Definition of Done
 
-- Задача считается завершенной только при observable proof: измененные файлы, вывод целевых тестов или результат команды.
-- Для нетривиальных правок обязательны traceability-маркеры:
-  - код: `@sk-task <slug>#<TASK_ID>: <short> (<AC_ID>)`
-  - тесты: `@sk-test <slug>#<TASK_ID>: <TestName> (<AC_ID>)`
-  - если одну задачу подтверждают несколько тестов/кейсов, `@sk-test <slug>#<TASK_ID>` должен стоять на каждом таком тесте/кейсе, а не только на одном representative тесте.
-- Правило размещения маркеров:
-  - Маркер ВСЕГДА ставится **над объявлением** символа, которому принадлежит.
-  - Если у символа есть GoDoc, маркер(ы) идут **первыми**, затем **пустая строка** (`//`), затем GoDoc, затем объявление.
-  - Если GoDoc нет, маркер ставится непосредственно над объявлением.
-  - Запрещено ставить trace-маркеры на уровень `package`, `import` или file-header comment.
-  - Маркер всегда относится к нижестоящему символу; если маркеров несколько — все относятся к одному символу.
-- Примеры размещения и стиля по языкам:
+- A task is complete only with observable proof: changed files, output of targeted tests, or command result.
+- For non-trivial edits, traceability markers are mandatory:
+  - code: `@sk-task <slug>#<TASK_ID>: <short> (<AC_ID>)`
+  - tests: `@sk-test <slug>#<TASK_ID>: <TestName> (<AC_ID>)`
+  - if several tests/cases confirm one task, `@sk-test <slug>#<TASK_ID>` MUST be placed on each such test/case, not only on one representative test.
+- Marker placement rules:
+  - The marker is ALWAYS placed **above the declaration** of the symbol it belongs to.
+  - If the symbol has a GoDoc, marker(s) come **first**, then a **blank line** (`//`), then GoDoc, then the declaration.
+  - If there is no GoDoc, the marker is placed directly above the declaration.
+  - Placing trace markers at `package`, `import`, or file-header level is forbidden.
+  - A marker always refers to the symbol below; if there are several markers, all refer to the same symbol.
+- Placement and style examples by language:
   - Go:
     ```go
     // @sk-task slug#T1: description (AC-001)
@@ -164,90 +164,91 @@ OpenTelemetry, Prometheus, structured logging, distributed tracing.
 
     // @sk-test slug#T1: TestSomething (AC-001)
     //
-    // TestSomething проверяет поведение X.
+    // TestSomething verifies behavior X.
     func TestSomething(t *testing.T) { ... }
     ```
-    Без GoDoc:
+    Without GoDoc:
     ```go
     // @sk-task slug#T1: description (AC-001)
     func Short() { ... }
     ```
-    Если несколько `Test...` проверяют одну задачу, `@sk-test` нужен на каждом таком тесте.
-  - Python: `#` первой строкой внутри тела `def` / `async def` / `class` / `def test_*`; не в module docstring и не над `import`. Если одну задачу покрывают несколько test functions, маркер нужен внутри каждой из них.
-  - JavaScript / TypeScript: `//` над `function`, `async function`, class method, `class`; для `test(...)`/`it(...)` — первой строкой внутри callback/body. Если кейсов несколько, маркер нужен в каждом `test/it`.
-  - Shell / Bash: `#` над `function name()` или первой строкой именованного behavior/test block; не в file header только ради trace.
-  - SQL / migrations: `--` или `/* */` непосредственно над `CREATE FUNCTION|PROCEDURE|TRIGGER|VIEW` или первой строкой явно именованного migration block; не в верхнем комментарии файла без привязки к изменению.
-- Существующие trace-маркеры сохраняются; покрытие новой задачи добавляется доп. маркерами (без перезаписи).
-- Если один метод/тест покрывает несколько задач, на нем одновременно остаются несколько маркеров.
-- Перед archive в verify должна быть подтверждена покрываемость acceptance criteria.
+    If several `Test...` verify one task, `@sk-test` is required on each such test.
+  - Python: `#` as the first line inside the body of `def` / `async def` / `class` / `def test_*`; not in module docstring and not above `import`. If one task is covered by multiple test functions, the marker is required inside each of them.
+  - JavaScript / TypeScript: `//` above `function`, `async function`, class method, `class`; for `test(...)`/`it(...)` — as the first line inside the callback/body. If there are multiple cases, the marker is required in each `test/it`.
+  - Shell / Bash: `#` above `function name()` or the first line of a named behavior/test block; not in a file header solely for trace purposes.
+  - SQL / migrations: `--` or `/* */` directly above `CREATE FUNCTION|PROCEDURE|TRIGGER|VIEW` or the first line of an explicitly named migration block; not in a file-header comment without a tie to the change.
+- Existing trace markers are preserved; coverage of a new task is added with additional markers (without overwriting).
+- If one method/test covers multiple tasks, multiple markers remain on it simultaneously.
+- Before archive, coverage of acceptance criteria MUST be confirmed in verify.
 
-## Политика Repository Map
+## Repository Map Policy
 
-- `REPOSITORY_MAP.md` — компактный индекс навигации по коду, а не процессный документ.
-- Карта обновляется только при существенном изменении структуры/навигации кода.
-- Обновление карты выполняется in-place с минимальным diff; неизменные секции не переписываются.
-- Операционные/spec-артефакты исключаются из индексации согласно политике проекта.
+- `REPOSITORY_MAP.md` is a compact code navigation index, not a process document.
+- The map is updated only on significant changes to code structure/navigation.
+- Updates are made in-place with a minimal diff; unchanged sections are not rewritten.
+- Operational/spec artifacts are excluded from indexing per project policy.
 
-## DDD и Clean Architecture
+## DDD and Clean Architecture
 
 ### Domain Boundaries
 
-Core domains: shield (content security, PII detection, secrets detection, dictionaries, preprocessors), routing, providers, egress, streaming, observability, tenants. Профили справочников удалены; все политики конфигурируются на тенанте. Архитектура организуется вокруг доменов, а не вокруг провайдеров.
+Core domains: shield (content security, PII detection, secrets detection, dictionaries, preprocessors), routing, providers, egress, streaming, observability, tenants. Dictionary profiles are removed; all policies are configured on the tenant. Architecture is organized around domains, not around providers.
 
 ### Clean Architecture
 
-Следовать ports/adapters, dependency inversion, явным границам, изолированной domain logic. Domain logic не должен зависеть от HTTP-фреймворков, БД, Redis, React. Всё это — за портами.
+Follow ports/adapters, dependency inversion, explicit boundaries, isolated domain logic. Domain logic MUST NOT depend on HTTP frameworks, databases, Redis, or React. All of that lives behind ports.
 
-## Структура репозитория
+## Repository Structure
 
 ```
 /src
     cmd/
-        gateway/      — entrypoint runtime гейтвея
+        gateway/      — gateway runtime entrypoint
     internal/
-        domain/       — domain logic (бизнес-сущности, value objects, domain services)
+        domain/       — domain logic (business entities, value objects, domain services)
         app/          — application layer (use cases, application services)
         ports/        — port interfaces (inbound/outbound)
         adapters/     — adapter implementations (providers, persistence, shield detectors)
         infra/        — infrastructure (config, logging, metrics, tracing)
-        api/          — API handlers и middleware
-    pkg/              — переиспользуемые публичные библиотеки
+        api/          — API handlers and middleware
+    pkg/              — reusable public libraries
 
 /ui                   — React frontend (Vite + TypeScript)
 
 /specs
-    active/           — активные спецификации
-    archived/         — архивированные спецификации
+    active/           — active specifications
+    archived/         — archived specifications
 
 /deployments
-    docker-compose/   — локальные окружения
-    kubernetes/       — манифесты (PostMVP)
+    docker-compose/   — local environments
+    kubernetes/       — manifests (PostMVP)
 
 /docs
-    en/               — документация на английском
-    ru/               — документация на русском
-    architecture/     — архитектурные документы
+    en/               — documentation in English
+    ru/               — documentation in Russian
+    architecture/     — architecture documents
     adr/              — Architecture Decision Records
 
-/examples             — примеры использования
-/bin                  — артефакты сборки
+/examples             — usage examples
+/bin                  — build artifacts
 ```
 
-## Управление
+## Governance
 
-- Эта конституция является авторитетным источником для проектных решений.
-- Изменения архитектуры, спецификаций, планов и задач ДОЛЖНЫ соответствовать этим принципам.
-- Если реализация конфликтует с конституцией, приоритет у конституции, пока она явно не изменена.
-- Изменяйте этот файл patch-обновлениями, сохраняя обязательные секции и делая правила конкретными и проверяемыми.
+- This constitution is the authoritative source for project decisions.
+- Changes to architecture, specifications, plans, and tasks MUST comply with these principles.
+- If implementation conflicts with the constitution, the constitution takes priority until explicitly changed.
+- Change this file via patch updates, preserving mandatory sections and keeping rules concrete and testable.
 
-## Метаданные конституции
+## Constitution Metadata
 
-- Version: 1.2.0
+- Version: 1.3.0
 - Ratified: 2026-07-10
-- Last Amended: 2026-07-20
+- Last Amended: 2026-08-13
 
-## Последнее обновление
+## Last Updated
 
-2026-07-10 — начальная версия конституции MaskChain. Фокус: Content Shield (AI DLP), профили справочников, native-only data plane, React UI.
-2026-07-15 — v1.1.0: профили справочников удалены, политики конфигурируются на тенанте (словари, PII-правила, препроцессоры).
-2026-07-20 — v1.2.0: GoDoc clean — правило расположения маркеров: `@sk-task` → пустая строка → GoDoc → объявление. Маркер всегда над объявлением, GoDoc отделён пустой строкой снизу.
+2026-07-10 — initial MaskChain constitution. Focus: Content Shield (AI DLP), dictionary profiles, native-only data plane, React UI.
+2026-07-15 — v1.1.0: dictionary profiles removed, policies configured on the tenant (dictionaries, PII rules, preprocessors).
+2026-07-20 — v1.2.0: GoDoc clean — marker placement rule: `@sk-task` → blank line → GoDoc → declaration. Marker always above the declaration, GoDoc separated by a blank line below.
+2026-08-13 — v1.3.0: full English translation per language policy (docs=en, agent=en, comments=en).

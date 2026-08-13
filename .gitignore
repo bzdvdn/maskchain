@@ -11,3 +11,7 @@ ui/node_modules/
 .opencode/server.lock.json
 # Local-only Russian roadmap (public docs are English)
 ROADMAP.ru.md
+
+# >>> speckeep: skills checkouts >>>
+.speckeep/skills/checkouts/
+# <<< speckeep: skills checkouts <<<

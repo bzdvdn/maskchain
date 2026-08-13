@@ -1,27 +1,37 @@
-# Prompt отката SpecKeep (compact)
+# SpecKeep Rollback Prompt (compact)
 
-Вы откатываете выполненные задачи для одной фичи, возвращая их в незавершённое состояние.
+You act as a **release engineer**. Change only the declared state (checkboxes and, when asked, code) with full transparency about what was reverted.
+
+You roll back completed tasks for one feature, returning them to unfinished state.
 
 ## Phase Contract
 
-Inputs: `<specs_dir>/<slug>/tasks.md` (обязательно).
-Outputs: обновлённый tasks.md — запрошенные задачи отмечены как незавершённые.
-Stop if: slug отсутствует, tasks.md не существует, или нет завершённых задач.
+Inputs: `<specs_dir>/<slug>/tasks.md` (required).
+Outputs: updated tasks.md with requested tasks unmarked as incomplete.
+Stop if: slug is missing, tasks.md does not exist, or no completed tasks exist.
 
-## Правила
+## Rules
 
-- Прочитайте `<specs_dir>/<slug>/tasks.md` и перечислите все `[x]` задачи с группировкой по фазам и их `Touches:`.
-- Спросите пользователя, какие задачи откатить (по ID через запятую: `T1.1,T1.2` или `all`). Если пользователь указал фазу (например `phase T1`), откатите все задачи этой фазы.
-- Для каждой откатываемой задачи:
-  1. Поменяйте `[x]` на `[ ]` в tasks.md.
-  2. НЕ откатывайте код автоматически — пользователь может захотеть оставить изменения.
-  3. Если пользователь также просит откатить код, выполните `git checkout -- <file>` для каждого файла из Touches: этих задач.
-- После отката состояние фичи возвращается к `implement`.
-- Не трогайте `[ ]` задачи — откатывайте только `[x]`.
+- Read `<specs_dir>/<slug>/tasks.md` and list all completed `[x]` tasks grouped by phase, with their `Touches:` surfaces.
+- Ask the user which tasks to roll back (by ID like `T1.1,T1.2` or `all`). If the user specifies a phase (e.g., `phase T1`), roll back all tasks in that phase.
+- For each rolled-back task:
+  1. Change `[x]` to `[ ]` in tasks.md.
+  2. Do NOT revert code changes automatically — the user may want to keep the code.
+  3. If the user also asks to revert code, use `git checkout -- <file>` on each Touches: file for those tasks.
+- After rollback, the feature phase state reverts to `implement`.
+- Do not touch `[ ]` tasks — only roll back `[x]` tasks.
 
 ## Output expectations
 
-- Перечислите затронутые задачи, для каждой: был ли откачен чекбокс и/или код.
-- Покажите новое состояние задач: `completed=<n>`, `open=<n>`.
-- Если код откатывался, перечислите запущенные git-checkout команды.
-- Финальная строка: `Готово к: /spk.implement <slug>`
+- List affected tasks per task ID: whether checkbox was reverted and/or code was reverted.
+- Show updated task state: `completed=<n>`, `open=<n>`.
+- If code was reverted, list the git-checkout commands run.
+- End with standard end block (see AGENTS.md), exact shape:
+  ```
+  Slug: <slug>
+  Status: <phase label>
+  Artifacts: <paths>
+  Blockers: <none | reason>
+  Ready for: /spk.implement <slug>
+  ```
+- The `Ready for:` line above is the mandatory final line — end with it.

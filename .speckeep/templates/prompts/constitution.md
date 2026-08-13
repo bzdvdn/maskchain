@@ -1,31 +1,33 @@
-# Prompt конституции SpecKeep (compact)
+# SpecKeep Constitution Prompt (compact)
 
-Вы создаёте или обновляете конституцию проекта.
+You act as a **principal architect**. Turn project reality into the fewest testable rules that keep all agents and humans aligned.
+
+You create or update the project constitution.
 
 ## Phase Contract
 
-Inputs: запрос пользователя, минимальный контекст репозитория (только то, что нужно для ограничений/архитектуры).
-Outputs: `project.constitution_file` (по умолчанию `CONSTITUTION.md`).
-Stop if: правила остаются `TBD`/placeholder или конфликтуют с текущим repo reality без явного решения.
+Inputs: user request + minimum repo context needed to define constraints/architecture.
+Outputs: `project.constitution_file` (default: `CONSTITUTION.md`).
+Stop if: rules remain `TBD`/placeholder or contradict repo reality without an explicit decision.
 
-## Правила
+## Rules
 
-- Конституция — верхний приоритет: короткие, проверяемые правила; без «философии».
-- Укажите: Purpose, принципы, ограничения, tech stack, архитектуру, language policy, workflow.
-- Всегда используйте шаблон `.speckeep/templates/constitution.md` как каркас и формат результата. Не ищите «примеры» в чужих конституциях/проектах ради формы: это лишний токен‑расход и дрейф.
-- Constitution summary: фаза автоматически загружает `.speckeep/constitution.summary.md` (см. AGENTS.md).
-- Запустите readiness script фазы (см. AGENTS.md: Скрипты).
+- Constitution is authoritative: short, concrete, testable rules (no philosophy).
+- Include: Purpose, principles, constraints, tech stack, architecture, language policy, workflow.
+- Always use `.speckeep/templates/constitution.md` as the skeleton and output format. Do not look for “examples” in other constitutions/projects for shape: it’s wasted tokens and drift.
+- Constitution summary: the phase loads `.speckeep/constitution.summary.md` automatically when present (see AGENTS.md).
+- Run the pre-phase readiness script (see AGENTS.md: Scripts).
 
 ## Output expectations
 
-- Запишите/patch конституцию.
-- Сгенерируйте `.speckeep/constitution.summary.md` в строгом компактном формате (только правила, без абзацев рассуждений):
-  - `Purpose:` одна строка
+- Write/patch the constitution.
+- Generate `.speckeep/constitution.summary.md` using this strict compact format (rules only, no prose paragraphs):
+  - `Purpose:` one line
   - `Non-negotiables:` 3-6 bullets (`MUST` / `MUST NOT`)
   - `Stack/Architecture:` 2-5 bullets
-  - `Workflow/DoD:` 4-7 bullets (traceability, proof-требования, scope discipline и repo map policy)
-  - `Branching:` 1-2 bullets (соглашение о нейминге веток, какая фаза создаёт ветки)
-  - `Languages:` одна строка (`docs=...`, `agent=...`, `comments=...`)
-  - жесткий лимит: ≤200 слов суммарно
-- Коротко перечислите ключевые правила и что изменилось.
-- Финальная строка: `Готово к: /spk.spec <slug>`
+  - `Workflow/DoD:` 4-7 bullets (include traceability, proof requirements, scope discipline, and repo map policy)
+  - `Branching:` 1-2 bullets (branch naming convention, which phase creates branches)
+  - `Languages:` one line (`docs=...`, `agent=...`, `comments=...`)
+  - hard limit: ≤200 words total
+- Summarize the key rules and what changed.
+- Final line: `Ready for: /spk.spec <slug>`
