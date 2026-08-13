@@ -85,6 +85,9 @@ func buildAdminServer(
 			cfgTenants[slugStr] = entity.NewTenant(slug, tc.Name, tc.AuthHeader, tc.APIKeys, opts...)
 		}
 		tenantResolver := resolver.NewDBFirstTenantResolver(tenantRepo, cfgTenants)
+		if mode, err := value.ParseRetentionMode(cfg.DefaultRetentionMode()); err == nil {
+			tenantResolver.SetDefaultRetentionMode(mode)
+		}
 
 		syncCtx, syncCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		if err := tenantResolver.SyncConfig(syncCtx, cfgTenants); err != nil {

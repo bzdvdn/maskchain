@@ -8,6 +8,7 @@ import {
   getTenant,
   type CreateTenantRequest,
   type UpdateTenantRequest,
+  type RetentionMode,
   type DictionaryItem,
   type PIIConfig,
   type PIARule,
@@ -23,6 +24,7 @@ interface FormData {
   pii_enabled: boolean
   pii_default_action: string
   pii_rules: PIARule[]
+  retention_mode: RetentionMode
 }
 
 interface FormErrors {
@@ -49,6 +51,7 @@ export function TenantForm() {
     pii_enabled: false,
     pii_default_action: 'mask',
     pii_rules: [],
+    retention_mode: 'full',
   })
   const [errors, setErrors] = useState<FormErrors>({})
   const [submitting, setSubmitting] = useState(false)
@@ -68,6 +71,7 @@ export function TenantForm() {
           pii_enabled: t.pii_config?.enabled ?? false,
           pii_default_action: t.pii_config?.default_action ?? 'mask',
           pii_rules: t.pii_config?.rules ?? [],
+          retention_mode: t.retention_mode ?? 'full',
         })
       )
       .catch(() => navigate('/tenants'))
@@ -113,6 +117,7 @@ export function TenantForm() {
           api_keys: keys,
           dictionaries: form.dictionaries,
           pii_config: piiCfg,
+          retention_mode: form.retention_mode,
         }
         await updateTenant(slug, req)
         toast('Tenant updated', 'success')
@@ -125,6 +130,7 @@ export function TenantForm() {
           api_keys: keys,
           dictionaries: form.dictionaries,
           pii_config: piiCfg,
+          retention_mode: form.retention_mode,
         }
         const created = await createTenant(req)
         toast(`Tenant "${created.slug}" created`, 'success')
@@ -231,6 +237,20 @@ export function TenantForm() {
             className={errors.api_keys ? 'input-error' : ''}
           />
           {errors.api_keys && <span className="field-error">{errors.api_keys}</span>}
+        </div>
+
+        <div className="form-field">
+          <label htmlFor="retention_mode">Retention Mode</label>
+          <select
+            id="retention_mode"
+            value={form.retention_mode}
+            onChange={(e) => setField('retention_mode', e.target.value as RetentionMode)}
+            className="editor-select"
+          >
+            <option value="full">Full (store content)</option>
+            <option value="meta">Metadata only</option>
+            <option value="none">None (no logs)</option>
+          </select>
         </div>
 
         <div className="editor-section">

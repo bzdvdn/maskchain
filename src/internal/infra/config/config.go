@@ -295,9 +295,24 @@ type EmbeddingConfig struct {
 	TimeoutSec int `mapstructure:"timeout_sec" yaml:"timeout_sec"`
 }
 
-// DataConfig groups data-plane feature configuration.
+// Retention Config groups data-plane feature configuration.
 type DataConfig struct {
-	Cache *CacheConfig `mapstructure:"cache" yaml:"cache"`
+	Cache     *CacheConfig     `mapstructure:"cache" yaml:"cache"`
+	Retention *RetentionConfig `mapstructure:"retention" yaml:"retention"`
+}
+
+// RetentionConfig configures data retention behavior for the request-log pipeline.
+type RetentionConfig struct {
+	Mode string `mapstructure:"mode" yaml:"mode"`
+}
+
+// DefaultRetentionMode returns the configured global retention mode, falling
+// back to "full" when unset.
+func (c *Config) DefaultRetentionMode() string {
+	if c.Data != nil && c.Data.Retention != nil && c.Data.Retention.Mode != "" {
+		return c.Data.Retention.Mode
+	}
+	return defaultDataRetentionMode
 }
 
 // ComplianceConfig configures compliance packs: where preset YAMLs live and

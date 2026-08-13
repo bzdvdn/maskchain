@@ -14,15 +14,43 @@ import (
 //
 // DBFirstTenantResolver represents a domain entity or configuration.
 type DBFirstTenantResolver struct {
-	repo       shield.TenantRepository
-	cfgTenants map[string]*entity.Tenant
+	repo                 shield.TenantRepository
+	cfgTenants           map[string]*entity.Tenant
+	defaultRetentionMode value.RetentionMode
 }
 
 func NewDBFirstTenantResolver(repo shield.TenantRepository, cfgTenants map[string]*entity.Tenant) *DBFirstTenantResolver {
 	return &DBFirstTenantResolver{
-		repo:       repo,
-		cfgTenants: cfgTenants,
+		repo:                 repo,
+		cfgTenants:           cfgTenants,
+		defaultRetentionMode: value.RetentionModeFull,
 	}
+}
+
+// SetDefaultRetentionMode sets the global default applied to tenants without
+// their own explicit retention mode (config data.retention.mode).
+func (r *DBFirstTenantResolver) SetDefaultRetentionMode(mode value.RetentionMode) {
+	if mode.Valid() {
+		r.defaultRetentionMode = mode
+	}
+}
+
+// DefaultRetentionMode returns the global default retention mode.
+func (r *DBFirstTenantResolver) DefaultRetentionMode() value.RetentionMode {
+	return r.defaultRetentionMode
+}
+
+// EffectiveMode returns the effective retention mode for the tenant: the
+// tenant's explicit value when set, otherwise the global default.
+func (r *DBFirstTenantResolver) EffectiveMode(ctx context.Context, slug value.TenantSlug) (value.RetentionMode, error) {
+	tenant, err := r.Get(ctx, slug)
+	if err != nil {
+		return "", fmt.Errorf("resolver effective mode: %w", err)
+	}
+	if tenant != nil && tenant.RetentionMode() != "" {
+		return tenant.RetentionMode(), nil
+	}
+	return r.defaultRetentionMode, nil
 }
 
 func (r *DBFirstTenantResolver) List(ctx context.Context) ([]*entity.Tenant, error) {

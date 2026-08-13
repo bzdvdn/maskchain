@@ -16,31 +16,34 @@ type DictionaryItem struct {
 }
 
 type CreateTenantRequest struct {
-	Slug         string            `json:"slug" binding:"required"`
-	Name         string            `json:"name" binding:"required"`
-	AuthHeader   string            `json:"auth_header"`
-	APIKeys      []string          `json:"api_keys" binding:"required"`
-	Dictionaries []DictionaryItem  `json:"dictionaries"`
-	PIIConfig    *entity.PIIConfig `json:"pii_config"`
+	Slug          string            `json:"slug" binding:"required"`
+	Name          string            `json:"name" binding:"required"`
+	AuthHeader    string            `json:"auth_header"`
+	APIKeys       []string          `json:"api_keys" binding:"required"`
+	Dictionaries  []DictionaryItem  `json:"dictionaries"`
+	PIIConfig     *entity.PIIConfig `json:"pii_config"`
+	RetentionMode string            `json:"retention_mode"`
 }
 
 type UpdateTenantRequest struct {
-	Name         string            `json:"name" binding:"required"`
-	AuthHeader   string            `json:"auth_header"`
-	APIKeys      []string          `json:"api_keys" binding:"required"`
-	Dictionaries []DictionaryItem  `json:"dictionaries"`
-	PIIConfig    *entity.PIIConfig `json:"pii_config"`
+	Name          string            `json:"name" binding:"required"`
+	AuthHeader    string            `json:"auth_header"`
+	APIKeys       []string          `json:"api_keys" binding:"required"`
+	Dictionaries  []DictionaryItem  `json:"dictionaries"`
+	PIIConfig     *entity.PIIConfig `json:"pii_config"`
+	RetentionMode string            `json:"retention_mode"`
 }
 
 type TenantResponse struct {
-	Slug         string            `json:"slug"`
-	Name         string            `json:"name"`
-	AuthHeader   string            `json:"auth_header"`
-	APIKeys      []string          `json:"api_keys"`
-	Dictionaries []DictionaryItem  `json:"dictionaries,omitempty"`
-	PIIConfig    *entity.PIIConfig `json:"pii_config,omitempty"`
-	CreatedAt    time.Time         `json:"created_at"`
-	UpdatedAt    time.Time         `json:"updated_at"`
+	Slug          string            `json:"slug"`
+	Name          string            `json:"name"`
+	AuthHeader    string            `json:"auth_header"`
+	APIKeys       []string          `json:"api_keys"`
+	Dictionaries  []DictionaryItem  `json:"dictionaries,omitempty"`
+	PIIConfig     *entity.PIIConfig `json:"pii_config,omitempty"`
+	RetentionMode string            `json:"retention_mode"`
+	CreatedAt     time.Time         `json:"created_at"`
+	UpdatedAt     time.Time         `json:"updated_at"`
 }
 
 type DictionaryRequest struct {
@@ -53,7 +56,8 @@ type DictionaryResponse struct {
 
 func TenantToResponse(t *entity.Tenant) TenantResponse {
 	piiCfg := t.PIIConfig()
-	return TenantResponse{
+	retentionMode := t.RetentionMode()
+	response := TenantResponse{
 		Slug:       t.Slug().String(),
 		Name:       t.Name(),
 		AuthHeader: t.AuthHeader(),
@@ -62,4 +66,8 @@ func TenantToResponse(t *entity.Tenant) TenantResponse {
 		CreatedAt:  t.CreatedAt(),
 		UpdatedAt:  t.UpdatedAt(),
 	}
+	if retentionMode != "" {
+		response.RetentionMode = retentionMode.String()
+	}
+	return response
 }

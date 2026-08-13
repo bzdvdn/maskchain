@@ -13,6 +13,7 @@ import (
 
 	conversationapp "github.com/bzdvdn/maskchain/src/internal/app/conversation"
 	"github.com/bzdvdn/maskchain/src/internal/domain/conversation"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
 
 const conversationMaxBodySize = 1 << 20 // 1MB
@@ -24,15 +25,39 @@ const conversationMaxBodySize = 1 << 20 // 1MB
 // for the background worker. It runs before the shield middleware, so the
 // captured request is the unmodified original. Encryption and persistence are
 // delegated to the worker; the hot path only reads/restores the body, buffers
-// the response and enqueues.
+// the response and enqueues. Retention mode gating (none/meta/full) happens at
+// this capture boundary so sensitive content never leaves the middleware.
 type ConversationMiddleware struct {
 	worker conversationapp.Sender
 	log    *slog.Logger
+	// defaultRetentionMode is the global data.retention.mode default, applied
+	// when the tenant in context has no explicit retention mode (DEC-002).
+	defaultRetentionMode value.RetentionMode
 }
 
 // @sk-task conversation-logging#T2.2: NewConversationMiddleware creates the middleware (RQ-008, DEC-001)
 func NewConversationMiddleware(sender conversationapp.Sender, log *slog.Logger) *ConversationMiddleware {
-	return &ConversationMiddleware{worker: sender, log: log}
+	return &ConversationMiddleware{
+		worker:               sender,
+		log:                  log,
+		defaultRetentionMode: value.RetentionModeFull,
+	}
+}
+
+// SetDefaultRetentionMode sets the global retention default (data.retention.mode).
+func (m *ConversationMiddleware) SetDefaultRetentionMode(mode value.RetentionMode) {
+	if mode.Valid() {
+		m.defaultRetentionMode = mode
+	}
+}
+
+// effectiveRetentionMode resolves the mode for the tenant in context: its
+// explicit value when set, otherwise the global default (DEC-002).
+func (m *ConversationMiddleware) effectiveRetentionMode(c *gin.Context) value.RetentionMode {
+	if t, ok := TenantFromContext(c); ok && t.RetentionMode() != "" {
+		return t.RetentionMode()
+	}
+	return m.defaultRetentionMode
 }
 
 // @sk-task conversation-logging#T2.5: Buffer the response with a 1MB cap without stalling the client stream (RQ-009, DEC-007, AC-003)
@@ -132,8 +157,31 @@ func (m *ConversationMiddleware) Handler() gin.HandlerFunc {
 		}
 
 		masking := maskingFromContext(c)
-		// @sk-task conversation-logging#T6.1: Only log exchanges that were masked or blocked (user requirement)
-		if len(masking) == 0 && status != conversation.StatusBlocked {
+		mode := m.effectiveRetentionMode(c)
+
+		// DEC-003: gating at the capture boundary. In `none` no RawRecord is
+		// ever produced; session/analytics counters are untouched (AC-003).
+		if mode == value.RetentionModeNone {
+			return
+		}
+
+		detector, category := blockFactsFromContext(c)
+
+		// DEC-005: log all chat requests in full/meta so the masked/not-masked
+		// filter is meaningful (AC-008).
+		if mode == value.RetentionModeMeta {
+			rec := conversationapp.RawRecord{
+				ID:        conversationRecordID(c),
+				TenantID:  tenantSlug,
+				Model:     chatReq.Model,
+				Status:    status,
+				Streamed:  chatReq.Stream,
+				MaskID:    conversationMaskIDFromContext(c),
+				Detector:  detector,
+				Category:  category,
+				CreatedAt: start.UTC(),
+			}
+			m.worker.Send(rec)
 			return
 		}
 
@@ -144,6 +192,8 @@ func (m *ConversationMiddleware) Handler() gin.HandlerFunc {
 			Status:    status,
 			Streamed:  chatReq.Stream,
 			MaskID:    conversationMaskIDFromContext(c),
+			Detector:  detector,
+			Category:  category,
 			Request:   append([]byte(nil), body...),
 			Response:  append([]byte(nil), buf.buf.Bytes()...),
 			Masking:   masking,
@@ -152,6 +202,20 @@ func (m *ConversationMiddleware) Handler() gin.HandlerFunc {
 
 		m.worker.Send(rec)
 	}
+}
+
+func blockFactsFromContext(c *gin.Context) (detector, category string) {
+	if v, ok := c.Get(conversationDetectorKey); ok {
+		if s, ok := v.(string); ok {
+			detector = s
+		}
+	}
+	if v, ok := c.Get(conversationCategoryKey); ok {
+		if s, ok := v.(string); ok {
+			category = s
+		}
+	}
+	return detector, category
 }
 
 func conversationStatusFrom(c *gin.Context, upstreamError bool) conversation.ConversationStatus {

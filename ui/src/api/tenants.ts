@@ -21,12 +21,15 @@ export interface DictionaryItem {
   match_mode: string
 }
 
+export type RetentionMode = 'full' | 'meta' | 'none'
+
 export interface TenantListItem {
   slug: string
   name: string
   auth_header: string
   api_keys: string[]
   pii_config?: PIIConfig
+  retention_mode?: RetentionMode
   created_at: string
   updated_at: string
 }
@@ -38,6 +41,7 @@ export interface TenantResponse {
   api_keys: string[]
   dictionaries?: DictionaryItem[]
   pii_config?: PIIConfig
+  retention_mode?: RetentionMode
   created_at: string
   updated_at: string
 }
@@ -49,6 +53,7 @@ export interface CreateTenantRequest {
   api_keys: string[]
   dictionaries?: DictionaryItem[]
   pii_config?: PIIConfig
+  retention_mode?: RetentionMode
 }
 
 export interface UpdateTenantRequest {
@@ -57,6 +62,7 @@ export interface UpdateTenantRequest {
   api_keys: string[]
   dictionaries?: DictionaryItem[]
   pii_config?: PIIConfig
+  retention_mode?: RetentionMode
 }
 
 export interface DictionaryRequest {

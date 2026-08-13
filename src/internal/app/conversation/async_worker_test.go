@@ -71,6 +71,80 @@ func testRawRecord(i int) RawRecord {
 	}
 }
 
+// @sk-test 402-zero-retention-mode#T3.2: metadata-only RawRecord encrypts without content (AC-002, AC-004)
+func TestAsyncWorkerEncryptMetadataOnly(t *testing.T) {
+	store := &mockConversationStore{}
+	worker := NewAsyncWorker(store, newTestEncryptor(t), 1000, 50*time.Millisecond, testLogger())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	go worker.Run(ctx)
+
+	worker.Send(RawRecord{
+		ID:        "rec-meta",
+		TenantID:  "tenant-1",
+		Model:     "gpt-4o",
+		Status:    conversation.StatusBlocked,
+		Streamed:  true,
+		MaskID:    "MASK_A1B2C3",
+		Detector:  "regex",
+		Category:  "credit-card",
+		CreatedAt: time.Now().UTC(),
+	})
+
+	<-ctx.Done()
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	if len(store.saveBatches) == 0 || len(store.saveBatches[0]) == 0 {
+		t.Fatal("expected a saved metadata-only record")
+	}
+	last := store.saveBatches[len(store.saveBatches)-1]
+	log := last[len(last)-1]
+	if len(log.Request) != 0 {
+		t.Errorf("metadata-only log must carry no request, got %d bytes", len(log.Request))
+	}
+	if len(log.Response) != 0 || len(log.Masking) != 0 {
+		t.Errorf("metadata-only log must carry no content")
+	}
+	if log.Detector != "regex" || log.Category != "credit-card" {
+		t.Errorf("facts = %q/%q, want regex/credit-card", log.Detector, log.Category)
+	}
+	if log.Status != conversation.StatusBlocked {
+		t.Errorf("Status = %q, want blocked", log.Status)
+	}
+}
+
+// @sk-test 402-zero-retention-mode#T3.2: full mode still encrypts content (AC-001)
+func TestAsyncWorkerEncryptFullContent(t *testing.T) {
+	store := &mockConversationStore{}
+	worker := NewAsyncWorker(store, newTestEncryptor(t), 1000, 50*time.Millisecond, testLogger())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	go worker.Run(ctx)
+
+	worker.Send(testRawRecord(1))
+
+	<-ctx.Done()
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	if len(store.saveBatches) == 0 || len(store.saveBatches[0]) == 0 {
+		t.Fatal("expected a saved record")
+	}
+	last := store.saveBatches[len(store.saveBatches)-1]
+	log := last[len(last)-1]
+	if len(log.Request) == 0 {
+		t.Error("full mode record must carry encrypted request content")
+	}
+	if len(log.Response) == 0 {
+		t.Error("full mode record must carry encrypted response content")
+	}
+}
+
 // @sk-test conversation-logging#T2.1: TestAsyncWorkerBatchInsert (AC-011)
 func TestAsyncWorkerBatchInsert(t *testing.T) {
 	store := &mockConversationStore{}

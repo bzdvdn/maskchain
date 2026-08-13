@@ -92,8 +92,25 @@ func validateCompliance(cfg *Config) error {
 	return nil
 }
 
+// validateDataRetention validates data.retention.mode against the enum.
+func validateDataRetention(cfg *Config) error {
+	d := cfg.Data
+	if d == nil || d.Retention == nil {
+		return nil
+	}
+	switch d.Retention.Mode {
+	case "full", "meta", "none":
+	default:
+		return fmt.Errorf("data.retention.mode: must be full|meta|none, got %q", d.Retention.Mode)
+	}
+	return nil
+}
+
 func validateConfig(cfg *Config, v *viper.Viper) error {
 	if err := validateDataCache(cfg); err != nil {
+		return err
+	}
+	if err := validateDataRetention(cfg); err != nil {
 		return err
 	}
 	if err := validateCompliance(cfg); err != nil {

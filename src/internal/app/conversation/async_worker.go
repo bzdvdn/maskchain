@@ -25,6 +25,8 @@ type RawRecord struct {
 	Status    conversation.ConversationStatus
 	Streamed  bool
 	MaskID    string
+	Detector  string
+	Category  string
 	Request   []byte
 	Response  []byte
 	Masking   []conversation.MaskingEntry
@@ -109,6 +111,22 @@ func (w *AsyncWorker) Run(ctx context.Context) {
 // @sk-task conversation-logging#T2.1: encrypt builds an encrypted ConversationLog (AC-004, AC-011)
 // @sk-task conversation-logging#T2.4: Carry Streamed flag through encryption (RQ-009, DEC-007, AC-003)
 func (w *AsyncWorker) encrypt(rec RawRecord) (*conversation.ConversationLog, error) {
+	var log *conversation.ConversationLog
+	var err error
+	if len(rec.Request) == 0 {
+		// Metadata-only capture (retention mode `meta`): no content is ever
+		// encrypted or stored; only block facts ride through (DEC-003, AC-002).
+		log, err = conversation.NewMetadataOnlyConversationLog(rec.ID, rec.TenantID, rec.Model, rec.Status, rec.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		log.Streamed = rec.Streamed
+		log.WithMaskID(rec.MaskID)
+		log.Detector = rec.Detector
+		log.Category = rec.Category
+		return log, nil
+	}
+
 	encReq, err := w.enc.Encrypt(trimToMax(rec.Request))
 	if err != nil {
 		return nil, fmt.Errorf("encrypt request: %w", err)
@@ -132,7 +150,7 @@ func (w *AsyncWorker) encrypt(rec RawRecord) (*conversation.ConversationLog, err
 		}
 	}
 
-	log, err := conversation.NewConversationLog(rec.ID, rec.TenantID, rec.Model, rec.Status, encReq, rec.CreatedAt)
+	log, err = conversation.NewConversationLog(rec.ID, rec.TenantID, rec.Model, rec.Status, encReq, rec.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -140,6 +158,8 @@ func (w *AsyncWorker) encrypt(rec RawRecord) (*conversation.ConversationLog, err
 	log.WithResponse(encResp)
 	log.WithMasking(encMasking)
 	log.WithMaskID(rec.MaskID)
+	log.Detector = rec.Detector
+	log.Category = rec.Category
 	log.RequestLen = len(rec.Request)
 	log.ResponseLen = len(rec.Response)
 	return log, nil

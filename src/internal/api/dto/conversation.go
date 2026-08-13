@@ -14,6 +14,8 @@ type ConversationListItem struct {
 	Masked    bool      `json:"masked"`
 	Streamed  bool      `json:"streamed"`
 	MaskID    string    `json:"mask_id,omitempty"`
+	Detector  string    `json:"detector,omitempty"`
+	Category  string    `json:"category,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -45,6 +47,8 @@ type ConversationDetail struct {
 	Masked    bool                `json:"masked"`
 	Streamed  bool                `json:"streamed"`
 	MaskID    string              `json:"mask_id,omitempty"`
+	Detector  string              `json:"detector,omitempty"`
+	Category  string              `json:"category,omitempty"`
 	CreatedAt time.Time           `json:"created_at"`
 	Payload   ConversationPayload `json:"payload"`
 }

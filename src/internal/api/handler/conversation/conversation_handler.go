@@ -45,6 +45,7 @@ func (h *ConversationHandler) HandleList(c *gin.Context) {
 		TenantID: c.Query("tenant_id"),
 		Status:   conversation.ConversationStatus(c.Query("status")),
 		Model:    c.Query("model"),
+		Masked:   parseMaskedQuery(c.Query("masked")),
 		Page:     page,
 		PerPage:  perPage,
 	})
@@ -63,6 +64,8 @@ func (h *ConversationHandler) HandleList(c *gin.Context) {
 			Masked:    l.Masked,
 			Streamed:  l.Streamed,
 			MaskID:    l.MaskID,
+			Detector:  l.Detector,
+			Category:  l.Category,
 			CreatedAt: l.CreatedAt,
 		})
 	}
@@ -118,6 +121,8 @@ func (h *ConversationHandler) HandleGet(c *gin.Context) {
 		Masked:    log.Masked,
 		Streamed:  log.Streamed,
 		MaskID:    log.MaskID,
+		Detector:  log.Detector,
+		Category:  log.Category,
 		CreatedAt: log.CreatedAt,
 		Payload: dto.ConversationPayload{
 			Request:  req,
@@ -146,4 +151,17 @@ func parsePositiveInt(s string, def int) int {
 		return def
 	}
 	return n
+}
+
+// parseMaskedQuery parses the tri-state masked filter: absent -> nil (no filter),
+// "true" -> true, "false" -> false; invalid values are ignored.
+func parseMaskedQuery(s string) *bool {
+	if s == "" {
+		return nil
+	}
+	v, err := strconv.ParseBool(s)
+	if err != nil {
+		return nil
+	}
+	return &v
 }

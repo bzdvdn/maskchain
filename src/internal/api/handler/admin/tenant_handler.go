@@ -82,6 +82,14 @@ func (h *TenantHandler) CreateTenant(c *gin.Context) {
 	if req.PIIConfig != nil {
 		opts = append(opts, entity.WithTenantPIIConfig(*req.PIIConfig))
 	}
+	if req.RetentionMode != "" {
+		mode, err := value.ParseRetentionMode(req.RetentionMode)
+		if err != nil {
+			middleware.AbortWithError(c, http.StatusBadRequest, middleware.ErrorCodeValidationError, err.Error())
+			return
+		}
+		opts = append(opts, entity.WithTenantRetentionMode(mode))
+	}
 	tenant := entity.NewTenant(slug, req.Name, authHeader, req.APIKeys, opts...)
 
 	if err := h.repo.Create(c.Request.Context(), tenant); err != nil {
@@ -171,6 +179,18 @@ func (h *TenantHandler) UpdateTenant(c *gin.Context) {
 	opts := []entity.TenantOption{entity.WithTenantDictionaries(dicts)}
 	if req.PIIConfig != nil {
 		opts = append(opts, entity.WithTenantPIIConfig(*req.PIIConfig))
+	}
+	if req.RetentionMode != "" {
+		mode, err := value.ParseRetentionMode(req.RetentionMode)
+		if err != nil {
+			middleware.AbortWithError(c, http.StatusBadRequest, middleware.ErrorCodeValidationError, err.Error())
+			return
+		}
+		opts = append(opts, entity.WithTenantRetentionMode(mode))
+	} else if existing, err := h.repo.Get(c.Request.Context(), slug); err == nil && existing != nil {
+		if existing.RetentionMode() != "" {
+			opts = append(opts, entity.WithTenantRetentionMode(existing.RetentionMode()))
+		}
 	}
 	tenant := entity.NewTenant(slug, req.Name, authHeader, req.APIKeys, opts...)
 

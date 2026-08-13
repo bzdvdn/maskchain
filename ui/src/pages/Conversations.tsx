@@ -46,7 +46,7 @@ export function Conversations() {
   const [detail, setDetail] = useState<ConversationDetail | null>(null)
   const [detailError, setDetailError] = useState(false)
 
-  const filterKey = useMemo(() => `${filters.tenant_id ?? ''}|${filters.status ?? ''}|${filters.model ?? ''}`, [filters])
+  const filterKey = useMemo(() => `${filters.tenant_id ?? ''}|${filters.status ?? ''}|${filters.model ?? ''}|${filters.masked ?? ''}`, [filters])
   const { data: result, loading } = useAsyncData(
     () => listConversations(page, perPage, filters),
     [page, perPage, filterKey],
@@ -54,11 +54,10 @@ export function Conversations() {
   const items = result?.items ?? []
   const total = result?.pagination.total ?? 0
 
-  function setFilter(key: keyof ConversationFilters, value: string) {
-    setFilters((prev) => ({ ...prev, [key]: value || undefined }))
+  function setFilter<K extends keyof ConversationFilters>(key: K, value: string) {
+    setFilters((prev) => ({ ...prev, [key]: (value || undefined) as ConversationFilters[K] | undefined }))
     setPage(1)
   }
-
   const models = useMemo(() => Array.from(new Set(items.map((c) => c.model))).sort(), [items])
   const tenants = useMemo(() => Array.from(new Set(items.map((c) => c.tenant_id))).sort(), [items])
 
@@ -125,6 +124,14 @@ export function Conversations() {
           <select value={filters.model ?? ''} onChange={(e) => setFilter('model', e.target.value)}>
             <option value="">All models</option>
             {models.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </label>
+        <label className="filter-field">
+          <span>Masked</span>
+          <select value={filters.masked ?? ''} onChange={(e) => setFilter('masked', e.target.value)}>
+            <option value="">All</option>
+            <option value="true">Masked</option>
+            <option value="false">Not masked</option>
           </select>
         </label>
       </div>

@@ -53,6 +53,7 @@ const defaultDataCacheBudgetGuardPercent = 5
 const defaultDataCacheMaxEntryBytes = 1 << 20
 const defaultDataCacheEmbeddingSource = "external"
 const defaultDataCacheEmbeddingTimeout = 3
+const defaultDataRetentionMode = "full"
 const defaultCompliancePresetDir = "presets"
 
 // @sk-task 10-gateway-skeleton#T1.2: Set ServerConfig defaults in DefaultConfig (AC-001, AC-005)
@@ -137,6 +138,9 @@ func DefaultConfig() *Config {
 			PresetDir: defaultCompliancePresetDir,
 		},
 		Data: &DataConfig{
+			Retention: &RetentionConfig{
+				Mode: defaultDataRetentionMode,
+			},
 			Cache: &CacheConfig{
 				Enabled:             false,
 				TTLSec:              defaultDataCacheTTL,

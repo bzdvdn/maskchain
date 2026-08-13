@@ -92,8 +92,8 @@ func TestConversationMiddlewareCapturesExchange(t *testing.T) {
 	}
 }
 
-// @sk-test conversation-logging#T6.1: TestConversationMiddlewareSkipsUnmaskedClean (user requirement)
-func TestConversationMiddlewareSkipsUnmaskedClean(t *testing.T) {
+// @sk-test 402-zero-retention-mode#T3.3: DEC-005 logs unmasked clean requests in full mode (AC-008)
+func TestConversationMiddlewareLogsUnmaskedClean(t *testing.T) {
 	mw, sender := newTestConversationMiddleware(t)
 
 	engine := gin.New()
@@ -111,8 +111,11 @@ func TestConversationMiddlewareSkipsUnmaskedClean(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	if len(sender.records) != 0 {
-		t.Fatalf("expected 0 records for clean unmasked request, got %d", len(sender.records))
+	if len(sender.records) != 1 {
+		t.Fatalf("expected 1 record for unmasked clean request in full mode, got %d", len(sender.records))
+	}
+	if len(sender.records[0].Masking) != 0 {
+		t.Errorf("expected no masking on unmasked record, got %+v", sender.records[0].Masking)
 	}
 }
 
@@ -527,7 +530,135 @@ func TestConversationMiddlewareShieldIntegrationFailOpen(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
+	if len(sender.records) != 1 {
+		t.Fatalf("expected 1 record for unmasked fail-open in full mode, got %d", len(sender.records))
+	}
+}
+
+func newTenantWithRetention(t *testing.T, mode value.RetentionMode) *entity.Tenant {
+	t.Helper()
+	slug, _ := value.NewTenantSlug("tenant-a")
+	return entity.NewTenant(slug, "Tenant A", "", nil, entity.WithTenantRetentionMode(mode))
+}
+
+// @sk-test 402-zero-retention-mode#T3.2: none mode produces no record (AC-003)
+func TestConversationMiddlewareNoneMode(t *testing.T) {
+	mw, sender := newTestConversationMiddleware(t)
+	tenant := newTenantWithRetention(t, value.RetentionModeNone)
+
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) { c.Set(tenantKey, tenant); c.Next() })
+	engine.Use(mw.Handler())
+	engine.POST("/api/v1/chat/completions", func(c *gin.Context) {
+		c.Header("X-Shield-Status", "clean")
+		c.Data(http.StatusOK, "application/json", []byte(`{"choices":[{"message":{"content":"answer"}}]}`))
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/api/v1/chat/completions",
+		strings.NewReader(`{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}]}`))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+
 	if len(sender.records) != 0 {
-		t.Fatalf("expected 0 records for unmasked fail-open, got %d", len(sender.records))
+		t.Fatalf("expected 0 records for none mode tenant, got %d", len(sender.records))
+	}
+}
+
+// @sk-test 402-zero-retention-mode#T3.3: default global mode is applied when tenant mode unset (AC-006)
+func TestConversationMiddlewareDefaultModeNone(t *testing.T) {
+	mw, sender := newTestConversationMiddleware(t)
+	mw.SetDefaultRetentionMode(value.RetentionModeNone)
+
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) { testTenantCtx(c); c.Next() })
+	engine.Use(mw.Handler())
+	engine.POST("/api/v1/chat/completions", func(c *gin.Context) {
+		c.Header("X-Shield-Status", "clean")
+		c.Data(http.StatusOK, "application/json", []byte(`{"ok":true}`))
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/api/v1/chat/completions",
+		strings.NewReader(`{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}]}`))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+
+	if len(sender.records) != 0 {
+		t.Fatalf("expected 0 records for global-none default, got %d", len(sender.records))
+	}
+}
+
+// @sk-test 402-zero-retention-mode#T3.2: meta mode produces metadata-only record (AC-002)
+func TestConversationMiddlewareMetaMode(t *testing.T) {
+	mw, sender := newTestConversationMiddleware(t)
+	tenant := newTenantWithRetention(t, value.RetentionModeMeta)
+
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) { c.Set(tenantKey, tenant); c.Next() })
+	engine.Use(mw.Handler())
+	engine.POST("/api/v1/chat/completions", func(c *gin.Context) {
+		c.Set(conversationMaskKey, map[string]string{"[MASK_A.0]": "secret@example.com"})
+		c.Header("X-Shield-Status", "clean")
+		c.Data(http.StatusOK, "application/json", []byte(`{"choices":[{"message":{"content":"answer"}}]}`))
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/api/v1/chat/completions",
+		strings.NewReader(`{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}]}`))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+
+	if len(sender.records) != 1 {
+		t.Fatalf("expected 1 record for meta mode tenant, got %d", len(sender.records))
+	}
+	rec := sender.records[0]
+	if len(rec.Request) != 0 {
+		t.Errorf("meta record must carry no request content, got %d bytes", len(rec.Request))
+	}
+	if len(rec.Response) != 0 {
+		t.Errorf("meta record must carry no response content, got %d bytes", len(rec.Response))
+	}
+	if len(rec.Masking) != 0 {
+		t.Errorf("meta record must carry no masking, got %+v", rec.Masking)
+	}
+}
+
+// @sk-test 402-zero-retention-mode#T3.1: blocked meta record carries detector/category facts (AC-004)
+func TestConversationMiddlewareMetaBlockFacts(t *testing.T) {
+	mw, sender := newTestConversationMiddleware(t)
+	tenant := newTenantWithRetention(t, value.RetentionModeMeta)
+
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) { c.Set(tenantKey, tenant); c.Next() })
+	engine.Use(mw.Handler())
+	engine.POST("/api/v1/chat/completions", func(c *gin.Context) {
+		c.Set(conversationDetectorKey, "regex")
+		c.Set(conversationCategoryKey, "credit-card")
+		c.Header("X-Shield-Status", "blocked")
+		c.JSON(http.StatusForbidden, shieldResponse{ShieldStatus: "blocked"})
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/api/v1/chat/completions",
+		strings.NewReader(`{"model":"gpt-4o","messages":[{"role":"user","content":"4111 1111 1111 1111"}]}`))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+
+	if len(sender.records) != 1 {
+		t.Fatalf("expected 1 record for meta blocked request, got %d", len(sender.records))
+	}
+	rec := sender.records[0]
+	if rec.Status != conversation.StatusBlocked {
+		t.Errorf("Status = %q, want blocked", rec.Status)
+	}
+	if rec.Detector != "regex" {
+		t.Errorf("Detector = %q, want regex", rec.Detector)
+	}
+	if rec.Category != "credit-card" {
+		t.Errorf("Category = %q, want credit-card", rec.Category)
+	}
+	if len(rec.Request) != 0 || len(rec.Response) != 0 {
+		t.Errorf("meta block record must carry no content")
 	}
 }

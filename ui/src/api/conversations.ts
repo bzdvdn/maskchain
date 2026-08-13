@@ -34,6 +34,7 @@ export interface ConversationFilters {
   tenant_id?: string
   status?: string
   model?: string
+  masked?: 'true' | 'false'
 }
 
 // @sk-task conversation-logging#T3.2: listConversations fetches metadata-only list (AC-006)
@@ -49,6 +50,7 @@ export async function listConversations(
   if (filters.tenant_id) params.set('tenant_id', filters.tenant_id)
   if (filters.status) params.set('status', filters.status)
   if (filters.model) params.set('model', filters.model)
+  if (filters.masked) params.set('masked', filters.masked)
   const res = await fetch(`${BASE}?${params.toString()}`, { credentials: 'include' })
   if (!res.ok) throw new Error('failed to load conversations')
   const body = await res.json()

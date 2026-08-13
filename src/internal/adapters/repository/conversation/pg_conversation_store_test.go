@@ -45,6 +45,8 @@ func getConversationTestPool(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
+func boolPtr(v bool) *bool { return &v }
+
 func convLog(id, tenant, model string, status conversation.ConversationStatus, masked bool, createdAt time.Time) conversation.ConversationLog {
 	l := conversation.ConversationLog{
 		ID:         id,
@@ -178,6 +180,32 @@ func TestPgConversationStoreListAndFilter(t *testing.T) {
 	}
 	if tFiltered.Total != 2 {
 		t.Errorf("tenant-filtered Total = %d, want 2", tFiltered.Total)
+	}
+
+	maskedLog := convLog(uuid.NewString(), "tenant-1", "gpt-4o", conversation.StatusOK, true, now.Add(-30*time.Minute))
+	if err := store.SaveBatch(ctx, []conversation.ConversationLog{maskedLog}); err != nil {
+		t.Fatalf("SaveBatch masked failed: %v", err)
+	}
+
+	maskedOnly, err := store.List(ctx, conversation.ConversationFilter{Masked: boolPtr(true), Page: 1, PerPage: 10})
+	if err != nil {
+		t.Fatalf("List masked=true failed: %v", err)
+	}
+	if maskedOnly.Total != 1 {
+		t.Errorf("masked=true Total = %d, want 1", maskedOnly.Total)
+	}
+	for _, item := range maskedOnly.Items {
+		if !item.Masked {
+			t.Error("masked=true returned an unmasked record")
+		}
+	}
+
+	unmaskedOnly, err := store.List(ctx, conversation.ConversationFilter{Masked: boolPtr(false), Page: 1, PerPage: 10})
+	if err != nil {
+		t.Fatalf("List masked=false failed: %v", err)
+	}
+	if unmaskedOnly.Total != 3 {
+		t.Errorf("masked=false Total = %d, want 3", unmaskedOnly.Total)
 	}
 }
 

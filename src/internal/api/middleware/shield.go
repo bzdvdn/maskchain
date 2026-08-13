@@ -38,6 +38,12 @@ const conversationMaskKey = "conversation_mask_mapping"
 // middleware can persist the same mask-id that was sent upstream.
 const conversationMaskIDKey = "conversation_mask_id"
 
+// conversationDetectorKey / conversationCategoryKey carry the anonymized block
+// facts (detector type + category only, never fragment text) from the shield
+// middleware to the conversation logger through the gin context (DEC-004).
+const conversationDetectorKey = "conversation_detector"
+const conversationCategoryKey = "conversation_category"
+
 // @sk-task 13-shield-middleware-wiring#T2.3: Custom ResponseWriter for dict unmask (AC-006)
 type dictUnmaskWriter struct {
 	gin.ResponseWriter
@@ -375,6 +381,7 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *slog.Logger
 		switch status {
 		case value.ScanStatusBlocked:
 			c.Header("X-Shield-Status", "blocked")
+			publishBlockFacts(c, shieldFindings(resp))
 			c.AbortWithStatusJSON(http.StatusForbidden, shieldResponse{
 				ShieldStatus: "blocked",
 				Error:        "request blocked by content shield",
@@ -386,6 +393,7 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *slog.Logger
 		case value.ScanStatusSuspicious:
 			if cfg != nil && cfg.ActionOnSuspicious == "block" {
 				c.Header("X-Shield-Status", "blocked")
+				publishBlockFacts(c, shieldFindings(resp))
 				c.AbortWithStatusJSON(http.StatusForbidden, shieldResponse{
 					ShieldStatus: "blocked",
 					Error:        "request blocked by content shield",
@@ -473,6 +481,22 @@ func piiMaskedCount(resp *appshield.ScanResponse) int {
 		return 0
 	}
 	return len(resp.Replacements)
+}
+
+// publishBlockFacts stores the anonymized block facts (detector type + category)
+// on the gin context. Only these two fields are captured; the fragment text is
+// deliberately never published (DEC-004, AC-004).
+func publishBlockFacts(c *gin.Context, findings []entity.Finding) {
+	for _, f := range findings {
+		if f.DetectorType == "" {
+			continue
+		}
+		c.Set(conversationDetectorKey, string(f.DetectorType))
+		if f.Label != "" {
+			c.Set(conversationCategoryKey, f.Label)
+		}
+		return
+	}
 }
 
 func shieldFindings(resp *appshield.ScanResponse) []entity.Finding {

@@ -129,6 +129,9 @@ func buildGatewayServer(
 			cfgTenants[slugStr] = entity.NewTenant(slug, tc.Name, tc.AuthHeader, tc.APIKeys, opts...)
 		}
 		tenantResolver := resolver.NewDBFirstTenantResolver(tenantRepo, cfgTenants)
+		if mode, err := value.ParseRetentionMode(cfg.DefaultRetentionMode()); err == nil {
+			tenantResolver.SetDefaultRetentionMode(mode)
+		}
 
 		syncCtx, syncCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		if err := tenantResolver.SyncConfig(syncCtx, cfgTenants); err != nil {
@@ -305,6 +308,9 @@ func buildGatewayServer(
 		go cleanupWorker.Run(conversationCtx)
 
 		convMw := middleware.NewConversationMiddleware(asyncWorker, logger)
+		if mode, err := value.ParseRetentionMode(cfg.DefaultRetentionMode()); err == nil {
+			convMw.SetDefaultRetentionMode(mode)
+		}
 		srv.RegisterConversationMiddleware(convMw.Handler())
 		logger.Info("conversation logging pipeline started", slog.Int("retention_days", cfg.Conversations.RetentionDays))
 	} else {

@@ -133,3 +133,69 @@ func TestDBFirstTenantResolver_Get_NotFound(t *testing.T) {
 		t.Fatal("expected nil tenant for unknown slug")
 	}
 }
+
+// @sk-test 402-zero-retention-mode#T2.3: EffectiveMode defaults to full (AC-001)
+func TestDBFirstTenantResolver_EffectiveMode_DefaultsFull(t *testing.T) {
+	ctx := context.Background()
+	slug, _ := value.NewTenantSlug("tenant-alpha")
+
+	repo := &mockTenantRepo{
+		getFn: func(_ context.Context, s value.TenantSlug) (*entity.Tenant, error) {
+			return entity.NewTenant(s, "Alpha", "Bearer x", nil), nil
+		},
+	}
+	r := NewDBFirstTenantResolver(repo, nil)
+
+	mode, err := r.EffectiveMode(ctx, slug)
+	if err != nil {
+		t.Fatalf("EffectiveMode: %v", err)
+	}
+	if mode != value.RetentionModeFull {
+		t.Errorf("mode = %q, want %q", mode, value.RetentionModeFull)
+	}
+}
+
+// @sk-test 402-zero-retention-mode#T2.3: EffectiveMode uses global default when tenant mode unset (AC-006)
+func TestDBFirstTenantResolver_EffectiveMode_GlobalDefault(t *testing.T) {
+	ctx := context.Background()
+	slug, _ := value.NewTenantSlug("tenant-nocfg")
+
+	repo := &mockTenantRepo{
+		getFn: func(_ context.Context, s value.TenantSlug) (*entity.Tenant, error) {
+			return entity.NewTenant(s, "NoCfg", "Bearer x", nil), nil
+		},
+	}
+	r := NewDBFirstTenantResolver(repo, nil)
+	r.SetDefaultRetentionMode(value.RetentionModeNone)
+
+	mode, err := r.EffectiveMode(ctx, slug)
+	if err != nil {
+		t.Fatalf("EffectiveMode: %v", err)
+	}
+	if mode != value.RetentionModeNone {
+		t.Errorf("mode = %q, want %q", mode, value.RetentionModeNone)
+	}
+}
+
+// @sk-test 402-zero-retention-mode#T2.3: EffectiveMode prefers explicit tenant value (AC-005)
+func TestDBFirstTenantResolver_EffectiveMode_ExplicitTenantWins(t *testing.T) {
+	ctx := context.Background()
+	slug, _ := value.NewTenantSlug("tenant-meta")
+
+	repo := &mockTenantRepo{
+		getFn: func(_ context.Context, s value.TenantSlug) (*entity.Tenant, error) {
+			return entity.NewTenant(s, "Meta", "Bearer x", nil,
+				entity.WithTenantRetentionMode(value.RetentionModeMeta)), nil
+		},
+	}
+	r := NewDBFirstTenantResolver(repo, nil)
+	r.SetDefaultRetentionMode(value.RetentionModeNone)
+
+	mode, err := r.EffectiveMode(ctx, slug)
+	if err != nil {
+		t.Fatalf("EffectiveMode: %v", err)
+	}
+	if mode != value.RetentionModeMeta {
+		t.Errorf("mode = %q, want %q", mode, value.RetentionModeMeta)
+	}
+}

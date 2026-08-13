@@ -58,6 +58,9 @@ func (m *mockConversationStore) List(_ context.Context, filter conversation.Conv
 		if filter.Model != "" && l.Model != filter.Model {
 			continue
 		}
+		if filter.Masked != nil && l.Masked != *filter.Masked {
+			continue
+		}
 		all = append(all, l)
 	}
 	// metadata only: strip content
@@ -183,6 +186,7 @@ func TestConversationHandlerListFilters(t *testing.T) {
 		{ID: "ok-gpt", TenantID: "tenant-a", Model: "gpt-4o", Status: conversation.StatusOK, CreatedAt: now},
 		{ID: "err-gpt", TenantID: "tenant-a", Model: "gpt-4o", Status: conversation.StatusError, CreatedAt: now},
 		{ID: "ok-claude", TenantID: "tenant-b", Model: "claude", Status: conversation.StatusOK, CreatedAt: now},
+		{ID: "masked-gpt", TenantID: "tenant-a", Model: "gpt-4o", Status: conversation.StatusOK, Masked: true, CreatedAt: now.Add(-time.Minute)},
 	}
 	if err := store.SaveBatch(context.Background(), logs); err != nil {
 		t.Fatalf("seed store: %v", err)
@@ -198,7 +202,10 @@ func TestConversationHandlerListFilters(t *testing.T) {
 	}{
 		{name: "by status", query: "status=error", wantLen: 1, wantFirst: "err-gpt"},
 		{name: "by model", query: "model=claude", wantLen: 1, wantFirst: "ok-claude"},
-		{name: "by tenant and status", query: "tenant_id=tenant-a&status=ok", wantLen: 1, wantFirst: "ok-gpt"},
+		{name: "by tenant and status", query: "tenant_id=tenant-a&status=ok", wantLen: 2, wantFirst: "ok-gpt"},
+		{name: "masked true", query: "masked=true", wantLen: 1, wantFirst: "masked-gpt"},
+		{name: "masked false", query: "masked=false", wantLen: 3, wantFirst: ""},
+		{name: "masked invalid ignored", query: "masked=banana", wantLen: 4, wantFirst: ""},
 		{name: "no match", query: "status=blocked", wantLen: 0},
 	}
 	for _, tc := range cases {
@@ -223,7 +230,7 @@ func TestConversationHandlerListFilters(t *testing.T) {
 			if len(resp.Data.Items) != tc.wantLen {
 				t.Errorf("len = %d, want %d", len(resp.Data.Items), tc.wantLen)
 			}
-			if tc.wantLen > 0 && resp.Data.Items[0].ID != tc.wantFirst {
+			if tc.wantLen > 0 && tc.wantFirst != "" && resp.Data.Items[0].ID != tc.wantFirst {
 				t.Errorf("first item = %q, want %q", resp.Data.Items[0].ID, tc.wantFirst)
 			}
 			if resp.Pagination.Total != tc.wantLen {
@@ -359,6 +366,8 @@ func TestConversationHandlerDetailBase64RoundTrip(t *testing.T) {
 		Masked:    true,
 		Streamed:  true,
 		MaskID:    "MASK_DETAIL_A",
+		Detector:  "email",
+		Category:  "pii",
 		Request:   req,
 		Response:  resp,
 		Masking:   masking,
@@ -384,6 +393,8 @@ func TestConversationHandlerDetailBase64RoundTrip(t *testing.T) {
 			Streamed bool   `json:"streamed"`
 			Masked   bool   `json:"masked"`
 			MaskID   string `json:"mask_id,omitempty"`
+			Detector string `json:"detector,omitempty"`
+			Category string `json:"category,omitempty"`
 			Payload  struct {
 				Request  string `json:"request"`
 				Response string `json:"response"`
@@ -402,6 +413,9 @@ func TestConversationHandlerDetailBase64RoundTrip(t *testing.T) {
 	}
 	if respEnv.Data.MaskID != "MASK_DETAIL_A" {
 		t.Errorf("MaskID = %q, want MASK_DETAIL_A", respEnv.Data.MaskID)
+	}
+	if respEnv.Data.Detector != "email" || respEnv.Data.Category != "pii" {
+		t.Errorf("detector/category not surfaced: %+v", respEnv.Data)
 	}
 
 	gotReq, err := base64.StdEncoding.DecodeString(respEnv.Data.Payload.Request)

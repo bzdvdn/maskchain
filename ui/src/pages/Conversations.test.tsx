@@ -56,6 +56,25 @@ describe('Conversations list', () => {
     expect(mockList).toHaveBeenCalledWith(1, 20, {})
   })
 
+  it('re-requests with masked filter when selected', async () => {
+    mockList.mockResolvedValue({
+      items: [listItem({})],
+      pagination: { page: 1, per_page: 20, total: 1 },
+    })
+
+    render(<Conversations />)
+
+    await screen.findByText(/id-1/)
+
+    const selects = screen.getAllByRole('combobox')
+    fireEvent.change(selects[3], { target: { value: 'true' } })
+
+    await waitFor(() => {
+      expect(mockList).toHaveBeenLastCalledWith(1, 20, { masked: 'true' })
+    })
+    expect(screen.getByRole('combobox', { name: /Masked/ })).toBeTruthy()
+  })
+
   it('shows empty state when no records', async () => {
     mockList.mockResolvedValueOnce({ items: [], pagination: { page: 1, per_page: 20, total: 0 } })
 

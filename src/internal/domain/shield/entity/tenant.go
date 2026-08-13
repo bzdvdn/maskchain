@@ -26,14 +26,15 @@ type PIARule struct {
 }
 
 type Tenant struct {
-	slug         value.TenantSlug
-	name         string
-	authHeader   string
-	apiKeys      []string
-	dictionaries []*dictionary.Dictionary
-	piiConfig    PIIConfig
-	createdAt    time.Time
-	updatedAt    time.Time
+	slug          value.TenantSlug
+	name          string
+	authHeader    string
+	apiKeys       []string
+	dictionaries  []*dictionary.Dictionary
+	piiConfig     PIIConfig
+	retentionMode value.RetentionMode
+	createdAt     time.Time
+	updatedAt     time.Time
 }
 
 type TenantOption func(*Tenant)
@@ -44,6 +45,10 @@ func WithTenantDictionaries(dicts []*dictionary.Dictionary) TenantOption {
 
 func WithTenantPIIConfig(cfg PIIConfig) TenantOption {
 	return func(t *Tenant) { t.piiConfig = cfg }
+}
+
+func WithTenantRetentionMode(mode value.RetentionMode) TenantOption {
+	return func(t *Tenant) { t.retentionMode = mode }
 }
 
 func NewTenant(slug value.TenantSlug, name string, authHeader string, apiKeys []string, opts ...TenantOption) *Tenant {
@@ -68,5 +73,6 @@ func (t *Tenant) APIKeys() []string                              { return t.apiK
 func (t *Tenant) Dictionaries() []*dictionary.Dictionary         { return t.dictionaries }
 func (t *Tenant) SetDictionaries(dicts []*dictionary.Dictionary) { t.dictionaries = dicts }
 func (t *Tenant) PIIConfig() PIIConfig                           { return t.piiConfig }
+func (t *Tenant) RetentionMode() value.RetentionMode             { return t.retentionMode }
 func (t *Tenant) CreatedAt() time.Time                           { return t.createdAt }
 func (t *Tenant) UpdatedAt() time.Time                           { return t.updatedAt }

@@ -256,6 +256,9 @@ func initTenants(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.Server, dict
 		cfgTenants[slugStr] = entity.NewTenant(slug, tc.Name, tc.AuthHeader, tc.APIKeys, opts...)
 	}
 	tenantResolver := resolver.NewDBFirstTenantResolver(tenantRepo, cfgTenants)
+	if mode, err := value.ParseRetentionMode(cfg.DefaultRetentionMode()); err == nil {
+		tenantResolver.SetDefaultRetentionMode(mode)
+	}
 
 	syncCtx, syncCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	if err := tenantResolver.SyncConfig(syncCtx, cfgTenants); err != nil {
@@ -409,7 +412,11 @@ func runConversations(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.Server,
 	go asyncWorker.Run(convCtx)
 	go conversationapp.NewCleanupWorker(store, time.Minute, retention, logger).Run(convCtx)
 
-	srv.RegisterConversationMiddleware(middleware.NewConversationMiddleware(asyncWorker, logger).Handler())
+	convMW := middleware.NewConversationMiddleware(asyncWorker, logger)
+	if mode, err := value.ParseRetentionMode(cfg.DefaultRetentionMode()); err == nil {
+		convMW.SetDefaultRetentionMode(mode)
+	}
+	srv.RegisterConversationMiddleware(convMW.Handler())
 	logger.Info("conversation logging pipeline started", slog.Int("retention_days", cfg.Conversations.RetentionDays))
 }
 

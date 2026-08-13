@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -28,8 +29,8 @@ func NewPgConversationStore(pool *pgxpool.Pool) *PgConversationStore {
 
 const insertConversationLogSQL = `
 	INSERT INTO conversation_logs
-		(id, tenant_id, model, status, masked, streamed, mask_id, masking, request, response, request_len, response_len, created_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		(id, tenant_id, model, status, masked, streamed, mask_id, detector, category, masking, request, response, request_len, response_len, created_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 	ON CONFLICT (id) DO NOTHING`
 
 // @sk-task conversation-logging#T2.1: SaveBatch inserts encrypted logs via pgx.Batch (AC-001, AC-003)
@@ -52,8 +53,16 @@ func (s *PgConversationStore) SaveBatch(ctx context.Context, logs []conversation
 		if l.MaskID != "" {
 			maskID = l.MaskID
 		}
+		var detector any
+		if l.Detector != "" {
+			detector = l.Detector
+		}
+		var category any
+		if l.Category != "" {
+			category = l.Category
+		}
 		batch.Queue(insertConversationLogSQL, l.ID, l.TenantID, l.Model,
-			string(l.Status), l.Masked, l.Streamed, maskID, masking, l.Request, response, l.RequestLen, l.ResponseLen, l.CreatedAt)
+			string(l.Status), l.Masked, l.Streamed, maskID, detector, category, masking, l.Request, response, l.RequestLen, l.ResponseLen, l.CreatedAt)
 	}
 	br := s.pool.SendBatch(ctx, batch)
 	defer br.Close()
@@ -94,28 +103,42 @@ func (s *PgConversationStore) List(ctx context.Context, filter conversation.Conv
 	offset := (page - 1) * perPage
 
 	var conditions []string
-	var args []any
-	args = append(args, perPage, offset)
+	var filterArgs []any
 	if filter.TenantID != "" {
-		conditions = append(conditions, `tenant_id = $`+strconv.Itoa(len(args)+1))
-		args = append(args, filter.TenantID)
+		filterArgs = append(filterArgs, filter.TenantID)
+		conditions = append(conditions, `tenant_id = $`+strconv.Itoa(len(filterArgs)))
 	}
 	if filter.Status != "" {
-		conditions = append(conditions, `status = $`+strconv.Itoa(len(args)+1))
-		args = append(args, string(filter.Status))
+		filterArgs = append(filterArgs, string(filter.Status))
+		conditions = append(conditions, `status = $`+strconv.Itoa(len(filterArgs)))
 	}
 	if filter.Model != "" {
-		conditions = append(conditions, `model = $`+strconv.Itoa(len(args)+1))
-		args = append(args, filter.Model)
+		filterArgs = append(filterArgs, filter.Model)
+		conditions = append(conditions, `model = $`+strconv.Itoa(len(filterArgs)))
+	}
+	if filter.Masked != nil {
+		filterArgs = append(filterArgs, *filter.Masked)
+		conditions = append(conditions, `masked = $`+strconv.Itoa(len(filterArgs)))
 	}
 	where := ""
 	if len(conditions) > 0 {
 		where = "WHERE " + strings.Join(conditions, " AND ")
 	}
+	// List conditions are numbered relative to filterArgs; the select must
+	// offset them past LIMIT ($1) and OFFSET ($2).
+	selectConditions := make([]string, len(conditions))
+	for i, c := range conditions {
+		selectConditions[i] = renumberPlaceholder(c, 2)
+	}
+	selectWhere := ""
+	if len(selectConditions) > 0 {
+		selectWhere = "WHERE " + strings.Join(selectConditions, " AND ")
+	}
 
+	listArgs := append([]any{perPage, offset}, filterArgs...)
 	rows, err := s.pool.Query(ctx,
-		fmt.Sprintf(`SELECT id, tenant_id, model, status, masked, streamed, mask_id, created_at
-		 FROM conversation_logs %s ORDER BY created_at DESC LIMIT $1 OFFSET $2`, where), args...)
+		fmt.Sprintf(`SELECT id, tenant_id, model, status, masked, streamed, mask_id, detector, category, created_at
+		 FROM conversation_logs %s ORDER BY created_at DESC LIMIT $1 OFFSET $2`, selectWhere), listArgs...)
 	if err != nil {
 		return conversation.ConversationPage{}, err
 	}
@@ -125,11 +148,19 @@ func (s *PgConversationStore) List(ctx context.Context, filter conversation.Conv
 	for rows.Next() {
 		var l conversation.ConversationLog
 		var maskID *string
-		if err := rows.Scan(&l.ID, &l.TenantID, &l.Model, &l.Status, &l.Masked, &l.Streamed, &maskID, &l.CreatedAt); err != nil {
+		var detector *string
+		var category *string
+		if err := rows.Scan(&l.ID, &l.TenantID, &l.Model, &l.Status, &l.Masked, &l.Streamed, &maskID, &detector, &category, &l.CreatedAt); err != nil {
 			return conversation.ConversationPage{}, err
 		}
 		if maskID != nil {
 			l.MaskID = *maskID
+		}
+		if detector != nil {
+			l.Detector = *detector
+		}
+		if category != nil {
+			l.Category = *category
 		}
 		items = append(items, l)
 	}
@@ -142,7 +173,7 @@ func (s *PgConversationStore) List(ctx context.Context, filter conversation.Conv
 	if len(conditions) > 0 {
 		countSQL += " " + where
 	}
-	if err := s.pool.QueryRow(ctx, countSQL, args[2:]...).Scan(&total); err != nil {
+	if err := s.pool.QueryRow(ctx, countSQL, filterArgs...).Scan(&total); err != nil {
 		return conversation.ConversationPage{}, err
 	}
 
@@ -159,11 +190,13 @@ func (s *PgConversationStore) Get(ctx context.Context, id string) (*conversation
 	var masking []byte
 	var response []byte
 	var maskID *string
+	var detector *string
+	var category *string
 	if err := s.pool.QueryRow(ctx,
-		`SELECT id, tenant_id, model, status, masked, streamed, mask_id, masking, request, response, request_len, response_len, created_at
+		`SELECT id, tenant_id, model, status, masked, streamed, mask_id, detector, category, masking, request, response, request_len, response_len, created_at
 		 FROM conversation_logs WHERE id = $1`, id).
 		Scan(&l.ID, &l.TenantID, &l.Model, &l.Status, &l.Masked, &l.Streamed,
-			&maskID, &masking, &l.Request, &response, &l.RequestLen, &l.ResponseLen, &l.CreatedAt); err != nil {
+			&maskID, &detector, &category, &masking, &l.Request, &response, &l.RequestLen, &l.ResponseLen, &l.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, conversation.ErrNotFound
 		}
@@ -172,12 +205,29 @@ func (s *PgConversationStore) Get(ctx context.Context, id string) (*conversation
 	if maskID != nil {
 		l.MaskID = *maskID
 	}
+	if detector != nil {
+		l.Detector = *detector
+	}
+	if category != nil {
+		l.Category = *category
+	}
 	l.WithMasking(masking)
 	if len(response) > 0 {
 		l.Response = response
 		l.ResponseLen = len(response)
 	}
 	return &l, nil
+}
+
+// renumberPlaceholder shifts $N placeholders inside a WHERE condition by offset.
+func renumberPlaceholder(cond string, offset int) string {
+	return regexp.MustCompile(`\$\d+`).ReplaceAllStringFunc(cond, func(m string) string {
+		n, err := strconv.Atoi(m[1:])
+		if err != nil {
+			return m
+		}
+		return "$" + strconv.Itoa(n+offset)
+	})
 }
 
 var _ conversation.ConversationStore = (*PgConversationStore)(nil)

@@ -9,13 +9,17 @@ import (
 // ErrNotFound is returned by Get when a conversation record does not exist.
 var ErrNotFound = errors.New("conversation: not found")
 
-// ConversationFilter narrows List results by tenant, status, model and pagination.
+// ConversationFilter narrows List results by tenant, status, model, masked and pagination.
 type ConversationFilter struct {
 	TenantID string
 	Status   ConversationStatus
 	Model    string
-	Page     int
-	PerPage  int
+	// Masked is a tri-state filter: nil = no filter, true/false = only
+	// masked/unmasked rows. Non-nil distinguishes "filter" from "unset"
+	// so absent/missing param preserves unfiltered behavior (DEC-006, AC-008).
+	Masked  *bool
+	Page    int
+	PerPage int
 }
 
 // ConversationPage is a paginated metadata-only list, ordered by CreatedAt.

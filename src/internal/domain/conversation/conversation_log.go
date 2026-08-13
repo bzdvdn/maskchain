@@ -70,6 +70,8 @@ type ConversationLog struct {
 	Masked      bool
 	Streamed    bool
 	MaskID      string
+	Detector    string
+	Category    string
 	Request     []byte
 	Response    []byte
 	Masking     []byte
@@ -107,6 +109,37 @@ func NewConversationLog(id, tenantID, model string, status ConversationStatus, r
 		Status:     status,
 		Request:    request,
 		RequestLen: len(request),
+		CreatedAt:  createdAt,
+	}, nil
+}
+
+// NewMetadataOnlyConversationLog creates a ConversationLog that carries no
+// content payloads (request/response/masking empty). It is used for retention
+// mode `meta` where only metadata + block facts are persisted (DEC-003, AC-002).
+func NewMetadataOnlyConversationLog(id, tenantID, model string, status ConversationStatus, createdAt time.Time) (*ConversationLog, error) {
+	if id == "" {
+		return nil, fmt.Errorf("id must not be empty")
+	}
+	if tenantID == "" {
+		return nil, fmt.Errorf("tenantID must not be empty")
+	}
+	if model == "" {
+		return nil, fmt.Errorf("model must not be empty")
+	}
+	switch status {
+	case StatusOK, StatusBlocked, StatusError:
+	default:
+		return nil, fmt.Errorf("invalid status %q", status)
+	}
+	if createdAt.IsZero() {
+		return nil, fmt.Errorf("createdAt must not be zero")
+	}
+	return &ConversationLog{
+		ID:         id,
+		TenantID:   tenantID,
+		Model:      model,
+		Status:     status,
+		RequestLen: 0,
 		CreatedAt:  createdAt,
 	}, nil
 }

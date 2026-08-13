@@ -138,6 +138,7 @@ export function TenantDetail() {
             <tr><td style={{ fontWeight: 600, padding: '8px 12px', width: 140 }}>Slug</td><td style={{ padding: '8px 12px' }}><code>{tenant.slug}</code></td></tr>
             <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>Auth Header</td><td style={{ padding: '8px 12px' }}><code>{tenant.auth_header}</code></td></tr>
             <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>API Keys</td><td style={{ padding: '8px 12px' }}><code>{formatKeys(tenant.api_keys)}</code></td></tr>
+            <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>Retention Mode</td><td style={{ padding: '8px 12px' }}>{tenant.retention_mode ?? 'full'}</td></tr>
             <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>Created</td><td style={{ padding: '8px 12px' }}>{new Date(tenant.created_at).toLocaleString()}</td></tr>
             <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>Updated</td><td style={{ padding: '8px 12px' }}>{new Date(tenant.updated_at).toLocaleString()}</td></tr>
           </tbody>
