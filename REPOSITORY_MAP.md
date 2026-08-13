@@ -20,10 +20,12 @@
   - `ui/src/pages/Incidents/` — IncidentList, IncidentDetail
   - `ui/src/pages/Keys.tsx` — Virtual Keys admin page
   - `ui/src/pages/Budgets.tsx` — Budget dashboard (progress bars, create/edit, history)
+  - `ui/src/pages/Tenants/TenantDetail.tsx` — tenant detail incl. one-click compliance pack apply + report view
   - `ui/src/components/` — DictionaryEditor, PreprocessorEditor, ErrorBoundary
   - `ui/src/api/profiles.ts` — API client для `/api/v1/profiles/*`
   - `ui/src/api/incidents.ts` — API client для `/api/v1/incidents/*`
   - `ui/src/api/keys.ts`, `ui/src/api/budgets.ts` — API clients для virtual keys/budgets
+  - `ui/src/api/tenants.ts` — API client для `/api/v1/tenants/*` incl. `applyCompliancePack` / `getComplianceReport`
 - `specs/active/` — active spec artifacts (speckeep-managed)
 - `deployments/` — Docker, migrations, docker-compose configs
 
@@ -68,9 +70,11 @@
 - `src/internal/domain/virtualkey/` — VirtualKey entity, KeyHash, VirtualKeyRepository port, Spend accumulation (virtual keys)
 - `src/internal/domain/budget/` — Budget entity (scope tenant|key|model, type monthly|daily|custom), PeriodKey/CounterKey, SpendCounter/AlertNotifier ports (budget enforcement)
 - `src/internal/domain/cache/` — CacheKey (cache:<tenant>:<sha256(masked-embedding)>), CacheEntry serialization/expiry, Embedder/Store ports (semantic cache over masked data)
+- `src/internal/domain/compliance/` — CompliancePack YAML presets (key -> detector/reaction/masking rules), Catalog validation against detector registry, Registry/LoadPacksFromDir
 - `src/internal/domain/analytics/` — CostRate entity, CostRateRepository port, CostRateRegistry (per-model cost lookup for budget/analytics)
 - `src/internal/app/budget/` — WebhookNotifier (budget threshold alerts), AggregationWorker (materialized daily spend)
 - `src/internal/app/cache/` — SemanticCacheService (lookup/store), ExternalEmbedder, SelfContained/FallbackEmbedder, BudgetWriteGuard (budget-safe writes)
+- `src/internal/app/compliance/` — ApplyPackService (one-action pack apply to tenant), ComplianceReportService (active/deviated diff)
 - `deployments/` — Docker, Helm, docker-compose, migrations
   - `deployments/helm/maskchain/` — Helm chart for Kubernetes (Bitnami subcharts, ConfigMap, Ingress/GatewayAPI, ServiceMonitor)
   - `deployments/docker-compose/` — local dev / production compose stacks
@@ -88,6 +92,7 @@
 - New domain logic — `src/internal/domain/`
 - New use case / feature — `src/internal/app/` + `src/internal/ports/` + `src/internal/adapters/`
 - Semantic cache changes — `src/internal/domain/cache/` + `src/internal/app/cache/` + `src/internal/adapters/repository/cache/` + `src/internal/api/middleware/cache.go` + `src/cmd/internal/bootstrap/cache.go` + `data.cache.*` in `src/internal/infra/config/`
+- Compliance packs changes — `src/internal/domain/compliance/` + `src/internal/app/compliance/` + `src/cmd/internal/bootstrap/compliance.go` + `src/internal/api/handler/admin/compliance_handler.go` + `compliance.*` in `src/internal/infra/config/` + `ui/src/pages/Tenants/` + `ui/src/api/tenants.ts` + `compliance:` example in `deployments/`
 - Budget/spend changes — `src/internal/domain/budget/` + `src/internal/adapters/repository/budget/` + `src/internal/app/budget/` + `src/internal/api/middleware/budget.go`
 - New API endpoint — `src/internal/api/` + `src/internal/ports/` (inbound interface)
 - Health check changes — `src/internal/api/health/`

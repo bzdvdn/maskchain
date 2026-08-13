@@ -117,6 +117,19 @@ func (s *AdminServer) RegisterTenantHandler(h *admin.TenantHandler, mw gin.Handl
 	group.PUT("/:slug/dictionaries", h.UpdateDictionaries)
 }
 
+// RegisterComplianceHandler registers apply-pack and compliance-report routes
+// under the tenant API, guarded by the same session middleware as tenants.
+func (s *AdminServer) RegisterComplianceHandler(h *admin.ComplianceHandler, mw gin.HandlerFunc) {
+	group := s.engine.Group("/api/v1/tenants/:slug/compliance")
+	if mw != nil {
+		group.Use(mw)
+	} else if s.adminSessionMw != nil {
+		group.Use(s.adminSessionMw)
+	}
+	group.POST("/apply", h.HandleApplyPack)
+	group.GET("/report", h.HandleComplianceReport)
+}
+
 // @sk-task 118-api-consistency#T3.4: Register Swagger UI at /api/v1/docs (AC-008, RQ-010)
 func (s *AdminServer) RegisterSwaggerUI() error {
 	yamlData, err := swagger.DocsFiles.ReadFile("openapi.yaml")

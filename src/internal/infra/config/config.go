@@ -300,6 +300,16 @@ type DataConfig struct {
 	Cache *CacheConfig `mapstructure:"cache" yaml:"cache"`
 }
 
+// ComplianceConfig configures compliance packs: where preset YAMLs live and
+// which pack keys are enabled for application to tenants.
+type ComplianceConfig struct {
+	// PresetDir is the directory scanned for CompliancePack YAML presets.
+	PresetDir string `mapstructure:"preset_dir" yaml:"preset_dir"`
+	// EnabledPacks limits the packs available for apply/report; empty means all
+	// presets found in PresetDir are available.
+	EnabledPacks []string `mapstructure:"enabled_packs" yaml:"enabled_packs"`
+}
+
 // @sk-task 80-tenant-isolation#T1.2: Add Tenants map to Config struct (AC-001, AC-003, AC-004, AC-005)
 // @sk-task 90-production-hardening#T1.1: Wire Debug into Config (<AC-001>)
 //
@@ -321,6 +331,7 @@ type Config struct {
 	Analytics       *AnalyticsConfig         `mapstructure:"analytics" yaml:"analytics"`
 	Conversations   *ConversationsConfig     `mapstructure:"conversations" yaml:"conversations"`
 	Budgets         *BudgetsConfig           `mapstructure:"budgets" yaml:"budgets"`
+	Compliance      *ComplianceConfig        `mapstructure:"compliance" yaml:"compliance"`
 	Data            *DataConfig              `mapstructure:"data" yaml:"data"`
 	Tenants         map[string]*TenantConfig `mapstructure:"tenants" yaml:"tenants"`
 	Admin           *AdminConfig             `mapstructure:"admin" yaml:"admin"`

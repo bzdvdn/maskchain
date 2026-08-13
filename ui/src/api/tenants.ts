@@ -107,3 +107,42 @@ export async function updateDictionaries(slug: string, req: DictionaryRequest): 
     body: req,
   })
 }
+
+export interface ComplianceRule {
+  detector_type: string
+  reaction: string
+  masking: boolean
+}
+
+export interface ComplianceApplyResult {
+  pack_key: string
+  rules: ComplianceRule[]
+}
+
+export interface ComplianceReportRule {
+  detector_type: string
+  expected_reaction: string
+  actual_reaction?: string
+  masking: boolean
+  status: 'active' | 'deviated' | 'missing'
+}
+
+export interface ComplianceReport {
+  pack_key: string
+  rules: ComplianceReportRule[]
+}
+
+export const COMPLIANCE_PACKS = ['HIPAA', 'PCI DSS', 'GDPR', 'Legal'] as const
+
+export async function applyCompliancePack(slug: string, packKey: string): Promise<ComplianceApplyResult> {
+  return apiFetch<ComplianceApplyResult>(`${BASE}/${encodeURIComponent(slug)}/compliance/apply`, {
+    method: 'POST',
+    body: { pack_key: packKey },
+  })
+}
+
+export async function getComplianceReport(slug: string, packKey: string): Promise<ComplianceReport> {
+  return apiFetch<ComplianceReport>(
+    `${BASE}/${encodeURIComponent(slug)}/compliance/report?pack=${encodeURIComponent(packKey)}`,
+  )
+}

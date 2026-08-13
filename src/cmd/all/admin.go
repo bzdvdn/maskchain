@@ -154,6 +154,12 @@ func buildAdminServer(
 		})
 		srv.RegisterTenantHandler(tenantHandler, tenantMw)
 
+		complianceRegistry := bootstrap.LoadComplianceRegistry(cfg, logger)
+		if complianceRegistry != nil {
+			complianceHandler := adminhandler.NewComplianceHandler(complianceRegistry, pgTenantRepo)
+			srv.RegisterComplianceHandler(complianceHandler, tenantMw)
+		}
+
 		vkHandler := adminhandler.NewVirtualKeyHandler(vkRepo, auditAdapter)
 		srv.RegisterVirtualKeyHandler(vkHandler)
 

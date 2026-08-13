@@ -41,6 +41,15 @@ analytics:
 #   alert_webhook_url: "${BUDGET_WEBHOOK_URL}"
 #   aggregation_interval: 5m
 
+# compliance — готовые наборы правил Content Shield ("HIPAA", "PCI DSS", "GDPR", "Legal").
+# Пресеты лежат в compliance.preset_dir (YAML) и применяются one-click к tenant'у
+# (роуты /api/v1/tenants/:slug/compliance/apply|report). По умолчанию выключено:
+# раскомментируй блок и укажи директорию с YAML-пресетами (см. deployments/presets).
+# Пустой preset_dir невалиден — либо полный блок, либо ничего.
+# compliance:
+#   preset_dir: "/etc/maskchain/presets"
+#   enabled_packs: []
+
 tenants:
   default:
     name: "Default Tenant"

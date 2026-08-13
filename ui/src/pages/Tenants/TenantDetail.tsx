@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { getTenant, deleteTenant, type TenantResponse, type DictionaryItem } from '../../api/tenants'
+import {
+  getTenant,
+  deleteTenant,
+  applyCompliancePack,
+  getComplianceReport,
+  COMPLIANCE_PACKS,
+  type TenantResponse,
+  type DictionaryItem,
+  type ComplianceReport,
+} from '../../api/tenants'
 import { DictionaryModal } from '../../components/DictionaryModal'
 import { ConfirmModal } from '../../components/ConfirmModal'
 import { useToast } from '../../components/Toast'
@@ -16,6 +25,10 @@ export function TenantDetail() {
   const [deleting, setDeleting] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [modalDict, setModalDict] = useState<DictionaryItem | null>(null)
+  const [applyingPack, setApplyingPack] = useState<string | null>(null)
+  const [reportPack, setReportPack] = useState<string | null>(null)
+  const [report, setReport] = useState<ComplianceReport | null>(null)
+  const [reportLoading, setReportLoading] = useState(false)
 
   useEffect(() => {
     if (!slug) return
@@ -39,6 +52,47 @@ export function TenantDetail() {
       toast('Failed to delete tenant', 'error')
       setDeleting(false)
       setShowConfirm(false)
+    }
+  }
+
+  async function handleApplyPack(packKey: string) {
+    if (!slug) return
+    setApplyingPack(packKey)
+    try {
+      await applyCompliancePack(slug, packKey)
+      toast(`Compliance pack "${packKey}" applied`, 'success')
+      setReportPack(packKey)
+      setTenant(await getTenant(slug))
+      setReport(await getComplianceReport(slug, packKey))
+    } catch {
+      toast('Failed to apply compliance pack', 'error')
+    } finally {
+      setApplyingPack(null)
+    }
+  }
+
+  async function handleShowReport(packKey: string) {
+    if (!slug) return
+    setReportPack(packKey)
+    setReportLoading(true)
+    setReport(null)
+    try {
+      setReport(await getComplianceReport(slug, packKey))
+    } catch {
+      toast('Failed to load compliance report', 'error')
+    } finally {
+      setReportLoading(false)
+    }
+  }
+
+  function statusBadge(status: string): string {
+    switch (status) {
+      case 'active':
+        return 'badge-up'
+      case 'deviated':
+        return 'badge-warn'
+      default:
+        return 'badge-down'
     }
   }
 
@@ -132,6 +186,56 @@ export function TenantDetail() {
           )}
         </div>
       )}
+
+      <div className="card">
+        <h3>Compliance</h3>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          {COMPLIANCE_PACKS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              className="btn btn-small"
+              disabled={applyingPack === p}
+              onClick={() => handleApplyPack(p)}
+            >
+              {applyingPack === p ? 'Applying...' : `Apply ${p}`}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+          {COMPLIANCE_PACKS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              className={`btn btn-small ${reportPack === p ? 'btn-primary' : ''}`}
+              onClick={() => handleShowReport(p)}
+            >
+              {p} report
+            </button>
+          ))}
+        </div>
+        {reportLoading && <Spinner label="Loading compliance report..." />}
+        {report && (
+          <div className="table-wrap" style={{ marginTop: 8 }}>
+            <table>
+              <thead>
+                <tr><th>Detector</th><th>Expected</th><th>Actual</th><th>Masking</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                {report.rules.map((r, i) => (
+                  <tr key={i}>
+                    <td><code>{r.detector_type}</code></td>
+                    <td>{r.expected_reaction}</td>
+                    <td>{r.actual_reaction ?? '—'}</td>
+                    <td>{r.masking ? 'yes' : 'no'}</td>
+                    <td><span className={`badge ${statusBadge(r.status)}`}>{r.status}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       {tenant.dictionaries && tenant.dictionaries.length > 0 && (
         <section>

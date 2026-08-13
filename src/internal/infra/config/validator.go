@@ -75,8 +75,28 @@ func validateProviderAuth(cfg *Config) error {
 	return nil
 }
 
+// validateCompliance validates the compliance preset configuration.
+func validateCompliance(cfg *Config) error {
+	c := cfg.Compliance
+	if c == nil {
+		return nil
+	}
+	if c.PresetDir == "" {
+		return fmt.Errorf("compliance.preset_dir: required")
+	}
+	for i, key := range c.EnabledPacks {
+		if key == "" {
+			return fmt.Errorf("compliance.enabled_packs.%d: empty pack key", i)
+		}
+	}
+	return nil
+}
+
 func validateConfig(cfg *Config, v *viper.Viper) error {
 	if err := validateDataCache(cfg); err != nil {
+		return err
+	}
+	if err := validateCompliance(cfg); err != nil {
 		return err
 	}
 	if err := validateProviderAuth(cfg); err != nil {

@@ -280,6 +280,16 @@ configRuntime:
   #       timeout_sec: 3
   data: {}
 
+  # compliance:
+  #   preset_dir: "/etc/maskchain/presets"
+  #   enabled_packs: []
+  # Compliance packs (HIPAA, PCI DSS, GDPR, Legal): static YAML presets loaded
+  # from preset_dir and applied one-click per tenant
+  # (/api/v1/tenants/:slug/compliance/apply|report). Disabled by default — an
+  # empty preset_dir is invalid; mount the preset YAMLs and point preset_dir at
+  # them to enable.
+  compliance: {}
+
   # tenants:
   #   default:
   #     name: "Default Tenant"
