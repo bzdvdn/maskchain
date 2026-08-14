@@ -55,7 +55,7 @@ func TestRateLimitAllowsWithinLimit(t *testing.T) {
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		slug, _ := value.NewTenantSlug("test-tenant")
-		c.Set(tenantKey, entity.NewTenant(slug, "Test", "", nil))
+		c.Set(tenantKey, entity.NewTenant(slug, "Test", ""))
 		c.Next()
 	})
 	engine.Use(RateLimit(&mockRateLimitRepo{
@@ -90,7 +90,7 @@ func TestRateLimitBlocksWhenExceeded(t *testing.T) {
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		slug, _ := value.NewTenantSlug("test-tenant")
-		c.Set(tenantKey, entity.NewTenant(slug, "Test", "", nil))
+		c.Set(tenantKey, entity.NewTenant(slug, "Test", ""))
 		c.Next()
 	})
 	engine.Use(RateLimit(&mockRateLimitRepo{
@@ -170,7 +170,7 @@ func TestRateLimitRecoversAfterWindow(t *testing.T) {
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		slug, _ := value.NewTenantSlug("test-tenant")
-		c.Set(tenantKey, entity.NewTenant(slug, "Test", "", nil))
+		c.Set(tenantKey, entity.NewTenant(slug, "Test", ""))
 		c.Next()
 	})
 	engine.Use(RateLimit(&mockRateLimitRepo{
@@ -211,7 +211,7 @@ func TestRateLimitHeadersOnSuccess(t *testing.T) {
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		slug, _ := value.NewTenantSlug("test-tenant")
-		c.Set(tenantKey, entity.NewTenant(slug, "Test", "", nil))
+		c.Set(tenantKey, entity.NewTenant(slug, "Test", ""))
 		c.Next()
 	})
 	engine.Use(RateLimit(&mockRateLimitRepo{
@@ -256,7 +256,7 @@ func TestRateLimitHeadersOn429(t *testing.T) {
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		slug, _ := value.NewTenantSlug("test-tenant")
-		c.Set(tenantKey, entity.NewTenant(slug, "Test", "", nil))
+		c.Set(tenantKey, entity.NewTenant(slug, "Test", ""))
 		c.Next()
 	})
 	engine.Use(RateLimit(&mockRateLimitRepo{
@@ -301,7 +301,7 @@ func TestRateLimitPerTenantConfig(t *testing.T) {
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		slugA, _ := value.NewTenantSlug("tenant-a")
-		c.Set(tenantKey, entity.NewTenant(slugA, "Tenant-A", "", nil))
+		c.Set(tenantKey, entity.NewTenant(slugA, "Tenant-A", ""))
 		c.Next()
 	})
 	engine.Use(RateLimit(&mockRateLimitRepo{
@@ -348,7 +348,7 @@ func TestRateLimitMetrics(t *testing.T) {
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		slug, _ := value.NewTenantSlug("test-tenant")
-		c.Set(tenantKey, entity.NewTenant(slug, "Test", "", nil))
+		c.Set(tenantKey, entity.NewTenant(slug, "Test", ""))
 		c.Next()
 	})
 	engine.Use(RateLimit(&mockRateLimitRepo{
@@ -387,7 +387,7 @@ func TestTokenBudgetBlocksWhenExceeded(t *testing.T) {
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		slug, _ := value.NewTenantSlug("test-tenant")
-		c.Set(tenantKey, entity.NewTenant(slug, "Test", "", nil))
+		c.Set(tenantKey, entity.NewTenant(slug, "Test", ""))
 		c.Set("model", "gpt-4")
 		c.Next()
 	})
@@ -437,7 +437,7 @@ func TestTokenBudgetPerModel(t *testing.T) {
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		slug, _ := value.NewTenantSlug("test-tenant")
-		c.Set(tenantKey, entity.NewTenant(slug, "Test", "", nil))
+		c.Set(tenantKey, entity.NewTenant(slug, "Test", ""))
 		if strings.Contains(c.Request.URL.Path, "gpt4") {
 			c.Set("model", "gpt-4")
 		} else {
@@ -493,7 +493,7 @@ func TestTokenBudgetHeader(t *testing.T) {
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		slug, _ := value.NewTenantSlug("test-tenant")
-		c.Set(tenantKey, entity.NewTenant(slug, "Test", "", nil))
+		c.Set(tenantKey, entity.NewTenant(slug, "Test", ""))
 		c.Set("model", "gpt-4")
 		c.Next()
 	})
@@ -534,7 +534,7 @@ func TestRateLimitE2E(t *testing.T) {
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		e2eSlug, _ := value.NewTenantSlug(c.Request.Header.Get("e2e_tenant"))
-		c.Set(tenantKey, entity.NewTenant(e2eSlug, "E2E", "", nil))
+		c.Set(tenantKey, entity.NewTenant(e2eSlug, "E2E", ""))
 		c.Next()
 	})
 	engine.Use(RateLimit(&mockRateLimitRepo{

@@ -8,6 +8,7 @@ import {
   deleteCostRate,
   deleteProvider,
   deleteRoute,
+  isMaskedKey,
   listCostRates,
   listProviders,
   listRoutes,
@@ -120,6 +121,7 @@ export function Routing() {
                 {providerTh('name', 'Name')}
                 {providerTh('api_type', 'Type')}
                 <th>Base URL</th>
+                <th>Keys</th>
                 <th>Source</th>
                 {providerTh('status', 'Status')}
                 {providerTh('latency_ms', 'Latency', true)}
@@ -132,6 +134,7 @@ export function Routing() {
                 <tr key={i}>
                   <td>{p.name}</td><td>{p.api_type}</td>
                   <td><code>{p.base_url}</code></td>
+                  <td><code>{p.api_keys?.join(', ') || (p.aws_access_key_id ? `${p.aws_access_key_id}` : '—')}</code></td>
                   <td><SourceBadge source={p.source} /></td>
                   <td><Badge value={p.status ?? 'unknown'} /></td>
                   <td className="num">{p.latency_ms != null ? `${p.latency_ms}ms` : '—'}</td>
@@ -144,8 +147,8 @@ export function Routing() {
                   </td>
                 </tr>
               ))}
-              {!loading && providerRows.length === 0 && <tr><td colSpan={8}><EmptyState message="No providers configured" /></td></tr>}
-              {loading && <tr><td colSpan={8}><TableSkeleton rows={4} cols={8} /></td></tr>}
+              {!loading && providerRows.length === 0 && <tr><td colSpan={9}><EmptyState message="No providers configured" /></td></tr>}
+              {loading && <tr><td colSpan={9}><TableSkeleton rows={4} cols={9} /></td></tr>}
             </tbody>
           </table>
         </div>
@@ -307,7 +310,12 @@ function CrudModal({
     setErr('')
     if (kind === 'provider') {
       if (!p.name || !p.base_url) { setErr('Name and Base URL are required'); return }
-      if ((p.api_keys ?? []).length === 0) { setErr('At least one API key is required'); return }
+      const keys = p.api_keys ?? []
+      const hasEditableKey = keys.some((k) => k && !isMaskedKey(k))
+      const hasAWSCreds = (p.aws_access_key_id && !isMaskedKey(p.aws_access_key_id) && p.aws_secret_access_key && !isMaskedKey(p.aws_secret_access_key)) ?? false
+      // A provider is valid when it has a real key or real AWS credentials.
+      // Masked/empty values on edit keep the previously stored secrets.
+      if (!hasEditableKey && !hasAWSCreds) { setErr('Add at least one API key or AWS access key'); return }
       onSaved('provider', p)
     } else if (kind === 'route') {
       if (!r.model || r.providers.length === 0) { setErr('Model and at least one provider are required'); return }

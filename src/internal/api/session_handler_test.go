@@ -114,7 +114,7 @@ func sessionHandlerTestTenant(t *testing.T) *entity.Tenant {
 	if err != nil {
 		t.Fatalf("NewTenantSlug: %v", err)
 	}
-	return entity.NewTenant(slug, "Test Tenant", "Authorization", nil)
+	return entity.NewTenant(slug, "Test Tenant", "Authorization")
 }
 
 func setupSessionHandlerTest(t *testing.T) (*SessionHandler, *mockSessionStore, *config.SessionConfig) {

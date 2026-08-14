@@ -1,0 +1,2 @@
+ALTER TABLE tenants
+    ADD COLUMN api_keys JSONB NOT NULL DEFAULT '[]'::JSONB;

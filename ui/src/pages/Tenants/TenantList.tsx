@@ -46,7 +46,6 @@ export function TenantList() {
                 <tr>
                   <th>Slug</th>
                   <th>Name</th>
-                  <th>API Keys</th>
                   <th>PII</th>
                   <th>Created</th>
                   <th></th>
@@ -57,7 +56,6 @@ export function TenantList() {
                   <tr key={t.slug}>
                     <td><code>{t.slug}</code></td>
                     <td>{t.name}</td>
-                    <td><code>{t.api_keys[0]?.slice(0, 12)}...</code></td>
                     <td>
                       <Badge value={t.pii_config?.enabled ? 'On' : 'No rules'} />
                     </td>

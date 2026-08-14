@@ -87,7 +87,7 @@ func setupSessionMWTest(t *testing.T) (*gin.Engine, *mockSessionStoreMW, *entity
 	}
 	engine := gin.New()
 	slug, _ := value.NewTenantSlug("test-tenant")
-	tenant := entity.NewTenant(slug, "Test Tenant", "Authorization", nil)
+	tenant := entity.NewTenant(slug, "Test Tenant", "Authorization")
 
 	engine.Use(func(c *gin.Context) {
 		c.Set("tenant", tenant)
@@ -184,7 +184,7 @@ func TestSessionMiddlewareWithShieldMiddlewareIncrement(t *testing.T) {
 		DefaultTTL: 30 * time.Minute,
 	}
 	slug, _ := value.NewTenantSlug("test-tenant")
-	tenant := entity.NewTenant(slug, "Test Tenant", "Authorization", nil)
+	tenant := entity.NewTenant(slug, "Test Tenant", "Authorization")
 
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {

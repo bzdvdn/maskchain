@@ -22,10 +22,17 @@ func VirtualKeyFromContext(c *gin.Context) (*virtualkey.VirtualKey, bool) {
 	return k, ok
 }
 
-// @sk-task 300-virtual-keys#T2.1: VirtualKeyAuth authenticates via DB-first SHA-256 key lookup (AC-001)
+// @sk-task 300-virtual-keys#T2.1: VirtualKeyAuth authenticates via SHA-256 key lookup (AC-001)
+// @sk-task 403-key-at-rest-encryption#T3.2: VirtualKeyAuth resolves from cache first (AC-005, AC-006)
 //
-// VirtualKeyAuth handles the operation.
-func VirtualKeyAuth(repo virtualkey.VirtualKeyRepository, provider *TenantProvider) gin.HandlerFunc {
+// VirtualKeyAuth handles the operation. When a cache is provided it resolves
+// tenants from the in-process index, falling back to the repository on a cache
+// miss; a nil cache keeps the previous repo-only behavior.
+func VirtualKeyAuth(repo virtualkey.VirtualKeyRepository, provider *TenantProvider, cache ...*VirtualKeyCache) gin.HandlerFunc {
+	var vkCache *VirtualKeyCache
+	if len(cache) > 0 {
+		vkCache = cache[0]
+	}
 	return func(c *gin.Context) {
 		if isPublicPath(c.Request.URL.Path) {
 			c.Next()
@@ -38,7 +45,7 @@ func VirtualKeyAuth(repo virtualkey.VirtualKeyRepository, provider *TenantProvid
 			return
 		}
 
-		key, vk := authenticateVirtualKey(c, repo, tenants)
+		key, vk := authenticateVirtualKey(c, repo, vkCache, tenants)
 		if key == nil {
 			AbortWithError(c, http.StatusUnauthorized, ErrorCodeUnauthorized, "unauthorized")
 			return
@@ -51,16 +58,35 @@ func VirtualKeyAuth(repo virtualkey.VirtualKeyRepository, provider *TenantProvid
 	}
 }
 
+// lookupVirtualKey fetches a key by hash from the cache when present, and falls
+// back to the repository on a miss. Lazy cache population avoids repeated DB
+// round-trips for the same key between refreshes.
+func lookupVirtualKey(c *gin.Context, repo virtualkey.VirtualKeyRepository, cache *VirtualKeyCache, hash string) (*virtualkey.VirtualKey, bool) {
+	if cache != nil {
+		if vk, ok := cache.Get(hash); ok {
+			return vk, true
+		}
+	}
+	vk, err := repo.FindByKeyHash(c.Request.Context(), hash)
+	if err != nil || vk == nil {
+		return nil, false
+	}
+	if cache != nil {
+		cache.Set(hash, vk)
+	}
+	return vk, true
+}
+
 // authenticateVirtualKey resolves a tenant by hashed candidate keys. It mirrors
 // the header rules of the legacy in-memory Auth middleware so existing clients
 // do not change their headers.
-func authenticateVirtualKey(c *gin.Context, repo virtualkey.VirtualKeyRepository, tenants []*entity.Tenant) (*entity.Tenant, *virtualkey.VirtualKey) {
+func authenticateVirtualKey(c *gin.Context, repo virtualkey.VirtualKeyRepository, cache *VirtualKeyCache, tenants []*entity.Tenant) (*entity.Tenant, *virtualkey.VirtualKey) {
 	for _, cand := range collectCandidates(c, tenants) {
 		if cand.key == "" {
 			continue
 		}
-		vk, err := repo.FindByKeyHash(c.Request.Context(), virtualkey.KeyHash(cand.key))
-		if err != nil || vk == nil {
+		vk, ok := lookupVirtualKey(c, repo, cache, virtualkey.KeyHash(cand.key))
+		if !ok {
 			continue
 		}
 		if !vk.Valid(time.Now()) {

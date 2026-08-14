@@ -2,10 +2,13 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 
 	"github.com/spf13/viper"
+
+	"github.com/bzdvdn/maskchain/src/internal/infra/crypto"
 )
 
 // @sk-task 111-provider-auth-and-config#T2.1: Validate APIKeys required + auth_scheme enum (AC-005)
@@ -106,7 +109,45 @@ func validateDataRetention(cfg *Config) error {
 	return nil
 }
 
+// @sk-task 403-key-at-rest-encryption#T1.1: Validate at-rest keys key fail-closed (AC-008)
+// @sk-task 403-key-at-rest-encryption#T4.5: Tenants now require DB-backed virtual-key auth (AC-007)
+//
+// validateAtRestKeysKey requires a valid 32-byte base64 key (MASKCHAIN_KEYS_KEY
+// or crypto.keys_key) whenever database-backed routing or tenancy is enabled.
+// A missing or malformed key fails closed so provider secrets are never
+// persisted as plaintext.
+func validateAtRestKeysKey(cfg *Config) error {
+	if cfg.DB == nil || cfg.DB.DSN == "" {
+		// Raw-key in-memory auth was removed (T4.3); tenancy is now served only
+		// by DB-backed virtual keys, so configured tenants without a DB fail closed.
+		if len(cfg.Tenants) > 0 {
+			return fmt.Errorf("tenants: configured but database is disabled; virtual-key auth requires DB (set db.dsn)")
+		}
+		return nil
+	}
+	routingEnabled := cfg.Routing != nil && len(cfg.Routing.Providers) > 0
+	tenancyEnabled := len(cfg.Tenants) > 0
+	if !routingEnabled && !tenancyEnabled {
+		return nil
+	}
+
+	key := os.Getenv(KeysKeyEnvVar)
+	if key == "" && cfg.Crypto != nil {
+		key = cfg.Crypto.KeysKey
+	}
+	if key == "" {
+		return fmt.Errorf("%s: required when database-backed routing or tenancy is enabled (set %s or crypto.keys_key)", KeysKeyEnvVar, KeysKeyEnvVar)
+	}
+	if _, err := crypto.New(key); err != nil {
+		return fmt.Errorf("%s: %w", KeysKeyEnvVar, err)
+	}
+	return nil
+}
+
 func validateConfig(cfg *Config, v *viper.Viper) error {
+	if err := validateAtRestKeysKey(cfg); err != nil {
+		return err
+	}
 	if err := validateDataCache(cfg); err != nil {
 		return err
 	}

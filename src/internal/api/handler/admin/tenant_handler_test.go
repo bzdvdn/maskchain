@@ -23,7 +23,7 @@ func TestTenantHandler_CreateWithRetentionMode(t *testing.T) {
 	router.POST("/api/v1/tenants", h.CreateTenant)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tenants",
-		bytes.NewBufferString(`{"slug":"acme","name":"Acme","api_keys":["k"],"retention_mode":"none"}`))
+		bytes.NewBufferString(`{"slug":"acme","name":"Acme","retention_mode":"none"}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -47,7 +47,7 @@ func TestTenantHandler_UpdatePreservesRetentionMode(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s, _ := value.NewTenantSlug("acme")
 	repo := newFakeTenantRepo()
-	_ = repo.Create(context.Background(), entity.NewTenant(s, "Acme", "X-Auth", []string{"k"},
+	_ = repo.Create(context.Background(), entity.NewTenant(s, "Acme", "X-Auth",
 		entity.WithTenantRetentionMode(value.RetentionModeNone)))
 	hh := NewTenantHandler(repo, nil, nil)
 
@@ -55,7 +55,7 @@ func TestTenantHandler_UpdatePreservesRetentionMode(t *testing.T) {
 	router.PUT("/api/v1/tenants/:slug", hh.UpdateTenant)
 
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/tenants/acme",
-		bytes.NewBufferString(`{"name":"Acme2","api_keys":["k"]}`))
+		bytes.NewBufferString(`{"name":"Acme2"}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -75,7 +75,7 @@ func TestTenantHandler_UpdateInvalidRetentionMode(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s, _ := value.NewTenantSlug("acme")
 	repo := newFakeTenantRepo()
-	_ = repo.Create(context.Background(), entity.NewTenant(s, "Acme", "X-Auth", []string{"k"},
+	_ = repo.Create(context.Background(), entity.NewTenant(s, "Acme", "X-Auth",
 		entity.WithTenantRetentionMode(value.RetentionModeFull)))
 	hh := NewTenantHandler(repo, nil, nil)
 
@@ -83,7 +83,7 @@ func TestTenantHandler_UpdateInvalidRetentionMode(t *testing.T) {
 	router.PUT("/api/v1/tenants/:slug", hh.UpdateTenant)
 
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/tenants/acme",
-		bytes.NewBufferString(`{"name":"Acme2","api_keys":["k"],"retention_mode":"redacted"}`))
+		bytes.NewBufferString(`{"name":"Acme2","retention_mode":"redacted"}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)

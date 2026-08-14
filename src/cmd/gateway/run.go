@@ -58,6 +58,24 @@ func run() {
 			logger.Error("failed to run migrations", slog.String("error", err.Error()))
 			os.Exit(1)
 		}
+		// @sk-task 403-key-at-rest-encryption#T2.2: Seal legacy plaintext provider secrets post-migration (AC-002)
+		if cfg.Routing != nil {
+			key := os.Getenv(config.KeysKeyEnvVar)
+			enc, kerr := crypto.New(key)
+			if kerr != nil {
+				logger.Error("at-rest encryption key unavailable — refusing to start (fail-closed)",
+					slog.String("env", config.KeysKeyEnvVar), slog.String("error", kerr.Error()))
+				os.Exit(1)
+			}
+			reencCtx, reencCancel := context.WithTimeout(context.Background(), 60*time.Second)
+			rerr := postgres.ReencryptProviderSecrets(reencCtx, b.PGPool, enc)
+			reencCancel()
+			if rerr != nil {
+				logger.Error("failed to re-encrypt legacy provider secrets", slog.String("error", rerr.Error()))
+				os.Exit(1)
+			}
+			logger.Info("provider secret re-encryption check complete")
+		}
 	}
 
 	provDeps, err := initProviders(cfg.Routing, cfg.Egress, b.PGPool, logger)
@@ -253,7 +271,7 @@ func initTenants(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.Server, dict
 		if tc.PIIConfig != nil {
 			opts = append(opts, entity.WithTenantPIIConfig(*tc.PIIConfig))
 		}
-		cfgTenants[slugStr] = entity.NewTenant(slug, tc.Name, tc.AuthHeader, tc.APIKeys, opts...)
+		cfgTenants[slugStr] = entity.NewTenant(slug, tc.Name, tc.AuthHeader, opts...)
 	}
 	tenantResolver := resolver.NewDBFirstTenantResolver(tenantRepo, cfgTenants)
 	if mode, err := value.ParseRetentionMode(cfg.DefaultRetentionMode()); err == nil {
@@ -289,12 +307,16 @@ func initTenants(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.Server, dict
 	if pgPool != nil {
 		bootstrap.BackfillVirtualKeys(context.Background(), cfg, pgPool, logger)
 		vkRepo := bootstrap.NewVirtualKeyRepo(pgPool)
-		srv.RegisterAuth(middleware.VirtualKeyAuth(vkRepo, tenantProvider))
+		// @sk-task 403-key-at-rest-encryption#T3.2: Own VirtualKeyCache lifecycle in gateway bootstrap (AC-005)
+		vkCache := middleware.NewVirtualKeyCache(vkRepo, logger)
+		cacheCtx, cacheCancel := context.WithCancel(context.Background())
+		_ = cacheCancel
+		go vkCache.Start(cacheCtx, middleware.DefaultVirtualKeyCacheRefresh)
+		srv.RegisterAuth(middleware.VirtualKeyAuth(vkRepo, tenantProvider, vkCache))
 		srv.RegisterModelAccess(middleware.ModelAccess())
 		logger.Info("virtual key auth middleware registered", slog.Int("tenants", len(dbTenants)))
 	} else {
-		srv.RegisterAuth(middleware.Auth(tenantProvider))
-		logger.Info("in-memory auth middleware registered (no db)", slog.Int("tenants", len(dbTenants)))
+		logger.Warn("virtual key auth requires a database; auth disabled", slog.Int("tenants", len(dbTenants)))
 	}
 
 	reloadCtx, reloadCancel := context.WithCancel(context.Background())

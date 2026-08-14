@@ -84,7 +84,7 @@ func newComplianceHandler(t *testing.T) (*ComplianceHandler, *fakeTenantRepo) {
 	t.Helper()
 	repo := newFakeTenantRepo()
 	s, _ := value.NewTenantSlug("acme")
-	repo.Create(context.Background(), entity.NewTenant(s, "acme", "X-Auth", []string{"k"}))
+	repo.Create(context.Background(), entity.NewTenant(s, "acme", "X-Auth"))
 	h := NewComplianceHandler(testComplianceRegistry(t), repo)
 	return h, repo
 }

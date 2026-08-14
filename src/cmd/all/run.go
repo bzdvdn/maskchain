@@ -16,6 +16,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/adapters/provider"
 	"github.com/bzdvdn/maskchain/src/internal/adapters/repository/postgres"
 	"github.com/bzdvdn/maskchain/src/internal/api"
+	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	routingDomain "github.com/bzdvdn/maskchain/src/internal/domain/routing"
 	routingSvc "github.com/bzdvdn/maskchain/src/internal/domain/routing/service"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
@@ -191,8 +192,17 @@ func run() {
 		os.Exit(1)
 	}
 
-	gwServer := buildGatewayServer(cfg, logger, serviceName, pgPool, vkClient, gwPromRegistry, gwMetricsHandler, registry, selector, clients, fallbackHandler, routingHandler, otelShutdown)
-	adminServer := buildAdminServer(cfg, logger, serviceName, pgPool, vkClient, adminPromRegistry, adminMetricsHandler, otelShutdown)
+	// @sk-task 403-key-at-rest-encryption#T3.2: Own shared VirtualKeyCache lifecycle in combined bootstrap (AC-005)
+	var vkCache *middleware.VirtualKeyCache
+	if pgPool != nil {
+		vkCache = middleware.NewVirtualKeyCache(bootstrap.NewVirtualKeyRepo(pgPool), logger)
+		cacheCtx, cacheCancel := context.WithCancel(context.Background())
+		defer cacheCancel()
+		go vkCache.Start(cacheCtx, middleware.DefaultVirtualKeyCacheRefresh)
+	}
+
+	gwServer := buildGatewayServer(cfg, logger, serviceName, pgPool, vkClient, gwPromRegistry, gwMetricsHandler, registry, selector, clients, fallbackHandler, routingHandler, otelShutdown, vkCache)
+	adminServer := buildAdminServer(cfg, logger, serviceName, pgPool, vkClient, adminPromRegistry, adminMetricsHandler, otelShutdown, vkCache)
 
 	errCh := make(chan error, 2)
 

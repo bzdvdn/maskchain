@@ -84,7 +84,7 @@ func newCacheTestEngineExt(enabled bool, calls *int, svc *cacheapp.SemanticCache
 	mw := NewSemanticCacheMiddleware(svc, cfg, slog.Default())
 
 	slug, _ := value.NewTenantSlug("alpha")
-	tenant := entity.NewTenant(slug, "Alpha", "X-Mask-Auth", []string{"legacy"}, entity.WithTenantDictionaries(nil))
+	tenant := entity.NewTenant(slug, "Alpha", "X-Mask-Auth", entity.WithTenantDictionaries(nil))
 
 	engine.Use(func(c *gin.Context) {
 		c.Set(tenantKey, tenant)

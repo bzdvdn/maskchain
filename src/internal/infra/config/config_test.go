@@ -3,9 +3,11 @@ package config
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -357,6 +359,84 @@ func TestConversationsConfig_Defaults(t *testing.T) {
 	}
 	if cfg.Conversations.RetentionDays == 0 {
 		t.Error("expected Conversations.RetentionDays default to be non-zero")
+	}
+}
+
+// @sk-test 403-key-at-rest-encryption#T1.2: TestMissingKeysKeyFailsClosed (AC-008)
+func TestMissingKeysKeyFailsClosed(t *testing.T) {
+	dir := t.TempDir()
+	content := []byte("log:\n  level: debug\ndatabase:\n  dsn: postgres://localhost:5432/maskchain\nrouting:\n  providers:\n    - name: test\n      base_url: https://api.example.com/v1\n      api_type: openai\n      api_keys:\n        - sk-abc123\n")
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), content, 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(KeysKeyEnvVar, "")
+	_, err := ParseAndLoadConfig([]string{"--config", filepath.Join(dir, "config.yaml")})
+	if err == nil {
+		t.Fatal("expected error for missing keys key, got nil")
+	}
+	if !strings.Contains(err.Error(), KeysKeyEnvVar) {
+		t.Errorf("expected error to mention %s, got: %v", KeysKeyEnvVar, err)
+	}
+}
+
+// @sk-test 403-key-at-rest-encryption#T1.2: TestInvalidKeysKeyFailsClosed (AC-008)
+func TestInvalidKeysKeyFailsClosed(t *testing.T) {
+	dir := t.TempDir()
+	content := []byte("log:\n  level: debug\ndatabase:\n  dsn: postgres://localhost:5432/maskchain\nrouting:\n  providers:\n    - name: test\n      base_url: https://api.example.com/v1\n      api_type: openai\n      api_keys:\n        - sk-abc123\n")
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), content, 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(KeysKeyEnvVar, "not-base64")
+	_, err := ParseAndLoadConfig([]string{"--config", filepath.Join(dir, "config.yaml")})
+	if err == nil {
+		t.Fatal("expected error for invalid keys key, got nil")
+	}
+}
+
+// @sk-test 403-key-at-rest-encryption#T1.2: TestValidKeysKeyPasses (AC-008)
+func TestValidKeysKeyPasses(t *testing.T) {
+	dir := t.TempDir()
+	content := []byte("log:\n  level: debug\ndatabase:\n  dsn: postgres://localhost:5432/maskchain\nrouting:\n  providers:\n    - name: test\n      base_url: https://api.example.com/v1\n      api_type: openai\n      api_keys:\n        - sk-abc123\n")
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), content, 0644); err != nil {
+		t.Fatal(err)
+	}
+	valid := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32))
+	t.Setenv(KeysKeyEnvVar, valid)
+	cfg, err := ParseAndLoadConfig([]string{"--config", filepath.Join(dir, "config.yaml")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	_ = cfg
+}
+
+// @sk-test 403-key-at-rest-encryption#T1.2: TestNoDBKeyNotRequired (AC-008)
+func TestNoDBKeyNotRequired(t *testing.T) {
+	dir := t.TempDir()
+	content := []byte("log:\n  level: debug\nrouting:\n  providers:\n    - name: test\n      base_url: https://api.example.com/v1\n      api_type: openai\n      api_keys:\n        - sk-abc123\n")
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), content, 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(KeysKeyEnvVar, "")
+	_, err := ParseAndLoadConfig([]string{"--config", filepath.Join(dir, "config.yaml")})
+	if err != nil {
+		t.Fatalf("unexpected error without DB: %v", err)
+	}
+}
+
+// @sk-test 403-key-at-rest-encryption#T4.5: TenantsWithoutDBFailsClosed (AC-007)
+func TestTenantsWithoutDBFailsClosed(t *testing.T) {
+	dir := t.TempDir()
+	content := []byte("log:\n  level: debug\ntenants:\n  acme:\n    auth_header: Authorization\n")
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), content, 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(KeysKeyEnvVar, "")
+	_, err := ParseAndLoadConfig([]string{"--config", filepath.Join(dir, "config.yaml")})
+	if err == nil {
+		t.Fatal("expected error for tenants without DB (virtual-key auth requires DB), got nil")
+	}
+	if !strings.Contains(err.Error(), "virtual-key auth requires DB") {
+		t.Errorf("expected error to mention virtual-key auth requires DB, got: %v", err)
 	}
 }
 

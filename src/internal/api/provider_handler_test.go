@@ -312,7 +312,7 @@ func TestSelectWithFallbackChain(t *testing.T) {
 // @sk-test 80-tenant-isolation#T4.5: TestRoutingHandlerTenantContext verifies tenant-scoped routing and X-Tenant-ID propagation (AC-006, AC-007)
 func customTenant() *entity.Tenant {
 	slug, _ := value.NewTenantSlug("custom-tenant")
-	return entity.NewTenant(slug, "Custom", "", nil)
+	return entity.NewTenant(slug, "Custom", "")
 }
 
 func TestRoutingHandlerTenantContext(t *testing.T) {

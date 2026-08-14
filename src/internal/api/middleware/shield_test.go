@@ -22,7 +22,7 @@ import (
 
 func newPIITenant(slug string, opts ...entity.TenantOption) *entity.Tenant {
 	s, _ := value.NewTenantSlug(slug)
-	return entity.NewTenant(s, "test-"+slug, "Authorization", nil, append([]entity.TenantOption{
+	return entity.NewTenant(s, "test-"+slug, "Authorization", append([]entity.TenantOption{
 		entity.WithTenantPIIConfig(entity.PIIConfig{
 			Enabled: true,
 			Rules: []entity.PIARule{
@@ -350,7 +350,7 @@ func TestPIIConfig_Disabled(t *testing.T) {
 
 	var handlerCalled bool
 	slug, _ := value.NewTenantSlug("test-tenant")
-	tenant := entity.NewTenant(slug, "test-tenant", "Authorization", nil, entity.WithTenantPIIConfig(entity.PIIConfig{Enabled: false}))
+	tenant := entity.NewTenant(slug, "test-tenant", "Authorization", entity.WithTenantPIIConfig(entity.PIIConfig{Enabled: false}))
 	engine.Use(func(c *gin.Context) {
 		c.Set("tenant", tenant)
 		c.Next()
@@ -380,7 +380,7 @@ func TestPIIConfig_EmptyRules(t *testing.T) {
 
 	var handlerCalled bool
 	slug, _ := value.NewTenantSlug("test-tenant")
-	tenant := entity.NewTenant(slug, "test-tenant", "Authorization", nil, entity.WithTenantPIIConfig(entity.PIIConfig{
+	tenant := entity.NewTenant(slug, "test-tenant", "Authorization", entity.WithTenantPIIConfig(entity.PIIConfig{
 		Enabled: true,
 		Rules:   []entity.PIARule{},
 	}))
@@ -414,7 +414,7 @@ func TestShieldGracefulDegradation(t *testing.T) {
 		mockEng.err = fmt.Errorf("scan service unavailable")
 
 		slug, _ := value.NewTenantSlug("test-tenant")
-		tenant := entity.NewTenant(slug, "test-tenant", "Authorization", nil, entity.WithTenantPIIConfig(entity.PIIConfig{
+		tenant := entity.NewTenant(slug, "test-tenant", "Authorization", entity.WithTenantPIIConfig(entity.PIIConfig{
 			Enabled:       true,
 			DefaultAction: "block",
 			Rules:         []entity.PIARule{{Label: "email", Type: "regex", Pattern: "EMAIL", Action: "block"}},
@@ -448,7 +448,7 @@ func TestShieldGracefulDegradation(t *testing.T) {
 
 		var handlerCalled bool
 		slug, _ := value.NewTenantSlug("test-tenant")
-		tenant := entity.NewTenant(slug, "test-tenant", "Authorization", nil, entity.WithTenantPIIConfig(entity.PIIConfig{
+		tenant := entity.NewTenant(slug, "test-tenant", "Authorization", entity.WithTenantPIIConfig(entity.PIIConfig{
 			Enabled:       true,
 			DefaultAction: "allow",
 			Rules:         []entity.PIARule{{Label: "email", Type: "regex", Pattern: "EMAIL", Action: "block"}},
@@ -486,7 +486,7 @@ func TestDictUnmask(t *testing.T) {
 
 	dict := dictionary.NewDictionary("names", []interface{}{"original-name"}, dictionary.MatchModeExact)
 	tenantSlug, _ := value.NewTenantSlug("test-tenant")
-	tenant := entity.NewTenant(tenantSlug, "test-tenant", "Authorization", nil,
+	tenant := entity.NewTenant(tenantSlug, "test-tenant", "Authorization",
 		entity.WithTenantDictionaries([]*dictionary.Dictionary{dict}),
 		entity.WithTenantPIIConfig(entity.PIIConfig{
 			Enabled: true,
@@ -541,7 +541,7 @@ func TestStreamingDictUnmask(t *testing.T) {
 
 	dict := dictionary.NewDictionary("names", []interface{}{"original-name"}, dictionary.MatchModeExact)
 	tenantSlug, _ := value.NewTenantSlug("test-tenant")
-	tenant := entity.NewTenant(tenantSlug, "test-tenant", "Authorization", nil,
+	tenant := entity.NewTenant(tenantSlug, "test-tenant", "Authorization",
 		entity.WithTenantDictionaries([]*dictionary.Dictionary{dict}),
 		entity.WithTenantPIIConfig(entity.PIIConfig{
 			Enabled: true,
@@ -620,7 +620,7 @@ func TestShieldEdge_UnmaskNoopNoPlaceholders(t *testing.T) {
 
 	dict := dictionary.NewDictionary("names", []interface{}{"original-name"}, dictionary.MatchModeExact)
 	tenantSlug, _ := value.NewTenantSlug("test-tenant")
-	tenant := entity.NewTenant(tenantSlug, "test-tenant", "Authorization", nil,
+	tenant := entity.NewTenant(tenantSlug, "test-tenant", "Authorization",
 		entity.WithTenantDictionaries([]*dictionary.Dictionary{dict}),
 		entity.WithTenantPIIConfig(entity.PIIConfig{
 			Enabled: true,
@@ -666,7 +666,7 @@ func TestShieldEdge_InvalidPlaceholderNotReplaced(t *testing.T) {
 
 	dict := dictionary.NewDictionary("names", []interface{}{"original-name"}, dictionary.MatchModeExact)
 	tenantSlug, _ := value.NewTenantSlug("test-tenant")
-	tenant := entity.NewTenant(tenantSlug, "test-tenant", "Authorization", nil,
+	tenant := entity.NewTenant(tenantSlug, "test-tenant", "Authorization",
 		entity.WithTenantDictionaries([]*dictionary.Dictionary{dict}),
 		entity.WithTenantPIIConfig(entity.PIIConfig{
 			Enabled: true,

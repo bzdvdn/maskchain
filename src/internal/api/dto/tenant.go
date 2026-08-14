@@ -19,7 +19,6 @@ type CreateTenantRequest struct {
 	Slug          string            `json:"slug" binding:"required"`
 	Name          string            `json:"name" binding:"required"`
 	AuthHeader    string            `json:"auth_header"`
-	APIKeys       []string          `json:"api_keys" binding:"required"`
 	Dictionaries  []DictionaryItem  `json:"dictionaries"`
 	PIIConfig     *entity.PIIConfig `json:"pii_config"`
 	RetentionMode string            `json:"retention_mode"`
@@ -28,7 +27,6 @@ type CreateTenantRequest struct {
 type UpdateTenantRequest struct {
 	Name          string            `json:"name" binding:"required"`
 	AuthHeader    string            `json:"auth_header"`
-	APIKeys       []string          `json:"api_keys" binding:"required"`
 	Dictionaries  []DictionaryItem  `json:"dictionaries"`
 	PIIConfig     *entity.PIIConfig `json:"pii_config"`
 	RetentionMode string            `json:"retention_mode"`
@@ -38,7 +36,6 @@ type TenantResponse struct {
 	Slug          string            `json:"slug"`
 	Name          string            `json:"name"`
 	AuthHeader    string            `json:"auth_header"`
-	APIKeys       []string          `json:"api_keys"`
 	Dictionaries  []DictionaryItem  `json:"dictionaries,omitempty"`
 	PIIConfig     *entity.PIIConfig `json:"pii_config,omitempty"`
 	RetentionMode string            `json:"retention_mode"`
@@ -61,7 +58,6 @@ func TenantToResponse(t *entity.Tenant) TenantResponse {
 		Slug:       t.Slug().String(),
 		Name:       t.Name(),
 		AuthHeader: t.AuthHeader(),
-		APIKeys:    t.APIKeys(),
 		PIIConfig:  &piiCfg,
 		CreatedAt:  t.CreatedAt(),
 		UpdatedAt:  t.UpdatedAt(),

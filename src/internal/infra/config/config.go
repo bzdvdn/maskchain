@@ -20,6 +20,12 @@ import (
 // Used to pre-populate viper from CONFIG_* env vars for Unmarshal to pick up.
 var envToKeyReplacer = strings.NewReplacer("_", ".", "-", ".")
 
+// KeysKeyEnvVar is the environment variable holding the base64-encoded 32-byte
+// symmetric key used for at-rest encryption of provider secrets
+// (AES-256-GCM, see infra/crypto). Required when database-backed routing or
+// tenancy is enabled.
+const KeysKeyEnvVar = "MASKCHAIN_KEYS_KEY"
+
 // @sk-task 01-config-bootstrap#T1.2: Create Config struct with LogConfig, mapstructure/yaml/validate tags, defaults (AC-001, AC-003)
 //
 // LogConfig represents a domain entity or configuration.
@@ -52,6 +58,17 @@ type DatabaseConfig struct {
 	MaxConns        int           `mapstructure:"max_conns" yaml:"max_conns"`
 	MinConns        int           `mapstructure:"min_conns" yaml:"min_conns"`
 	MaxConnLifetime time.Duration `mapstructure:"max_conn_lifetime" yaml:"max_conn_lifetime"`
+}
+
+// @sk-task 403-key-at-rest-encryption#T1.1: Add CryptoConfig section (AC-008)
+//
+// CryptoConfig configures at-rest secret encryption. KeysKey is read from the
+// MASKCHAIN_KEYS_KEY env var (see KeysKeyEnvVar) and holds the base64-encoded
+// 32-byte AES-256-GCM key; it must not be committed to YAML.
+type CryptoConfig struct {
+	// KeysKey is the base64-encoded 32-byte AES key. Empty by default; the
+	// validator requires it whenever DB-backed routing or tenancy is enabled.
+	KeysKey string `mapstructure:"keys_key" yaml:"keys_key"`
 }
 
 // @sk-task 22-shield-mask-storage#T5.1: Add Valkey config section (AC-all)
@@ -333,6 +350,7 @@ type Config struct {
 	Log             *LogConfig               `mapstructure:"log" yaml:"log"`
 	Server          *ServerConfig            `mapstructure:"server" yaml:"server"`
 	DB              *DatabaseConfig          `mapstructure:"database" yaml:"database"`
+	Crypto          *CryptoConfig            `mapstructure:"crypto" yaml:"crypto"`
 	Valkey          *ValkeyConfig            `mapstructure:"valkey" yaml:"valkey"`
 	Mask            *MaskConfig              `mapstructure:"mask" yaml:"mask"`
 	Shield          *ShieldConfig            `mapstructure:"shield" yaml:"shield"`

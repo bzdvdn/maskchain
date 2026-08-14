@@ -75,7 +75,6 @@ func (s *ApplyPackService) Apply(ctx context.Context, slug value.TenantSlug, pac
 		tenant.Slug(),
 		tenant.Name(),
 		tenant.AuthHeader(),
-		tenant.APIKeys(),
 		entity.WithTenantDictionaries(tenant.Dictionaries()),
 		entity.WithTenantPIIConfig(pii),
 	)

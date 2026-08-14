@@ -24,7 +24,7 @@ func budgetMiddlewareTestHandler(b *budget.Budget, counter *fakeBudgetCounter, r
 	_, engine := gin.CreateTestContext(w)
 
 	slug, _ := value.NewTenantSlug("alpha")
-	tenant := entity.NewTenant(slug, "Alpha", "X-Mask-Auth", []string{"legacy"}, entity.WithTenantDictionaries(nil))
+	tenant := entity.NewTenant(slug, "Alpha", "X-Mask-Auth", entity.WithTenantDictionaries(nil))
 
 	repo := &fakeBudgetRepo{budgets: []*budget.Budget{b}}
 	if counter == nil {
@@ -119,7 +119,7 @@ func TestBudgetMiddlewareFiresAlertOnThreshold(t *testing.T) {
 	w := httptest.NewRecorder()
 	_, engine := gin.CreateTestContext(w)
 	slug, _ := value.NewTenantSlug("alpha")
-	tenant := entity.NewTenant(slug, "Alpha", "X-Mask-Auth", []string{"legacy"}, entity.WithTenantDictionaries(nil))
+	tenant := entity.NewTenant(slug, "Alpha", "X-Mask-Auth", entity.WithTenantDictionaries(nil))
 
 	engine.Use(func(c *gin.Context) {
 		c.Set(tenantKey, tenant)

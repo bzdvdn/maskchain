@@ -70,7 +70,7 @@ func newTestLogger(_ *testing.T) (*testRecordHandler, *slog.Logger) {
 
 func newTestTenant(slug string) *entity.Tenant {
 	s, _ := value.NewTenantSlug(slug)
-	return entity.NewTenant(s, "test-"+slug, "Authorization", nil)
+	return entity.NewTenant(s, "test-"+slug, "Authorization")
 }
 
 func setupTest(t *testing.T) (*gin.Engine, *mockEngine, *slog.Logger) {
@@ -223,7 +223,7 @@ func TestLoggerWithTenant(t *testing.T) {
 	engine.Use(Logger(log))
 	engine.GET("/test", func(c *gin.Context) {
 		slug, _ := value.NewTenantSlug("test-tenant")
-		c.Set(tenantKey, entity.NewTenant(slug, "Test", "", nil))
+		c.Set(tenantKey, entity.NewTenant(slug, "Test", ""))
 		c.Status(http.StatusOK)
 	})
 

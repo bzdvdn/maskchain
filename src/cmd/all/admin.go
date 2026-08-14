@@ -46,6 +46,7 @@ func buildAdminServer(
 	promRegistry *prometheus.Registry,
 	metricsHandler gin.HandlerFunc,
 	otelShutdown func(context.Context) error,
+	vkCache *middleware.VirtualKeyCache,
 ) *api.AdminServer {
 	if cfg.Server.HealthCheck == nil {
 		cfg.Server.HealthCheck = &config.HealthCheckConfig{CriticalDeps: []string{"database"}}
@@ -82,7 +83,7 @@ func buildAdminServer(
 			if tc.PIIConfig != nil {
 				opts = append(opts, entity.WithTenantPIIConfig(*tc.PIIConfig))
 			}
-			cfgTenants[slugStr] = entity.NewTenant(slug, tc.Name, tc.AuthHeader, tc.APIKeys, opts...)
+			cfgTenants[slugStr] = entity.NewTenant(slug, tc.Name, tc.AuthHeader, opts...)
 		}
 		tenantResolver := resolver.NewDBFirstTenantResolver(tenantRepo, cfgTenants)
 		if mode, err := value.ParseRetentionMode(cfg.DefaultRetentionMode()); err == nil {
@@ -98,16 +99,12 @@ func buildAdminServer(
 		syncCancel()
 
 		loadCtx, loadCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		dbTenants, err := tenantResolver.List(loadCtx)
+		_, err := tenantResolver.List(loadCtx)
 		loadCancel()
 		if err != nil {
 			logger.Error("failed to load tenants from db", slog.String("error", err.Error()))
 			os.Exit(1)
 		}
-
-		authMw := middleware.Auth(middleware.NewTenantProvider(dbTenants))
-		srv.RegisterAuth(authMw)
-		logger.Info("auth middleware registered", slog.Int("tenants", len(dbTenants)))
 	} else {
 		logger.Warn("no tenants configured, auth disabled")
 	}
@@ -163,7 +160,8 @@ func buildAdminServer(
 			srv.RegisterComplianceHandler(complianceHandler, tenantMw)
 		}
 
-		vkHandler := adminhandler.NewVirtualKeyHandler(vkRepo, auditAdapter)
+		// @sk-task 403-key-at-rest-encryption#T3.3: Wire auth cache into key handler for invalidation (AC-005)
+		vkHandler := adminhandler.NewVirtualKeyHandler(vkRepo, auditAdapter, vkCache)
 		srv.RegisterVirtualKeyHandler(vkHandler)
 
 		auditHandler := adminhandler.NewAuditHandler(auditAdapter)

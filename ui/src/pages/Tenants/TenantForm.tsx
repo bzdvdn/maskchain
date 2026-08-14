@@ -19,7 +19,6 @@ interface FormData {
   name: string
   slug: string
   auth_header: string
-  api_keys: string
   dictionaries: DictionaryItem[]
   pii_enabled: boolean
   pii_default_action: string
@@ -30,7 +29,6 @@ interface FormData {
 interface FormErrors {
   name?: string
   slug?: string
-  api_keys?: string
   server?: string
 }
 
@@ -46,7 +44,6 @@ export function TenantForm() {
     name: '',
     slug: '',
     auth_header: 'Authorization',
-    api_keys: '',
     dictionaries: [],
     pii_enabled: false,
     pii_default_action: 'mask',
@@ -66,7 +63,6 @@ export function TenantForm() {
           name: t.name,
           slug: t.slug,
           auth_header: t.auth_header,
-          api_keys: t.api_keys.join(', '),
           dictionaries: t.dictionaries || [],
           pii_enabled: t.pii_config?.enabled ?? false,
           pii_default_action: t.pii_config?.default_action ?? 'mask',
@@ -88,7 +84,6 @@ export function TenantForm() {
         e.slug = 'Slug must be lowercase alphanumeric with hyphens'
       }
     }
-    if (!form.api_keys.trim()) e.api_keys = 'At least one API key is required'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -100,7 +95,6 @@ export function TenantForm() {
     setSubmitting(true)
     setErrors({})
 
-    const keys = form.api_keys.split(',').map((k) => k.trim()).filter(Boolean)
     const piiCfg: PIIConfig | undefined = form.pii_enabled || form.pii_rules.length > 0
       ? {
           enabled: form.pii_enabled,
@@ -114,7 +108,6 @@ export function TenantForm() {
         const req: UpdateTenantRequest = {
           name: form.name,
           auth_header: form.auth_header || undefined,
-          api_keys: keys,
           dictionaries: form.dictionaries,
           pii_config: piiCfg,
           retention_mode: form.retention_mode,
@@ -127,7 +120,6 @@ export function TenantForm() {
           slug: form.slug,
           name: form.name,
           auth_header: form.auth_header || undefined,
-          api_keys: keys,
           dictionaries: form.dictionaries,
           pii_config: piiCfg,
           retention_mode: form.retention_mode,
@@ -222,21 +214,6 @@ export function TenantForm() {
             onChange={(e) => setField('auth_header', e.target.value)}
             placeholder="Authorization"
           />
-        </div>
-
-        <div className="form-field">
-          <label htmlFor="api_keys">
-            API Keys * (comma-separated)
-          </label>
-          <textarea
-            id="api_keys"
-            value={form.api_keys}
-            onChange={(e) => setField('api_keys', e.target.value)}
-            rows={2}
-            placeholder="sk-key-1, sk-key-2"
-            className={errors.api_keys ? 'input-error' : ''}
-          />
-          {errors.api_keys && <span className="field-error">{errors.api_keys}</span>}
         </div>
 
         <div className="form-field">

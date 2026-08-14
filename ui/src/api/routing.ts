@@ -40,6 +40,16 @@ export interface CostRateDto {
 const ROUTING = '/api/v1/routing'
 const COST = '/api/v1/analytics/cost-rates'
 
+/**
+ * isMaskedKey reports whether a provider secret value is the masked display
+ * form returned by the admin API (contains the "***" marker) rather than a
+ * real key. Used by the Routing page to keep existing secrets untouched when a
+ * provider is re-saved without changing its keys.
+ */
+export function isMaskedKey(v: string | undefined): boolean {
+  return !!v && v.includes('***')
+}
+
 function unwrap<T>(d: unknown): T {
   if (d && typeof d === 'object' && 'data' in (d as Record<string, unknown>)) {
     return (d as { data: T }).data

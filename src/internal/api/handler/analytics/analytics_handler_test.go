@@ -67,7 +67,7 @@ func setupTest(t *testing.T, store *mockUsageStore) *gin.Engine {
 
 func setTenant(c *gin.Context, slug string) {
 	s, _ := value.NewTenantSlug(slug)
-	t := entity.NewTenant(s, "", "", nil)
+	t := entity.NewTenant(s, "", "")
 	c.Set("tenant", t)
 }
 

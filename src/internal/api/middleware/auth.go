@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"net/http"
 	"strings"
 	"sync"
 
@@ -58,31 +57,9 @@ func (p *TenantProvider) Update(tenants []*entity.Tenant) {
 	p.tenants = tenants
 }
 
-// @sk-task tenant-profile-sync#T2.1: Multi-header auth middleware using TenantResolver (AC-002, AC-005)
+// @sk-task tenant-profile-sync#T2.1: Multi-header candidate collection for virtual-key auth (AC-002, AC-005)
 //
-// Auth handles the operation.
-func Auth(provider *TenantProvider) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		tenants := provider.Get()
-		if len(tenants) == 0 {
-			c.Next()
-			return
-		}
-		if isPublicPath(c.Request.URL.Path) {
-			c.Next()
-			return
-		}
-
-		t, ok := authenticate(c, tenants)
-		if !ok {
-			AbortWithError(c, http.StatusUnauthorized, ErrorCodeUnauthorized, "unauthorized")
-			return
-		}
-		c.Set(tenantKey, t)
-		c.Next()
-	}
-}
-
+// collectCandidates handles the operation.
 type candidate struct {
 	header string
 	key    string
@@ -115,24 +92,4 @@ func collectCandidates(c *gin.Context, tenants []*entity.Tenant) []candidate {
 		}
 	}
 	return candidates
-}
-
-func authenticate(c *gin.Context, tenants []*entity.Tenant) (*entity.Tenant, bool) {
-	for _, cand := range collectCandidates(c, tenants) {
-		if cand.key == "" {
-			continue
-		}
-		for _, t := range tenants {
-			for _, k := range t.APIKeys() {
-				if k == cand.key {
-					if t.AuthHeader() != cand.header {
-						AbortWithError(c, http.StatusUnauthorized, ErrorCodeUnauthorized, "unauthorized")
-						return nil, false
-					}
-					return t, true
-				}
-			}
-		}
-	}
-	return nil, false
 }

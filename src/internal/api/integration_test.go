@@ -17,9 +17,75 @@ import (
 	routingSvc "github.com/bzdvdn/maskchain/src/internal/domain/routing/service"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
+	"github.com/bzdvdn/maskchain/src/internal/domain/virtualkey"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 	"github.com/bzdvdn/maskchain/src/internal/ports"
 )
+
+type integrationVirtualKeyRepo struct {
+	keys []*virtualkey.VirtualKey
+}
+
+func (r *integrationVirtualKeyRepo) FindByKeyHash(_ context.Context, hash string) (*virtualkey.VirtualKey, error) {
+	for _, k := range r.keys {
+		if k.KeyHash == hash && k.Enabled {
+			return k, nil
+		}
+	}
+	return nil, virtualkey.ErrNotFound
+}
+
+func (r *integrationVirtualKeyRepo) GetById(_ context.Context, id string) (*virtualkey.VirtualKey, error) {
+	for _, k := range r.keys {
+		if k.ID == id {
+			return k, nil
+		}
+	}
+	return nil, virtualkey.ErrNotFound
+}
+
+func (r *integrationVirtualKeyRepo) ListByTenant(_ context.Context, tenantID string) ([]*virtualkey.VirtualKey, error) {
+	var out []*virtualkey.VirtualKey
+	for _, k := range r.keys {
+		if k.TenantID == tenantID {
+			out = append(out, k)
+		}
+	}
+	return out, nil
+}
+
+func (r *integrationVirtualKeyRepo) List(_ context.Context) ([]*virtualkey.VirtualKey, error) {
+	return r.keys, nil
+}
+
+func (r *integrationVirtualKeyRepo) Create(_ context.Context, k *virtualkey.VirtualKey) error {
+	r.keys = append(r.keys, k)
+	return nil
+}
+
+func (r *integrationVirtualKeyRepo) Update(_ context.Context, k *virtualkey.VirtualKey) error {
+	for i, item := range r.keys {
+		if item.ID == k.ID {
+			r.keys[i] = k
+			return nil
+		}
+	}
+	return virtualkey.ErrNotFound
+}
+
+func (r *integrationVirtualKeyRepo) Delete(_ context.Context, id string) error {
+	for i, item := range r.keys {
+		if item.ID == id {
+			r.keys = append(r.keys[:i], r.keys[i+1:]...)
+			return nil
+		}
+	}
+	return virtualkey.ErrNotFound
+}
+
+func (r *integrationVirtualKeyRepo) BackfillFromLegacy(_ context.Context, _ map[string][]string) (int, error) {
+	return 0, nil
+}
 
 type integrationMockScanner struct {
 	resp *appshield.ScanResponse
@@ -55,7 +121,7 @@ func TestIntegration_FullCycle(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	slug, _ := value.NewTenantSlug("test-tenant")
-	tenant := entity.NewTenant(slug, "test-tenant", "Authorization", []string{"valid-key"},
+	tenant := entity.NewTenant(slug, "test-tenant", "Authorization",
 		entity.WithTenantPIIConfig(entity.PIIConfig{
 			Enabled: true,
 			Rules:   []entity.PIARule{{Label: "test", Type: "regex", Pattern: "NOMATCH", Action: "block"}},
@@ -63,7 +129,12 @@ func TestIntegration_FullCycle(t *testing.T) {
 	)
 
 	engine.Use(middleware.RequestID())
-	engine.Use(middleware.Auth(middleware.NewTenantProvider([]*entity.Tenant{tenant})))
+	engine.Use(middleware.VirtualKeyAuth(
+		&integrationVirtualKeyRepo{keys: []*virtualkey.VirtualKey{
+			{ID: "k1", TenantID: "test-tenant", KeyHash: virtualkey.KeyHash("valid-key"), Enabled: true},
+		}},
+		middleware.NewTenantProvider([]*entity.Tenant{tenant}),
+	))
 
 	scanner := &integrationMockScanner{
 		resp: &appshield.ScanResponse{

@@ -29,7 +29,6 @@ type Tenant struct {
 	slug          value.TenantSlug
 	name          string
 	authHeader    string
-	apiKeys       []string
 	dictionaries  []*dictionary.Dictionary
 	piiConfig     PIIConfig
 	retentionMode value.RetentionMode
@@ -51,12 +50,11 @@ func WithTenantRetentionMode(mode value.RetentionMode) TenantOption {
 	return func(t *Tenant) { t.retentionMode = mode }
 }
 
-func NewTenant(slug value.TenantSlug, name string, authHeader string, apiKeys []string, opts ...TenantOption) *Tenant {
+func NewTenant(slug value.TenantSlug, name string, authHeader string, opts ...TenantOption) *Tenant {
 	t := &Tenant{
 		slug:       slug,
 		name:       name,
 		authHeader: authHeader,
-		apiKeys:    apiKeys,
 		createdAt:  time.Now().UTC(),
 		updatedAt:  time.Now().UTC(),
 	}
@@ -69,7 +67,6 @@ func NewTenant(slug value.TenantSlug, name string, authHeader string, apiKeys []
 func (t *Tenant) Slug() value.TenantSlug                         { return t.slug }
 func (t *Tenant) Name() string                                   { return t.name }
 func (t *Tenant) AuthHeader() string                             { return t.authHeader }
-func (t *Tenant) APIKeys() []string                              { return t.apiKeys }
 func (t *Tenant) Dictionaries() []*dictionary.Dictionary         { return t.dictionaries }
 func (t *Tenant) SetDictionaries(dicts []*dictionary.Dictionary) { t.dictionaries = dicts }
 func (t *Tenant) PIIConfig() PIIConfig                           { return t.piiConfig }

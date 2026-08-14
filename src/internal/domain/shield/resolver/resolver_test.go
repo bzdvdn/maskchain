@@ -71,7 +71,7 @@ func TestDBFirstTenantResolver_Get_FromRepo(t *testing.T) {
 
 	repo := &mockTenantRepo{
 		getFn: func(_ context.Context, s value.TenantSlug) (*entity.Tenant, error) {
-			return entity.NewTenant(s, "Alpha", "Bearer x", nil), nil
+			return entity.NewTenant(s, "Alpha", "Bearer x"), nil
 		},
 	}
 	r := NewDBFirstTenantResolver(repo, nil)
@@ -98,7 +98,7 @@ func TestDBFirstTenantResolver_Get_FallbackToConfig(t *testing.T) {
 			return nil, nil
 		},
 	}
-	cfgTenant := entity.NewTenant(slug, "Config Tenant", "Bearer cfg", nil)
+	cfgTenant := entity.NewTenant(slug, "Config Tenant", "Bearer cfg")
 	r := NewDBFirstTenantResolver(repo, map[string]*entity.Tenant{"cfg-tenant": cfgTenant})
 
 	tenant, err := r.Get(ctx, slug)
@@ -141,7 +141,7 @@ func TestDBFirstTenantResolver_EffectiveMode_DefaultsFull(t *testing.T) {
 
 	repo := &mockTenantRepo{
 		getFn: func(_ context.Context, s value.TenantSlug) (*entity.Tenant, error) {
-			return entity.NewTenant(s, "Alpha", "Bearer x", nil), nil
+			return entity.NewTenant(s, "Alpha", "Bearer x"), nil
 		},
 	}
 	r := NewDBFirstTenantResolver(repo, nil)
@@ -162,7 +162,7 @@ func TestDBFirstTenantResolver_EffectiveMode_GlobalDefault(t *testing.T) {
 
 	repo := &mockTenantRepo{
 		getFn: func(_ context.Context, s value.TenantSlug) (*entity.Tenant, error) {
-			return entity.NewTenant(s, "NoCfg", "Bearer x", nil), nil
+			return entity.NewTenant(s, "NoCfg", "Bearer x"), nil
 		},
 	}
 	r := NewDBFirstTenantResolver(repo, nil)
@@ -184,7 +184,7 @@ func TestDBFirstTenantResolver_EffectiveMode_ExplicitTenantWins(t *testing.T) {
 
 	repo := &mockTenantRepo{
 		getFn: func(_ context.Context, s value.TenantSlug) (*entity.Tenant, error) {
-			return entity.NewTenant(s, "Meta", "Bearer x", nil,
+			return entity.NewTenant(s, "Meta", "Bearer x",
 				entity.WithTenantRetentionMode(value.RetentionModeMeta)), nil
 		},
 	}

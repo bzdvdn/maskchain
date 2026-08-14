@@ -63,11 +63,6 @@ func (h *TenantHandler) CreateTenant(c *gin.Context) {
 		return
 	}
 
-	if len(req.APIKeys) == 0 {
-		middleware.AbortWithError(c, http.StatusBadRequest, middleware.ErrorCodeValidationError, "api_keys must not be empty")
-		return
-	}
-
 	authHeader := req.AuthHeader
 	if authHeader == "" {
 		authHeader = "X-Mask-Authorization"
@@ -90,7 +85,7 @@ func (h *TenantHandler) CreateTenant(c *gin.Context) {
 		}
 		opts = append(opts, entity.WithTenantRetentionMode(mode))
 	}
-	tenant := entity.NewTenant(slug, req.Name, authHeader, req.APIKeys, opts...)
+	tenant := entity.NewTenant(slug, req.Name, authHeader, opts...)
 
 	if err := h.repo.Create(c.Request.Context(), tenant); err != nil {
 		if errors.Is(err, domainErr.ErrDuplicateSlug) {
@@ -161,11 +156,6 @@ func (h *TenantHandler) UpdateTenant(c *gin.Context) {
 		return
 	}
 
-	if len(req.APIKeys) == 0 {
-		middleware.AbortWithError(c, http.StatusBadRequest, middleware.ErrorCodeValidationError, "api_keys must not be empty")
-		return
-	}
-
 	authHeader := req.AuthHeader
 	if authHeader == "" {
 		authHeader = "X-Mask-Authorization"
@@ -192,7 +182,7 @@ func (h *TenantHandler) UpdateTenant(c *gin.Context) {
 			opts = append(opts, entity.WithTenantRetentionMode(existing.RetentionMode()))
 		}
 	}
-	tenant := entity.NewTenant(slug, req.Name, authHeader, req.APIKeys, opts...)
+	tenant := entity.NewTenant(slug, req.Name, authHeader, opts...)
 
 	if err := h.repo.Update(c.Request.Context(), tenant); err != nil {
 		if errors.Is(err, domainErr.ErrTenantNotFound) {

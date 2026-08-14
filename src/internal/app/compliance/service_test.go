@@ -90,7 +90,7 @@ func hipaaRegistry(t *testing.T) *compliance.Registry {
 
 func testTenant(slug string) *entity.Tenant {
 	s, _ := value.NewTenantSlug(slug)
-	return entity.NewTenant(s, slug, "X-Auth", []string{"key-" + slug}, entity.WithTenantPIIConfig(entity.PIIConfig{}))
+	return entity.NewTenant(s, slug, "X-Auth", entity.WithTenantPIIConfig(entity.PIIConfig{}))
 }
 
 func TestApplyPackService_AppliesPreset(t *testing.T) {
@@ -167,7 +167,7 @@ func TestComplianceReportService_ActiveAndDeviated(t *testing.T) {
 
 	t.Run("customized rule reported deviated", func(t *testing.T) {
 		s, _ := value.NewTenantSlug("acme")
-		tenant := entity.NewTenant(s, "acme", "X-Auth", []string{"k"}, entity.WithTenantPIIConfig(entity.PIIConfig{
+		tenant := entity.NewTenant(s, "acme", "X-Auth", entity.WithTenantPIIConfig(entity.PIIConfig{
 			Enabled: true,
 			Rules: []entity.PIARule{
 				{Type: string(entity.DetectorTypeRegex), Action: string(entity.ReactionReview)},

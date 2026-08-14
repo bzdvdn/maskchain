@@ -24,7 +24,7 @@ func TestRateLimitWiringNilValkeyPassthrough(t *testing.T) {
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		slug, _ := value.NewTenantSlug("test-tenant")
-		c.Set("tenant", entity.NewTenant(slug, "Test", "", nil))
+		c.Set("tenant", entity.NewTenant(slug, "Test", ""))
 		c.Next()
 	})
 

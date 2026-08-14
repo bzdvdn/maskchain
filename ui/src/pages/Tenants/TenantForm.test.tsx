@@ -36,7 +36,6 @@ describe('TenantForm retention mode', () => {
       slug: 'acme',
       name: 'Acme',
       auth_header: 'Authorization',
-      api_keys: ['sk-1'],
       retention_mode: 'meta',
       created_at: '2026-08-10T10:00:00Z',
       updated_at: '2026-08-10T10:00:00Z',
@@ -46,7 +45,6 @@ describe('TenantForm retention mode', () => {
 
     fireEvent.change(screen.getByLabelText(/Name \*/), { target: { value: 'Acme' } })
     fireEvent.change(screen.getByLabelText(/Slug \*/), { target: { value: 'acme' } })
-    fireEvent.change(screen.getByLabelText(/API Keys/), { target: { value: 'sk-1' } })
 
     const select = screen.getByLabelText(/Retention Mode/)
     expect(select).toBeTruthy()

@@ -27,7 +27,6 @@ export interface TenantListItem {
   slug: string
   name: string
   auth_header: string
-  api_keys: string[]
   pii_config?: PIIConfig
   retention_mode?: RetentionMode
   created_at: string
@@ -38,7 +37,6 @@ export interface TenantResponse {
   slug: string
   name: string
   auth_header: string
-  api_keys: string[]
   dictionaries?: DictionaryItem[]
   pii_config?: PIIConfig
   retention_mode?: RetentionMode
@@ -50,7 +48,6 @@ export interface CreateTenantRequest {
   slug: string
   name: string
   auth_header?: string
-  api_keys: string[]
   dictionaries?: DictionaryItem[]
   pii_config?: PIIConfig
   retention_mode?: RetentionMode
@@ -59,7 +56,6 @@ export interface CreateTenantRequest {
 export interface UpdateTenantRequest {
   name: string
   auth_header?: string
-  api_keys: string[]
   dictionaries?: DictionaryItem[]
   pii_config?: PIIConfig
   retention_mode?: RetentionMode

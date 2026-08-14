@@ -14,13 +14,22 @@ import (
 )
 
 // @sk-task 300-virtual-keys#T3.1: VirtualKeyHandler manages virtual keys via admin API (AC-001)
+// @sk-task 403-key-at-rest-encryption#T3.3: VirtualKeyHandler invalidates the auth cache on mutations (AC-005)
 type VirtualKeyHandler struct {
 	repo     virtualkey.VirtualKeyRepository
 	auditLog AuditLogger
+	cache    *middleware.VirtualKeyCache
 }
 
-func NewVirtualKeyHandler(repo virtualkey.VirtualKeyRepository, auditLog AuditLogger) *VirtualKeyHandler {
-	return &VirtualKeyHandler{repo: repo, auditLog: auditLog}
+// NewVirtualKeyHandler builds a handler. A non-nil cache is invalidated after
+// create/update/delete so gateway auth does not serve stale keys (revoked keys
+// stop authenticating immediately in-process).
+func NewVirtualKeyHandler(repo virtualkey.VirtualKeyRepository, auditLog AuditLogger, cache ...*middleware.VirtualKeyCache) *VirtualKeyHandler {
+	var vkCache *middleware.VirtualKeyCache
+	if len(cache) > 0 {
+		vkCache = cache[0]
+	}
+	return &VirtualKeyHandler{repo: repo, auditLog: auditLog, cache: vkCache}
 }
 
 // @sk-task 300-virtual-keys#T3.1: Create generates a key and returns plaintext once (AC-001)
@@ -70,6 +79,7 @@ func (h *VirtualKeyHandler) Create(c *gin.Context) {
 		middleware.AbortWithError(c, http.StatusInternalServerError, middleware.ErrorCodeInternal, "failed to create key")
 		return
 	}
+	h.invalidateKey(key.ID)
 
 	h.writeKeyAudit(c, "create_key", key.ID, map[string]any{"tenant_id": req.TenantID, "label": req.Label})
 
@@ -161,6 +171,7 @@ func (h *VirtualKeyHandler) Update(c *gin.Context) {
 		middleware.AbortWithError(c, http.StatusInternalServerError, middleware.ErrorCodeInternal, "failed to update key")
 		return
 	}
+	h.invalidateKey(key.ID)
 
 	h.writeKeyAudit(c, "update_key", key.ID, map[string]any{"tenant_id": key.TenantID, "label": key.Label})
 	c.JSON(http.StatusOK, dto.VirtualKeyToResponse(key))
@@ -176,8 +187,16 @@ func (h *VirtualKeyHandler) Delete(c *gin.Context) {
 		middleware.AbortWithError(c, http.StatusInternalServerError, middleware.ErrorCodeInternal, "failed to revoke key")
 		return
 	}
+	h.invalidateKey(c.Param("id"))
 	h.writeKeyAudit(c, "revoke_key", c.Param("id"), nil)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func (h *VirtualKeyHandler) invalidateKey(keyID string) {
+	if h.cache == nil {
+		return
+	}
+	h.cache.InvalidateKey(keyID)
 }
 
 func (h *VirtualKeyHandler) writeKeyAudit(c *gin.Context, action, target string, details map[string]any) {

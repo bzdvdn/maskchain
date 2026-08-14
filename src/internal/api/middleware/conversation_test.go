@@ -39,7 +39,7 @@ func newTestConversationMiddleware(t *testing.T) (*ConversationMiddleware, *reco
 
 func testTenantCtx(c *gin.Context) {
 	slug, _ := value.NewTenantSlug("tenant-a")
-	c.Set(tenantKey, entity.NewTenant(slug, "Tenant A", "", nil))
+	c.Set(tenantKey, entity.NewTenant(slug, "Tenant A", ""))
 }
 
 // @sk-test conversation-logging#T2.2: TestConversationMiddlewareCapturesExchange (AC-001, AC-010)
@@ -343,7 +343,7 @@ func TestConversationMiddlewareShieldIntegrationCapture(t *testing.T) {
 
 	dict := dictionary.NewDictionary("names", []interface{}{"original-name"}, dictionary.MatchModeExact)
 	slug, _ := value.NewTenantSlug("tenant-a")
-	tenant := entity.NewTenant(slug, "Tenant A", "Authorization", nil,
+	tenant := entity.NewTenant(slug, "Tenant A", "Authorization",
 		entity.WithTenantDictionaries([]*dictionary.Dictionary{dict}),
 		entity.WithTenantPIIConfig(entity.PIIConfig{
 			Enabled: true,
@@ -447,7 +447,7 @@ func TestConversationMiddlewareShieldIntegrationStream(t *testing.T) {
 
 	dict := dictionary.NewDictionary("names", []interface{}{"original-name"}, dictionary.MatchModeExact)
 	slug, _ := value.NewTenantSlug("tenant-a")
-	tenant := entity.NewTenant(slug, "Tenant A", "Authorization", nil,
+	tenant := entity.NewTenant(slug, "Tenant A", "Authorization",
 		entity.WithTenantDictionaries([]*dictionary.Dictionary{dict}),
 		entity.WithTenantPIIConfig(entity.PIIConfig{Enabled: false}),
 	)
@@ -502,7 +502,7 @@ func TestConversationMiddlewareShieldIntegrationFailOpen(t *testing.T) {
 
 	var handlerCalled bool
 	slug, _ := value.NewTenantSlug("tenant-a")
-	tenant := entity.NewTenant(slug, "Tenant A", "Authorization", nil,
+	tenant := entity.NewTenant(slug, "Tenant A", "Authorization",
 		entity.WithTenantPIIConfig(entity.PIIConfig{
 			Enabled:       true,
 			DefaultAction: "allow",
@@ -538,7 +538,7 @@ func TestConversationMiddlewareShieldIntegrationFailOpen(t *testing.T) {
 func newTenantWithRetention(t *testing.T, mode value.RetentionMode) *entity.Tenant {
 	t.Helper()
 	slug, _ := value.NewTenantSlug("tenant-a")
-	return entity.NewTenant(slug, "Tenant A", "", nil, entity.WithTenantRetentionMode(mode))
+	return entity.NewTenant(slug, "Tenant A", "", entity.WithTenantRetentionMode(mode))
 }
 
 // @sk-test 402-zero-retention-mode#T3.2: none mode produces no record (AC-003)
