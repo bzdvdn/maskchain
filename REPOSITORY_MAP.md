@@ -14,18 +14,20 @@
 - `src/internal/infra/` — infrastructure: config, logging, metrics, telemetry
 - `src/internal/api/` — HTTP/gRPC handlers, middleware, request/response types
 - `src/pkg/` — shared utilities (future)
-- `ui/` — Vite + React + TypeScript frontend (profiles management, incidents viewer)
+- `ui/` — Vite + React + TypeScript operator console (LiteLLM-class UI v2)
   - `ui/embed.go` — Go embed для встраивания статики в admin (не gateway)
-  - `ui/src/pages/Profiles/` — ProfileList, ProfileDetail, ProfileForm
-  - `ui/src/pages/Incidents/` — IncidentList, IncidentDetail
-  - `ui/src/pages/Keys.tsx` — Virtual Keys admin page
-  - `ui/src/pages/Budgets.tsx` — Budget dashboard (progress bars, create/edit, history)
-  - `ui/src/pages/Tenants/TenantDetail.tsx` — tenant detail incl. one-click compliance pack apply + report view
-  - `ui/src/components/` — DictionaryEditor, PreprocessorEditor, ErrorBoundary
-  - `ui/src/api/profiles.ts` — API client для `/api/v1/profiles/*`
-  - `ui/src/api/incidents.ts` — API client для `/api/v1/incidents/*`
-  - `ui/src/api/keys.ts`, `ui/src/api/budgets.ts` — API clients для virtual keys/budgets
-  - `ui/src/api/tenants.ts` — API client для `/api/v1/tenants/*` incl. `applyCompliancePack` / `getComplianceReport`
+  - `ui/src/components/Layout.tsx` — sidebar IA (Overview/Traffic/Governance/Operations/System), header with contextual actions + workspace switcher
+  - `ui/src/components/ui/` — v2 primitives: Card, PageHeader, Status (dot/pill), Segmented, ChipTag/ChipInput, Switch, ProgressBar, Spinner, EmptyState + `v2.css`
+  - `ui/src/utils/format.ts` — locale-neutral relativeTime/absDate/money/fmtTokens
+  - `ui/src/styles/` — design tokens v2 (tokens.css), base.css, components.css
+  - `ui/src/pages/Dashboard.tsx` — Operations HQ (KPI+delta, trend toggle, Needs-attention, onboarding)
+  - `ui/src/pages/Analytics.tsx` — persisted range, compare, day/model/tenant tabs
+  - `ui/src/pages/Keys.tsx` — endpoint quickstart, create-key drawer, spend/budget, revocation
+  - `ui/src/pages/Routing.tsx` — provider health cards + rules/rates tables
+  - `ui/src/pages/Tenants/TenantDetail.tsx` — Overview/Policies/Compliance/Activity tabs + deviation banner
+  - `ui/src/pages/Settings.tsx` — live system status from `/api/v1/admin/status`
+  - Legacy pages: Login, Sessions, Conversations, Budgets, AuditLog, Swagger, Tenants list/form
+  - `ui/src/api/` — API clients (analytics w/ tenant scope, keys, budgets, routing, tenants, conversations, admin status)
 - `specs/active/` — active spec artifacts (speckeep-managed)
 - `deployments/` — Docker, migrations, docker-compose configs
 

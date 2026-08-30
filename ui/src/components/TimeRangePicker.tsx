@@ -147,4 +147,30 @@ export function useRange(v: RangeValue): { from: string; to: string } {
   return useMemo(() => ({ from: v.from, to: v.to }), [v.from, v.to])
 }
 
+export function usePersistedRange(storageKey: string): [RangeValue, (v: RangeValue) => void] {
+  const [range, setRange] = useState<RangeValue>(() => {
+    try {
+      const raw = localStorage.getItem(storageKey)
+      if (raw) {
+        const parsed = JSON.parse(raw) as RangeValue
+        if (parsed && typeof parsed.mode === 'string') return parsed
+      }
+    } catch {
+      /* fall through to default */
+    }
+    return defaultRange
+  })
+
+  const persist = useCallback((v: RangeValue) => {
+    setRange(v)
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(v))
+    } catch {
+      /* storage unavailable */
+    }
+  }, [storageKey])
+
+  return [range, persist]
+}
+
 export const defaultRange: RangeValue = { mode: '7d', from: '', to: '' }

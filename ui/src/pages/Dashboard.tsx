@@ -1,119 +1,275 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { BarChart3, KeyRound, Shield, Users, Wallet, Zap, AlertTriangle, Plus } from 'lucide-react'
 import { TimeRangePicker, useRange, defaultRange, type RangeValue } from '../components/TimeRangePicker'
-import { TimeSeriesChart } from '../components/TimeSeriesChart'
-import { getAnalyticsTokens, getAnalyticsSeries, type SeriesPoint, type TokenRecord } from '../api/analytics'
+import { Segmented, StatusPill, Button, type StatusTone } from '../components/ui'
+import { relativeTime, money, fmtTokens, groupNum } from '../utils/format'
+import {
+  getAnalyticsTokens,
+  getAnalyticsCost,
+  getAnalyticsSeries,
+  type SeriesPoint,
+} from '../api/analytics'
+import { listBudgets, listBudgetsByTenant } from '../api/budgets'
+import { listProviders } from '../api/routing'
+import { listKeys } from '../api/keys'
+import { listConversations } from '../api/conversations'
 
-interface TokenTotals {
-  total_input_tokens: number
-  total_output_tokens: number
+type Metric = 'tokens' | 'cost' | 'requests'
+
+const METRICS: { key: Metric; label: string }[] = [
+  { key: 'tokens', label: 'Tokens' },
+  { key: 'cost', label: 'Cost' },
+  { key: 'requests', label: 'Requests' },
+]
+
+interface AttentionItem {
+  tone: StatusTone
+  title: string
+  detail: string
+  to?: string
 }
 
-interface Session {
-  session_id: string
-  tenant_id: string
-  model: string
-  status: string
-  token_count: number
-  expires_at: string
+function shiftWindow(from: string, to: string): { from: string; to: string } {
+  const f = new Date(from)
+  const t = new Date(to)
+  if (Number.isNaN(f.getTime()) || Number.isNaN(t.getTime())) {
+    return { from, to }
+  }
+  const span = t.getTime() - f.getTime()
+  return { from: new Date(f.getTime() - span).toISOString(), to: f.toISOString() }
 }
 
-interface SessionsData {
-  items: Session[]
+function deltaPct(cur: number, prev: number): number | null {
+  if (prev <= 0) return cur > 0 ? 100 : null
+  return Math.round(((cur - prev) / prev) * 1000) / 10
+}
+
+function seriesValue(p: SeriesPoint, metric: Metric): number {
+  if (metric === 'cost') return p.cost
+  if (metric === 'requests') return p.requests
+  return p.input_tokens + p.output_tokens
+}
+
+function TrendChart({ points, metric }: { points: SeriesPoint[]; metric: Metric }) {
+  const values = points.map((p) => seriesValue(p, metric))
+  if (values.length === 0) {
+    return <div className="u-center muted">No data for this period</div>
+  }
+  const max = Math.max(1, ...values)
+  const W = 600
+  const H = 200
+  const step = W / Math.max(1, values.length - 1)
+  const path = values
+    .map((v, i) => `${i === 0 ? 'M' : 'L'}${i * step},${H - (v / max) * (H - 20) - 10}`)
+    .join(' ')
+  const area = `${path} L${W},${H} L0,${H} Z`
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" className="trend-svg">
+      <defs>
+        <linearGradient id="hqTrend" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.32" />
+          <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {[40, 80, 120, 160].map((y) => (
+        <line key={y} x1="0" y1={y} x2={W} y2={y} stroke="var(--border-soft)" />
+      ))}
+      <path d={area} fill="url(#hqTrend)" />
+      <path d={path} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function Sparkline({ points, metric }: { points: SeriesPoint[]; metric: Metric }) {
+  const values = points.map((p) => seriesValue(p, metric))
+  const max = Math.max(1, ...values)
+  const step = 120 / Math.max(1, values.length - 1)
+  const d = values.map((v, i) => `${i === 0 ? 'M' : 'L'}${i * step},${30 - (v / max) * 26}`).join(' ')
+  return (
+    <svg viewBox="0 0 120 30" preserveAspectRatio="none" width="100%" height="30" className="spark-svg">
+      <path d={d} fill="none" stroke="var(--accent)" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  )
 }
 
 export function Dashboard() {
+  const navigate = useNavigate()
   const [range, setRange] = useState<RangeValue>(defaultRange)
   const { from, to } = useRange(range)
-  const [records, setRecords] = useState<TokenRecord[]>([])
-  const [totals, setTotals] = useState<TokenTotals>({ total_input_tokens: 0, total_output_tokens: 0 })
+  const [metric, setMetric] = useState<Metric>('tokens')
+  const [workspace, setWorkspace] = useState<string>(() => localStorage.getItem('maskchain.workspace') ?? '')
+
+  const [totals, setTotals] = useState({ total_input_tokens: 0, total_output_tokens: 0 })
+  const [totalCost, setTotalCost] = useState(0)
+  const [totalRequests, setTotalRequests] = useState(0)
   const [series, setSeries] = useState<SeriesPoint[]>([])
-  const [sessions, setSessions] = useState<Session[]>([])
+  const [prevTotals, setPrevTotals] = useState({ total_output_tokens: 0, total_input_tokens: 0, total_cost: 0 })
+  const [passRate, setPassRate] = useState(0)
+  const [attention, setAttention] = useState<AttentionItem[]>([])
+  const [activity, setActivity] = useState<{ id: string; tenant_id: string; model: string; status: string; created_at: string }[]>([])
   const [error, setError] = useState('')
-  const [refreshSec, setRefreshSec] = useState(10)
-
-  const fetchTokens = useCallback(() => {
-    getAnalyticsTokens(from, to)
-      .then((body) => {
-        setRecords(body.records ?? [])
-        setTotals(body.totals ?? { total_input_tokens: 0, total_output_tokens: 0 })
-        setError('')
-      })
-      .catch(() => setError('No data yet'))
-  }, [from, to])
-
-  const fetchSeries = useCallback(() => {
-    getAnalyticsSeries(from, to)
-      .then((d) => setSeries(Array.isArray(d.series) ? d.series : []))
-      .catch(() => {})
-  }, [from, to])
-
-  function fetchSessions() {
-    fetch('/api/v1/sessions', { credentials: 'include' })
-      .then((r) => {
-        if (!r.ok) throw new Error('fetch failed')
-        return r.json()
-      })
-      .then((body) => {
-        const d: SessionsData = body.data ?? body
-        setSessions(Array.isArray(d.items) ? d.items.slice(0, 5) : [])
-      })
-      .catch(() => {})
-  }
 
   useEffect(() => {
-    fetchTokens()
-    fetchSeries()
-    fetchSessions()
-    if (refreshSec > 0) {
-      const interval = setInterval(() => {
-        fetchTokens()
-        fetchSeries()
-        fetchSessions()
-      }, refreshSec * 1000)
-      return () => clearInterval(interval)
+    const onWorkspace = (e: Event) => setWorkspace((e as CustomEvent<string>).detail)
+    window.addEventListener('maskchain:workspace', onWorkspace)
+    return () => window.removeEventListener('maskchain:workspace', onWorkspace)
+  }, [])
+
+  const loadKpis = useCallback(async () => {
+    const prev = shiftWindow(from, to)
+    try {
+      const [curToks, curCost, prevToks, prevCost] = await Promise.all([
+        getAnalyticsTokens(from, to, workspace),
+        getAnalyticsCost(from, to, workspace),
+        getAnalyticsTokens(prev.from, prev.to, workspace),
+        getAnalyticsCost(prev.from, prev.to, workspace),
+      ])
+      setTotals(curToks.totals)
+      setTotalCost(curCost.totals?.total_cost ?? 0)
+      setTotalRequests(curCost.totals?.request_count ?? 0)
+      setPrevTotals({
+        total_input_tokens: prevToks.totals?.total_input_tokens ?? 0,
+        total_output_tokens: prevToks.totals?.total_output_tokens ?? 0,
+        total_cost: prevCost.totals?.total_cost ?? 0,
+      })
+      setError('')
+    } catch {
+      setError('No data yet')
     }
-  }, [fetchTokens, fetchSeries, refreshSec])
+  }, [from, to, workspace])
+
+  const loadSeries = useCallback(async () => {
+    try {
+      const d = await getAnalyticsSeries(from, to, workspace)
+      setSeries(Array.isArray(d.series) ? d.series : [])
+    } catch {
+      setSeries([])
+    }
+  }, [from, to, workspace])
+
+  const loadAttention = useCallback(async () => {
+    const items: AttentionItem[] = []
+    try {
+      const budgets = workspace ? await listBudgetsByTenant(workspace) : await listBudgets()
+      const list = budgets?.data ?? budgets ?? []
+      for (const b of list) {
+        if (!b.hard_limit) continue
+        const pct = (b.spent / b.hard_limit) * 100
+        if (pct >= 100) {
+          items.push({ tone: 'red', title: 'Budget exhausted', detail: `${b.tenant_id} hit ${money(b.hard_limit)} / ${b.type}`, to: '/budgets' })
+        } else if (pct >= 70) {
+          items.push({ tone: 'amber', title: `Budget at ${Math.round(pct)}%`, detail: `${b.tenant_id} — ${money(b.spent)} of ${money(b.hard_limit)}`, to: '/budgets' })
+        }
+      }
+    } catch {
+      /* attention panel degrades gracefully */
+    }
+    try {
+      const providers = await listProviders()
+      for (const p of Array.isArray(providers) ? providers : []) {
+        if (p.status === 'down') items.push({ tone: 'red', title: 'Provider down', detail: `${p.name} unreachable`, to: '/routing' })
+        else if (p.status === 'degraded') items.push({ tone: 'amber', title: 'Provider degraded', detail: p.name, to: '/routing' })
+      }
+    } catch {
+      /* ignore */
+    }
+    try {
+      const keys = await listKeys()
+      const rows = Array.isArray(keys?.data) ? keys.data : Array.isArray(keys) ? keys : []
+      const expiring = rows.filter((k) => k.expires_at && new Date(k.expires_at).getTime() - Date.now() < 7 * 86400_000 && new Date(k.expires_at).getTime() > Date.now())
+      if (expiring.length > 0) {
+        items.push({ tone: 'blue', title: 'Keys expiring', detail: `${expiring.length} virtual key${expiring.length > 1 ? 's' : ''} expire within 7 days`, to: '/keys' })
+      }
+    } catch {
+      /* ignore */
+    }
+    try {
+      const conv = await listConversations(1, 100)
+      const convRows = Array.isArray(conv.items) ? conv.items : []
+      const blocked = convRows.filter((c) => c.status === 'blocked').length
+      if (blocked > 0) items.push({ tone: 'amber', title: 'Requests blocked', detail: `${blocked} messages blocked · last 100`, to: '/conversations' })
+    } catch {
+      /* ignore */
+    }
+    setAttention(items.slice(0, 5))
+  }, [workspace])
+
+  const loadActivity = useCallback(async () => {
+    try {
+      const conv = await listConversations(1, 100)
+      const rows = Array.isArray(conv.items) ? conv.items : []
+      setActivity(rows.slice(0, 6).map((c) => ({ id: c.id, tenant_id: c.tenant_id, model: c.model, status: c.status, created_at: c.created_at })))
+    } catch {
+      setActivity([])
+    }
+  }, [])
+
+  useEffect(() => {
+    loadKpis()
+    loadAttention()
+    loadActivity()
+  }, [loadKpis, loadAttention, loadActivity])
+
+  useEffect(() => {
+    loadSeries()
+  }, [loadSeries, metric])
+
+  useEffect(() => {
+    let active = true
+    listConversations(1, 100)
+      .then((conv) => {
+        if (!active) return
+        const rows = Array.isArray(conv.items) ? conv.items : []
+        const ok = rows.filter((c) => c.status === 'ok').length
+        setPassRate(rows.length > 0 ? Math.round((ok / rows.length) * 1000) / 10 : 0)
+      })
+      .catch(() => active && setPassRate(0))
+    return () => {
+      active = false
+    }
+  }, [workspace])
 
   const tokensTotal = totals.total_input_tokens + totals.total_output_tokens
-  const activeTenants = new Set(records.map((r) => r.tenant_id)).size
+  const tokensDelta = deltaPct(tokensTotal, prevTotals.total_input_tokens + prevTotals.total_output_tokens)
+  const costDelta = deltaPct(totalCost, prevTotals.total_cost)
+
+  const firstRun = series.length === 0 && tokensTotal === 0 && attention.length === 0 && activity.length === 0 && !error
 
   const cards = [
-    { label: 'Requests', value: records.length },
-    { label: 'Input Tokens', value: totals.total_input_tokens.toLocaleString() },
-    { label: 'Output Tokens', value: totals.total_output_tokens.toLocaleString() },
-    { label: 'Total Tokens', value: tokensTotal.toLocaleString() },
-    { label: 'Active Tenants', value: activeTenants },
-    { label: 'Models Used', value: new Set(records.map((r) => r.model)).size },
+    { label: 'Spend · last 24h', value: money(totalCost), delta: costDelta },
+    { label: 'Requests · last 24h', value: groupNum(totalRequests), delta: null },
+    { label: 'Tokens · last 24h', value: fmtTokens(tokensTotal), delta: tokensDelta },
+    { label: 'Pass rate · last 100', value: `${passRate}%`, delta: null },
   ]
-
-  const modelTotals: Record<string, { input: number; output: number }> = {}
-  for (const r of records) {
-    if (!modelTotals[r.model]) modelTotals[r.model] = { input: 0, output: 0 }
-    modelTotals[r.model].input += r.total_input_tokens
-    modelTotals[r.model].output += r.total_output_tokens
-  }
 
   return (
     <div>
-      <div className="card" style={{ marginBottom: 24 }}>
+      {firstRun ? (
+        <div className="onboard">
+          <div className="onboard-title">Welcome to MaskChain</div>
+          <p className="muted-sm">Your privacy-safe LLM gateway is up. Issue a virtual key and route your first request.</p>
+          <div className="codebox u-block">
+            curl https://gw.maskchain.dev/v1/chat/completions \<br />
+            &nbsp;&nbsp;-H "Authorization: Bearer sk-mc-…" \<br />
+            &nbsp;&nbsp;-d {'{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}]}'}
+          </div>
+          <div className="u-flex">
+            <Button variant="primary" onClick={() => navigate('/keys?create=1')}><Plus size={14} /> Create virtual key</Button>
+            <Button onClick={() => navigate('/tenants/new')}><Users size={14} /> Add tenant</Button>
+          </div>
+        </div>
+      ) : (
+        <>
+      <div className="card u-mb24">
         <div className="card-header-row">
-          <h3>Token Usage Trend <span className="text-muted" style={{ fontSize: 12, fontWeight: 400 }}>{`${series.length} pts`}</span></h3>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span className="text-muted" style={{ fontSize: 12 }}>Refresh:</span>
-            {[0, 5, 10, 30].map((s) => (
-              <button
-                key={s}
-                className="btn btn-small"
-                onClick={() => setRefreshSec(s)}
-                style={refreshSec === s ? { borderColor: 'var(--accent)', color: 'var(--accent)' } : {}}
-              >
-                {s === 0 ? 'Off' : `${s}s`}
-              </button>
-            ))}
+          <h3>Traffic trend</h3>
+          <div className="u-flex-lg">
+            <Segmented<Metric> options={METRICS} value={metric} onChange={setMetric} ariaLabel="Trend metric" />
             <TimeRangePicker value={range} onChange={setRange} />
           </div>
         </div>
-        <TimeSeriesChart data={series} />
+        <TrendChart points={series} metric={metric} />
       </div>
 
       <div className="stats-grid">
@@ -121,57 +277,90 @@ export function Dashboard() {
           <div key={card.label} className="stat-card">
             <div className="label">{card.label}</div>
             <div className="value">{card.value}</div>
+            {card.delta !== null && (
+              <div className={`change ${card.delta >= 0 ? 'up' : 'down'}`}>
+                {card.delta >= 0 ? '▲' : '▼'} {Math.abs(card.delta)}%
+              </div>
+            )}
+            <div className="u-mt6">
+              <Sparkline points={series} metric={metric} />
+            </div>
           </div>
         ))}
       </div>
 
-      {error && <p className="text-muted" style={{ marginBottom: 24 }}>{error}</p>}
+      {error && <p className="text-muted u-mb24">{error}</p>}
 
-      {Object.keys(modelTotals).length > 0 && (
-        <div className="card" style={{ marginBottom: 24 }}>
-          <h3>Token Usage by Model</h3>
+      <div className="dash-grid">
+        <div className="card">
+          <div className="card-header-row">
+            <h3>Needs attention</h3>
+            {attention.length > 0 && <StatusPill tone={attention.some((a) => a.tone === 'red') ? 'red' : 'amber'}>{attention.length}</StatusPill>}
+          </div>
+          {attention.length === 0 ? (
+            <div className="empty-state u-center">All systems nominal.</div>
+          ) : (
+            <ul className="attn-list">
+              {attention.map((a, i) => (
+                <li key={`${a.title}-${i}`} className="attn-row">
+                  <StatusPill tone={a.tone}>{a.tone === 'red' ? 'critical' : a.tone}</StatusPill>
+                  <div className="u-grow">
+                    <div className="attn-title">{a.title}</div>
+                    <div className="attn-detail u-muted">{a.detail}</div>
+                  </div>
+                  {a.to && <a className="btn-link attn-open" href={a.to}>Open →</a>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-header-row"><h3>Quick actions</h3></div>
+          <div className="u-col">
+            <button className="btn" onClick={() => navigate('/keys?create=1')}><KeyRound size={14} /> Create virtual key</button>
+            <button className="btn" onClick={() => navigate('/tenants/new')}><Users size={14} /> Add tenant</button>
+            <button className="btn" onClick={() => navigate('/budgets')}><Wallet size={14} /> Set budget</button>
+            <button className="btn" onClick={() => navigate('/routing')}><BarChart3 size={14} /> Inspect routing</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header-row">
+          <h3>Latest activity</h3>
+          <a className="btn-link link-sm" href="/conversations">View all</a>
+        </div>
+        {activity.length === 0 ? (
+          <div className="empty-state u-center">No traffic yet.</div>
+        ) : (
           <div className="table-wrap">
-            <table>
+            <table className="tbl">
               <thead>
-                <tr><th>Model</th><th>Input Tokens</th><th>Output Tokens</th><th>Total</th></tr>
+                <tr><th>Event</th><th>Tenant</th><th>Model</th><th>Status</th><th>When</th></tr>
               </thead>
               <tbody>
-                {Object.entries(modelTotals).map(([model, counts]) => (
-                  <tr key={model}>
-                    <td><code>{model}</code></td>
-                    <td>{counts.input.toLocaleString()}</td>
-                    <td>{counts.output.toLocaleString()}</td>
-                    <td>{(counts.input + counts.output).toLocaleString()}</td>
+                {activity.map((a) => (
+                  <tr key={a.id}>
+                    <td>
+                      <span className="u-flex">
+                        {a.status === 'blocked' ? <Shield size={13} className="ic-accent" /> : a.status === 'ok' ? <Zap size={13} className="ic-green" /> : <AlertTriangle size={13} className="ic-amber" />}
+                        {a.status === 'blocked' ? 'Mask blocked' : a.status === 'ok' ? 'Request passed' : 'Request failed'}
+                      </span>
+                    </td>
+                    <td><code>{a.tenant_id}</code></td>
+                    <td>{a.model || '—'}</td>
+                    <td><StatusPill tone={a.status === 'ok' ? 'green' : a.status === 'blocked' ? 'amber' : 'red'}>{a.status}</StatusPill></td>
+                    <td className="muted">{relativeTime(a.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
-      )}
-
-      <div className="card">
-        <h3>Active Sessions</h3>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Session ID</th><th>Tenant</th><th>Model</th><th>Status</th><th>TTL</th></tr>
-            </thead>
-            <tbody>
-              {sessions.map((s) => (
-                <tr key={s.session_id}>
-                  <td><code>{s.session_id.slice(0, 12)}...</code></td>
-                  <td>{s.tenant_id}</td>
-                  <td>{s.model}</td>
-                  <td><span className={`badge ${s.status === 'active' ? 'badge-up' : s.status === 'expired' ? 'badge-down' : 'badge-warn'}`}>{s.status}</span></td>
-                  <td>{s.expires_at ? Math.round((new Date(s.expires_at).getTime() - Date.now()) / 60000) + 'm' : '—'}</td>
-                </tr>
-              ))}
-              {sessions.length === 0 && <tr><td colSpan={5} className="text-muted" style={{ padding: 12 }}>No active sessions</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        )}
       </div>
+        </>
+      )}
     </div>
   )
 }

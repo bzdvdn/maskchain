@@ -43,14 +43,19 @@ interface SeriesResult {
   series: SeriesPoint[]
 }
 
-export function getAnalyticsTokens(from: string, to: string): Promise<TokensResult> {
-  return apiFetch(`${BASE}/tokens?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
+export function withTenant(base: string, tenant?: string): string {
+  if (!tenant) return base
+  return `${base}${base.includes('?') ? '&' : '?'}tenant=${encodeURIComponent(tenant)}`
 }
 
-export function getAnalyticsCost(from: string, to: string): Promise<CostResult> {
-  return apiFetch(`${BASE}/cost?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
+export function getAnalyticsTokens(from: string, to: string, tenant?: string): Promise<TokensResult> {
+  return apiFetch(withTenant(`${BASE}/tokens?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, tenant))
 }
 
-export function getAnalyticsSeries(from: string, to: string): Promise<SeriesResult> {
-  return apiFetch(`${BASE}/timeseries?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
+export function getAnalyticsCost(from: string, to: string, tenant?: string): Promise<CostResult> {
+  return apiFetch(withTenant(`${BASE}/cost?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, tenant))
+}
+
+export function getAnalyticsSeries(from: string, to: string, tenant?: string): Promise<SeriesResult> {
+  return apiFetch(withTenant(`${BASE}/timeseries?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, tenant))
 }

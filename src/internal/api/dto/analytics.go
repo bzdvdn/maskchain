@@ -10,6 +10,7 @@ type AnalyticsQuery struct {
 	From    string `form:"from"`
 	To      string `form:"to"`
 	Model   string `form:"model"`
+	Tenant  string `form:"tenant"`
 	Page    int    `form:"page"`
 	PerPage int    `form:"per_page"`
 	Format  string `form:"format"`

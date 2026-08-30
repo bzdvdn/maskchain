@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
   ChartColumn,
@@ -17,8 +17,13 @@ import {
   Search,
   KeyRound,
   Wallet,
+  Shield,
+  Plus,
+  Download,
+  ChevronDown,
 } from 'lucide-react'
 import { logout } from '../api/admin'
+import { listTenants } from '../api/tenants'
 import { useTheme } from '../hooks/useTheme'
 import { CommandPalette } from './CommandPalette'
 
@@ -27,32 +32,55 @@ interface Props {
   onLogout: () => void
 }
 
-// @sk-task conversation-logging#T3.2: Add Conversations menu item in Management section (AC-005, AC-006)
-const navItems = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/analytics', label: 'Analytics', icon: ChartColumn },
-  { to: '/tenants', label: 'Tenants', icon: Users },
-  { to: '/sessions', label: 'Sessions', icon: Radio },
-  { to: '/conversations', label: 'Conversations', icon: MessageSquare },
-  { to: '/routing', label: 'Routing', icon: Route },
-  { to: '/keys', label: 'Keys', icon: KeyRound },
-  { to: '/budgets', label: 'Budgets', icon: Wallet },
-  { to: '/audit', label: 'Audit Log', icon: ScrollText },
-  { to: '/settings', label: 'Settings', icon: Settings },
-  { to: '/swagger', label: 'Swagger', icon: FileJson },
-]
-
-const navSections: { label: string; items: typeof navItems }[] = [
-  { label: 'Overview', items: navItems.slice(0, 2) },
-  { label: 'Management', items: navItems.slice(2, 8) },
-  { label: 'System', items: navItems.slice(8) },
-]
-
-const headerTimes: Record<string, string> = {
-  '/sessions': 'Live',
-  '/routing': 'Last check: 2s ago',
-  '/audit': 'All time',
+interface NavItem {
+  to: string
+  label: string
+  icon: typeof LayoutDashboard
 }
+
+type Section = { label: string; items: NavItem[] }
+
+const navSections: Section[] = [
+  {
+    label: 'Overview',
+    items: [
+      { to: '/', label: 'Operations HQ', icon: LayoutDashboard },
+      { to: '/analytics', label: 'Analytics', icon: ChartColumn },
+    ],
+  },
+  {
+    label: 'Traffic',
+    items: [
+      { to: '/sessions', label: 'Live Sessions', icon: Radio },
+      { to: '/conversations', label: 'Conversations', icon: MessageSquare },
+    ],
+  },
+  {
+    label: 'Governance',
+    items: [
+      { to: '/tenants', label: 'Tenants', icon: Users },
+      { to: '/keys', label: 'Keys', icon: KeyRound },
+      { to: '/budgets', label: 'Budgets', icon: Wallet },
+      { to: '/compliance', label: 'Compliance', icon: Shield },
+    ],
+  },
+  {
+    label: 'Operations',
+    items: [
+      { to: '/routing', label: 'Routing', icon: Route },
+      { to: '/audit', label: 'Audit Log', icon: ScrollText },
+    ],
+  },
+  {
+    label: 'System',
+    items: [
+      { to: '/settings', label: 'Settings', icon: Settings },
+      { to: '/swagger', label: 'API Reference', icon: FileJson },
+    ],
+  },
+]
+
+const WORKSPACE_KEY = 'maskchain.workspace'
 
 function Logo() {
   return (
@@ -65,12 +93,54 @@ function Logo() {
 
 export function Layout({ children, onLogout }: Props) {
   const location = useLocation()
+  const navigate = useNavigate()
   const { theme, toggleTheme } = useTheme()
+  const [workspaces, setWorkspaces] = useState<{ slug: string; name: string }[]>([])
+  const [workspace, setWorkspace] = useState<string>(() => localStorage.getItem(WORKSPACE_KEY) ?? '')
 
   useEffect(() => {
-    const label = navItems.find((i) => i.to === location.pathname)?.label
+    const label = navSections.flatMap((s) => s.items).find((i) => i.to === location.pathname)?.label
     document.title = label ? `${label} — MaskChain` : 'MaskChain'
   }, [location.pathname])
+
+  useEffect(() => {
+    listTenants()
+      .then((ts) => setWorkspaces(Array.isArray(ts) ? ts.map((t) => ({ slug: t.slug, name: t.name })) : []))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const onWorkspace = (e: Event) => {
+      const slug = (e as CustomEvent<string>).detail
+      setWorkspace(slug)
+      localStorage.setItem(WORKSPACE_KEY, slug)
+    }
+    window.addEventListener('maskchain:workspace', onWorkspace)
+    return () => window.removeEventListener('maskchain:workspace', onWorkspace)
+  }, [])
+
+  function applyWorkspace(slug: string) {
+    localStorage.setItem(WORKSPACE_KEY, slug)
+    setWorkspace(slug)
+    window.dispatchEvent(new CustomEvent<string>('maskchain:workspace', { detail: slug }))
+  }
+
+  function openCreateKey() {
+    navigate('/keys?create=1')
+  }
+
+  function exportCSV() {
+    window.open('/api/v1/analytics/cost?format=csv', '_blank')
+  }
+
+  const headerActions: { to: string; label: string; icon: typeof Plus; onClick?: () => void }[] = []
+  if (location.pathname === '/') {
+    headerActions.push({ to: '/keys', label: 'Create key', icon: Plus, onClick: openCreateKey })
+  } else if (location.pathname === '/keys') {
+    headerActions.push({ to: '/keys', label: 'Create key', icon: Plus, onClick: openCreateKey })
+  } else if (location.pathname === '/analytics') {
+    headerActions.push({ to: '', label: 'Export CSV', icon: Download, onClick: exportCSV })
+  }
 
   async function handleLogout() {
     await logout()
@@ -90,9 +160,7 @@ export function Layout({ children, onLogout }: Props) {
                   key={item.to}
                   to={item.to}
                   end={item.to === '/'}
-                  className={({ isActive }) =>
-                    `nav-item${isActive ? ' active' : ''}`
-                  }
+                  className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
                 >
                   <item.icon size={16} strokeWidth={2} className="nav-icon" />
                   <span>{item.label}</span>
@@ -114,13 +182,28 @@ export function Layout({ children, onLogout }: Props) {
       </aside>
       <div className="main-area">
         <header className="app-header">
-          <h2>
-            {navItems.find((i) => i.to === location.pathname)?.label ?? 'MaskChain'}
-          </h2>
+          <h2>{navSections.flatMap((s) => s.items).find((i) => i.to === location.pathname)?.label ?? 'MaskChain'}</h2>
           <div className="header-right">
-            {headerTimes[location.pathname] && (
-              <span className="time">{headerTimes[location.pathname]}</span>
-            )}
+            {headerActions.map((a) => (
+              <button key={a.label} type="button" className="header-action-btn btn btn-small" onClick={a.onClick}>
+                <a.icon size={13} strokeWidth={2.2} />
+                {a.label}
+              </button>
+            ))}
+            <label className="workspace-switch">
+              <span className="workspace-label">Workspace</span>
+              <select value={workspace} onChange={(e) => applyWorkspace(e.target.value)} aria-label="Workspace scope">
+                <option value="">All workspaces</option>
+                {workspaces.map((w) => (
+                  <option key={w.slug} value={w.slug}>{w.name}</option>
+                ))}
+              </select>
+              <ChevronDown size={12} className="workspace-chevron" />
+            </label>
+            <span className="live-pill" title="Gateway status">
+              <span className="live-dot" />
+              Live
+            </span>
             <button
               type="button"
               className="btn-link command-trigger"

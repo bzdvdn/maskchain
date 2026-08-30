@@ -1,35 +1,53 @@
-import { useMemo, useState } from 'react'
-import { useAsyncData } from '../hooks/useAsyncData'
-import { Badge, Button, EmptyState, SortHeader, TableSkeleton } from '../components/ui'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { Plus, Search, ClipboardCopy, KeyRound } from 'lucide-react'
+import { Button, ChipInput, ChipTag, ProgressBar, Segmented, StatusPill, Switch } from '../components/ui'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { CopyButton } from '../components/CopyButton'
 import { useToast } from '../components/Toast'
-import { useSort, sortRows } from '../hooks/useSort'
+import { relativeTime, money } from '../utils/format'
 import { createKey, deleteKey, listKeys, updateKey, type CreateKeyRequest, type VirtualKeyDto } from '../api/keys'
 import { listTenants } from '../api/tenants'
 
-function fmtTime(iso: string | undefined | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString()
+function endpointBase(): string {
+  return `${window.location.protocol}//${window.location.host}/v1`
 }
 
-function modelList(models: string[] | undefined): string {
-  if (!models || models.length === 0) return '—'
-  return models.join(', ')
+const EXPIRY_PRESETS: { key: string; label: string; value: () => string | null }[] = [
+  { key: '7d', label: '7 days', value: () => new Date(Date.now() + 7 * 86400_000).toISOString() },
+  { key: '30d', label: '30 days', value: () => new Date(Date.now() + 30 * 86400_000).toISOString() },
+  { key: 'never', label: 'Never', value: () => null },
+]
+
+function tenantName(slug: string, tenants: { slug: string; name: string }[]): string {
+  const t = tenants.find((x) => x.slug === slug)
+  return t ? `${t.name} (${slug})` : slug
 }
 
 export function Keys() {
   const { toast } = useToast()
+  const [searchParams, setSearchParams] = useSearchParams()
+
   const [keys, setKeys] = useState<VirtualKeyDto[]>([])
   const [tenants, setTenants] = useState<{ slug: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
+
+  const [search, setSearch] = useState('')
+  const [tenantFilter, setTenantFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+
+  const [modalOpen, setModalOpen] = useState(false)
+  const drawerOpenedRef = useRef(false)
+  const [createdKey, setCreatedKey] = useState<{ key: string; label: string } | null>(null)
+  const [deleting, setDeleting] = useState<VirtualKeyDto | null>(null)
+  const [busy, setBusy] = useState(false)
 
   const reload = async () => {
     setLoading(true)
     try {
       const [kRes, tRes] = await Promise.all([listKeys(), listTenants()])
       setKeys(kRes?.data ?? [])
-      setTenants((tRes ?? []).map((t) => ({ slug: t.slug, name: t.name })))
+      setTenants(Array.isArray(tRes) ? tRes.map((t) => ({ slug: t.slug, name: t.name })) : [])
     } catch {
       toast('Failed to load keys', 'error')
     } finally {
@@ -37,30 +55,28 @@ export function Keys() {
     }
   }
 
-  useAsyncData(async () => {
-    await reload()
-    return null
+  useEffect(() => {
+    reload()
+    if (searchParams.get('create') === '1' && !drawerOpenedRef.current) {
+      drawerOpenedRef.current = true
+      setModalOpen(true)
+      setSearchParams({}, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const sort = useSort<VirtualKeyDto>('tenant_id', 'asc')
-  const sortState = sort
-  const rows = useMemo(() => sortRows(keys, sortState.key, sortState.dir), [keys, sortState])
-
-  const [modalOpen, setModalOpen] = useState(false)
-  const [createdKey, setCreatedKey] = useState<{ key: string; label: string } | null>(null)
-  const [deleting, setDeleting] = useState<VirtualKeyDto | null>(null)
-  const [busy, setBusy] = useState(false)
-
-  const tenantName = (slug: string) => {
-    const t = tenants.find((x) => x.slug === slug)
-    return t ? `${t.name} (${slug})` : slug
-  }
-
-  const th = (k: keyof VirtualKeyDto, label: string) => (
-    <th>
-      <SortHeader active={sort.key === k} dir={sort.dir} onClick={() => sort.toggle(k)}>{label}</SortHeader>
-    </th>
-  )
+  const rows = useMemo(() => {
+    const normalized = search.trim().toLowerCase()
+    return keys
+      .filter((k) => tenantFilter === '' || k.tenant_id === tenantFilter)
+      .filter((k) => statusFilter === '' || (statusFilter === 'enabled' ? k.enabled : !k.enabled))
+      .filter((k) => {
+        if (!normalized) return true
+        const haystack = [k.tenant_id, k.label ?? '', ...(k.allowed_models ?? [])].join(' ').toLowerCase()
+        return haystack.includes(normalized)
+      })
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+  }, [keys, search, tenantFilter, statusFilter])
 
   const doDelete = async () => {
     if (!deleting) return
@@ -91,56 +107,150 @@ export function Keys() {
   const handleToggle = async (k: VirtualKeyDto) => {
     try {
       await updateKey(k.id, { enabled: !k.enabled })
-      toast(k.enabled ? 'Key disabled' : 'Key enabled', 'success')
-      await reload()
+      setKeys((prev) => prev.map((x) => (x.id === k.id ? { ...x, enabled: !k.enabled } : x)))
     } catch (e: any) {
       toast(e?.message ?? 'Update failed', 'error')
     }
+  }
+
+  const modelChips = (models: string[] | undefined) => {
+    if (!models || models.length === 0) return <span className="muted">all</span>
+    const shown = models.slice(0, 3)
+    const rest = models.length - shown.length
+    return (
+      <>
+        {shown.map((m) => <ChipTag key={m}>{m}</ChipTag>)}
+        {rest > 0 && <ChipTag>{`+${rest}`}</ChipTag>}
+      </>
+    )
   }
 
   return (
     <div>
       <div className="card">
         <div className="card-header-row">
-          <h3>Virtual Keys</h3>
-          <div className="header-actions">
-            <Button size="small" onClick={() => setModalOpen(true)}>Create Key</Button>
+          <h3>Connect your app</h3>
+          <span className="muted u-flex">
+            <span className="live-dot" /> REST · SSE streaming
+          </span>
+        </div>
+        <div className="endpoint">
+          <div className="box">
+            <div className="u-label">Base URL</div>
+            <div className="copy-row">
+              <code>{endpointBase()}</code>
+              <CopyButton text={endpointBase()} label="Copy" />
+            </div>
+            <div className="divider" />
+            <div className="copy-row">
+              <span className="muted">curl</span>
+              <code className="u-ellipsis">
+                curl https://gw.maskchain.dev/v1/chat/completions -H "Authorization: Bearer sk-mc-…"
+              </code>
+              <CopyButton text={'curl https://gw.maskchain.dev/v1/chat/completions \\\n  -H "Authorization: Bearer sk-mc-…"' as string} label="Copy" />
+            </div>
+          </div>
+          <div className="box">
+            <div className="label">Keys are hashed at rest</div>
+            <p className="muted-sm u-mt4">
+              Provider secrets are encrypted with AES-256-GCM; virtual keys are stored as SHA-256
+              hashes and shown exactly once at creation.
+            </p>
           </div>
         </div>
-        <div className="table-wrap">
-          <table>
+      </div>
+
+      {!loading && keys.length === 0 && (
+        <div className="onboard u-mb16">
+          <div className="u-flex">
+            <KeyRound size={18} className="ic-accent" />
+            <div>
+              <div className="onboard-title">Get your first key</div>
+              <p className="muted-sm">Issue a tenant-scoped key and hand your app the curl snippet above — traffic flows through shield, routing and budgets automatically.</p>
+            </div>
+          </div>
+          <div className="u-flex">
+            <Button variant="primary" onClick={() => setModalOpen(true)}><Plus size={14} /> Create virtual key</Button>
+          </div>
+        </div>
+      )}
+
+      <div className="toolbar">
+        <div className="search">
+          <Search size={14} className="search-icon" />
+          <input placeholder="Search by label, tenant or model…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <select className="select" value={tenantFilter} onChange={(e) => setTenantFilter(e.target.value)} aria-label="Tenant filter">
+          <option value="">All tenants</option>
+          {tenants.map((t) => <option key={t.slug} value={t.slug}>{t.name}</option>)}
+        </select>
+        <select className="select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status filter">
+          <option value="">All statuses</option>
+          <option value="enabled">Enabled</option>
+          <option value="disabled">Disabled</option>
+        </select>
+        <div className="u-grow" />
+        <Button size="small" onClick={() => setModalOpen(true)}><Plus size={13} /> Create key</Button>
+      </div>
+
+      <div className="card table-card">
+        <div className="table-wrap table-flush">
+          <table className="tbl">
             <thead>
               <tr>
-                {th('tenant_id', 'Tenant')}
-                {th('label', 'Label')}
-                <th>Allowed Models</th>
-                <th>Blocked Models</th>
-                {th('enabled', 'Status')}
+                <th>Tenant</th>
+                <th>Label</th>
+                <th>Models</th>
+                <th className="budget-col">Budget &amp; Spend</th>
+                <th>Status</th>
                 <th>Expires</th>
-                {th('created_at', 'Created')}
-                <th>Actions</th>
+                <th className="num">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((k) => (
-                <tr key={k.id}>
-                  <td>{tenantName(k.tenant_id)}</td>
-                  <td>{k.label || k.id}</td>
-                  <td><code>{modelList(k.allowed_models)}</code></td>
-                  <td><code>{modelList(k.blocked_models)}</code></td>
-                  <td><Badge value={k.enabled ? 'enabled' : 'disabled'} /></td>
-                  <td>{fmtTime(k.expires_at)}</td>
-                  <td>{fmtTime(k.created_at)}</td>
-                  <td>
-                    <div className="header-actions">
-                      <Button size="small" onClick={() => handleToggle(k)}>{k.enabled ? 'Disable' : 'Enable'}</Button>
-                      <Button size="small" variant="danger" onClick={() => setDeleting(k)}>Revoke</Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {!loading && rows.length === 0 && <tr><td colSpan={8}><EmptyState message="No virtual keys" /></td></tr>}
-              {loading && <tr><td colSpan={8}><TableSkeleton rows={4} cols={8} /></td></tr>}
+              {rows.map((k) => {
+                const pct = k.budget_cap ? Math.round((k.spent / k.budget_cap) * 100) : null
+                return (
+                  <tr key={k.id}>
+                    <td><span className="u-fw">{tenantName(k.tenant_id, tenants)}</span></td>
+                    <td><code>{k.label || k.id.slice(0, 8)}</code></td>
+                    <td>{modelChips(k.allowed_models)}</td>
+                    <td>
+                      {pct === null ? (
+                        <span className="muted">—</span>
+                      ) : (
+                        <div className="prog-cell">
+                          <div className="meta">
+                            <span className="mono">{money(k.spent)}</span>
+                            <span className={`mono ${pct >= 90 ? '' : 'muted'}`}>{pct}%</span>
+                          </div>
+                          <ProgressBar percentage={pct} ariaLabel={`${k.label || k.id} spend`} />
+                          <div className="meta"><span>of {money(k.budget_cap ?? 0)}</span></div>
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <span className="u-flex">
+                        <StatusPill tone={k.enabled ? 'green' : 'gray'}>{k.enabled ? 'enabled' : 'disabled'}</StatusPill>
+                        <Switch checked={k.enabled} onChange={() => handleToggle(k)} label={`Toggle ${k.label || k.id}`} />
+                      </span>
+                    </td>
+                    <td className="muted">{k.expires_at ? relativeTime(k.expires_at) : 'Never'}</td>
+                    <td>
+                      <div className="u-actions">
+                        <button className="icon-btn sm" title="Copy key id" onClick={() => { navigator.clipboard.writeText(k.id); toast('Key id copied', 'success') }}>
+                          <ClipboardCopy size={13} />
+                        </button>
+                        <Button size="small" variant="danger" onClick={() => setDeleting(k)}>Revoke</Button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+              {!loading && rows.length === 0 && (
+                <tr><td colSpan={7}><div className="empty-state u-center">No virtual keys match the current filters.</div></td></tr>
+              )}
+              {loading && <tr><td colSpan={7} className="tbl-loading">Loading keys…</td></tr>}
             </tbody>
           </table>
         </div>
@@ -159,7 +269,7 @@ export function Keys() {
           <div className="modal generic-modal" role="dialog" aria-modal="true">
             <h3>Key created</h3>
             <div className="modal-body">
-              <p>Copy the key now — it will not be shown again.</p>
+              <p className="muted">Copy the key now — it will not be shown again.</p>
               <div className="form-field">
                 <label>Key ({createdKey.label})</label>
                 <div className="copy-row">
@@ -187,58 +297,80 @@ export function Keys() {
   )
 }
 
-function CreateKeyModal({
-  tenants,
-  onClose,
-  onCreate,
-}: {
+interface CreateModalProps {
   tenants: { slug: string; name: string }[]
   onClose: () => void
   onCreate: (req: CreateKeyRequest) => void
-}) {
-  const [req, setReq] = useState<CreateKeyRequest>({
-    tenant_id: tenants[0]?.slug ?? '',
-    label: '',
-    allowed_models: [],
-    blocked_models: [],
-  })
+}
+
+function CreateKeyModal({ tenants, onClose, onCreate }: CreateModalProps) {
+  const [tenant, setTenant] = useState(tenants[0]?.slug ?? '')
+  const [label, setLabel] = useState('')
+  const [allowed, setAllowed] = useState<string[]>([])
+  const [blocked, setBlocked] = useState<string[]>([])
+  const [budget, setBudget] = useState('')
+  const [expiry, setExpiry] = useState('30d')
   const [err, setErr] = useState('')
+
+  useEffect(() => {
+    if (!tenant && tenants.length > 0) {
+      setTenant(tenants[0].slug)
+    }
+  }, [tenants, tenant])
 
   const submit = () => {
     setErr('')
-    if (!req.tenant_id) { setErr('Tenant is required'); return }
+    if (!tenant) { setErr('Tenant is required'); return }
+    const budgetNum = budget ? Number(budget) : undefined
+    if (budget && (!Number.isFinite(budgetNum) || (budgetNum as number) <= 0)) { setErr('Budget must be a positive number'); return }
+    const preset = EXPIRY_PRESETS.find((p) => p.key === expiry)
     onCreate({
-      tenant_id: req.tenant_id,
-      label: req.label,
-      allowed_models: req.allowed_models ?? [],
-      blocked_models: req.blocked_models ?? [],
+      tenant_id: tenant,
+      label: label || undefined,
+      allowed_models: allowed.length > 0 ? allowed : undefined,
+      blocked_models: blocked.length > 0 ? blocked : undefined,
+      budget_cap: budgetNum,
+      expires_at: preset?.value() ?? null,
     })
   }
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal generic-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <h3>Create Key</h3>
-        {err && <div className="confirm-dialog" style={{ marginTop: 8 }}><p>{err}</p></div>}
+        <h3>Create key</h3>
+        {err && <div className="confirm-dialog u-mt8"><p>{err}</p></div>}
         <div className="modal-body">
           <div className="form-field">
             <label>Tenant</label>
-            <select value={req.tenant_id} onChange={(e) => setReq({ ...req, tenant_id: e.target.value })}>
+            <select value={tenant} onChange={(e) => setTenant(e.target.value)}>
               {tenants.length === 0 && <option value="">No tenants</option>}
               {tenants.map((t) => <option key={t.slug} value={t.slug}>{t.name} ({t.slug})</option>)}
             </select>
           </div>
           <div className="form-field">
             <label>Label</label>
-            <input value={req.label ?? ''} onChange={(e) => setReq({ ...req, label: e.target.value })} placeholder="production-integration" />
+            <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. payments-gw, ci-pipeline" />
           </div>
           <div className="form-field">
-            <label>Allowed Models (comma separated, empty = all)</label>
-            <input value={(req.allowed_models ?? []).join(', ')} onChange={(e) => setReq({ ...req, allowed_models: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="gpt-4o, claude-3-5-sonnet" />
+            <label>Allowed models (empty = all)</label>
+            <ChipInput value={allowed} onChange={setAllowed} placeholder="press Enter to add a model" />
           </div>
           <div className="form-field">
-            <label>Blocked Models (comma separated)</label>
-            <input value={(req.blocked_models ?? []).join(', ')} onChange={(e) => setReq({ ...req, blocked_models: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} />
+            <label>Blocked models</label>
+            <ChipInput value={blocked} onChange={setBlocked} placeholder="press Enter to add a model" />
+          </div>
+          <div className="form-field">
+            <label>Budget limit (USD)</label>
+            <input inputMode="numeric" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="e.g. 500" />
+          </div>
+          <div className="form-field">
+            <label>Expiry</label>
+            <Segmented
+              options={EXPIRY_PRESETS.map((p) => ({ key: p.key, label: p.label }))}
+              value={expiry}
+              onChange={setExpiry}
+              ariaLabel="Expiry"
+            />
           </div>
         </div>
         <div className="form-actions">

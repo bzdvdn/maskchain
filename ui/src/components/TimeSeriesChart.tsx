@@ -17,6 +17,7 @@ interface Point {
 interface Props {
   data: Point[]
   height?: number
+  compare?: Point[]
 }
 
 const INPUT = 'var(--accent)'
@@ -39,12 +40,16 @@ function fmtTick(iso: string): string {
   return `${d.getDate()}.${d.getMonth() + 1}`
 }
 
+function pad2(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
 function fmtLabel(iso: string): string {
   const d = new Date(iso)
   const now = new Date()
   const diffH = (now.getTime() - d.getTime()) / 3600_000
-  if (diffH < 24) return d.toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-  return d.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  if (diffH < 24) return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+  return `${d.getDate()}.${pad2(d.getMonth() + 1)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 }
 
 function ChartTooltip({ active, payload, label }: {
@@ -76,7 +81,7 @@ function ChartTooltip({ active, payload, label }: {
   )
 }
 
-export function TimeSeriesChart({ data, height = 220 }: Props) {
+export function TimeSeriesChart({ data, height = 220, compare }: Props) {
   if (!data.length) {
     return (
       <div className="text-muted" style={{ padding: 24, textAlign: 'center' }}>
@@ -85,12 +90,16 @@ export function TimeSeriesChart({ data, height = 220 }: Props) {
     )
   }
 
-  const chartData = data.map((d) => ({
-    ...d,
-    label: fmtLabel(d.bucket),
-    Input: d.input_tokens,
-    Output: d.output_tokens,
-  }))
+  const chartData = data.map((d, i) => {
+    const cmp = compare?.[i]
+    return {
+      ...d,
+      label: fmtLabel(d.bucket),
+      Input: d.input_tokens,
+      Output: d.output_tokens,
+      Compare: cmp ? cmp.input_tokens + cmp.output_tokens : null,
+    }
+  })
 
   return (
     <div style={{ width: '100%' }}>
@@ -142,16 +151,33 @@ export function TimeSeriesChart({ data, height = 220 }: Props) {
             dot={false}
             activeDot={{ r: 4, strokeWidth: 0, fill: OUTPUT }}
           />
+          {compare && (
+            <Area
+              type="monotone"
+              dataKey="Compare"
+              stroke={TICK}
+              strokeWidth={1.5}
+              strokeDasharray="4 4"
+              fill="none"
+              dot={false}
+              activeDot={false}
+            />
+          )}
         </AreaChart>
       </ResponsiveContainer>
 
-      <div style={{ display: 'flex', gap: 20, justifyContent: 'center', marginTop: 4 }}>
+      <div style={{ display: 'flex', gap: 20, justifyContent: 'center', marginTop: 10 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: TICK }}>
           <span style={{ width: 10, height: 10, borderRadius: 2, background: INPUT, display: 'inline-block', flexShrink: 0 }} /> Input
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: TICK }}>
           <span style={{ width: 10, height: 10, borderRadius: 2, background: OUTPUT, display: 'inline-block', flexShrink: 0 }} /> Output
         </span>
+        {compare && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: TICK }}>
+            <span style={{ width: 14, height: 0, borderTop: '1.5px dashed var(--text-muted)', display: 'inline-block' }} /> prev period
+          </span>
+        )}
       </div>
     </div>
   )

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { AlertTriangle, RefreshCw } from 'lucide-react'
 import {
   getTenant,
   deleteTenant,
@@ -10,10 +11,20 @@ import {
   type DictionaryItem,
   type ComplianceReport,
 } from '../../api/tenants'
+import { listConversations } from '../../api/conversations'
 import { DictionaryModal } from '../../components/DictionaryModal'
 import { ConfirmModal } from '../../components/ConfirmModal'
 import { useToast } from '../../components/Toast'
-import { Spinner } from '../../components/ui'
+import { Button, Spinner, StatusPill, type StatusTone } from '../../components/ui'
+import { relativeTime, absDate } from '../../utils/format'
+
+type Tab = 'overview' | 'policies' | 'compliance' | 'activity'
+
+function ruleTone(status: string): StatusTone {
+  if (status === 'active') return 'green'
+  if (status === 'deviated') return 'amber'
+  return 'red'
+}
 
 export function TenantDetail() {
   const { slug } = useParams<{ slug: string }>()
@@ -22,6 +33,7 @@ export function TenantDetail() {
   const [tenant, setTenant] = useState<TenantResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [tab, setTab] = useState<Tab>('overview')
   const [deleting, setDeleting] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [modalDict, setModalDict] = useState<DictionaryItem | null>(null)
@@ -29,6 +41,7 @@ export function TenantDetail() {
   const [reportPack, setReportPack] = useState<string | null>(null)
   const [report, setReport] = useState<ComplianceReport | null>(null)
   const [reportLoading, setReportLoading] = useState(false)
+  const [activity, setActivity] = useState<{ id: string; model: string; status: string; created_at: string }[]>([])
 
   useEffect(() => {
     if (!slug) return
@@ -39,6 +52,9 @@ export function TenantDetail() {
         if (err.name === 'NotFoundError') setNotFound(true)
       })
       .finally(() => setLoading(false))
+    listConversations(1, 30, { tenant_id: slug })
+      .then((res) => setActivity(Array.isArray(res.items) ? res.items.map((c) => ({ id: c.id, model: c.model, status: c.status, created_at: c.created_at })) : []))
+      .catch(() => {})
   }, [slug])
 
   async function handleDelete() {
@@ -85,16 +101,8 @@ export function TenantDetail() {
     }
   }
 
-  function statusBadge(status: string): string {
-    switch (status) {
-      case 'active':
-        return 'badge-up'
-      case 'deviated':
-        return 'badge-warn'
-      default:
-        return 'badge-down'
-    }
-  }
+  const deviated = report ? report.rules.filter((r) => r.status !== 'active') : []
+  const hasDeviation = deviated.length > 0
 
   if (loading) return <Spinner label="Loading tenant..." />
 
@@ -103,42 +111,177 @@ export function TenantDetail() {
       <div className="not-found">
         <h1>Tenant not found</h1>
         <p>The tenant you are looking for does not exist.</p>
-        <Link to="/tenants" className="btn">
-          Back to list
-        </Link>
+        <Link to="/tenants" className="btn">Back to list</Link>
       </div>
     )
   }
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600 }}>{tenant.name}</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Link to={`/tenants/${tenant.slug}/edit`} className="btn btn-small">
-            Edit
-          </Link>
-          <button
-            type="button"
-            className="btn btn-small btn-danger"
-            onClick={() => setShowConfirm(true)}
-          >
-            Delete
-          </button>
+      <div className="u-between u-mb18">
+        <div className="u-flex-lg">
+          <h2 className="page-name">{tenant.name}</h2>
+          <StatusPill tone="green">active</StatusPill>
+          <span className="muted mono slug-tag">{tenant.slug}</span>
+        </div>
+        <div className="u-flex">
+          <Link to={`/tenants/${tenant.slug}/edit`} className="btn btn-small">Edit</Link>
+          <button type="button" className="btn btn-small btn-danger" onClick={() => setShowConfirm(true)}>Delete</button>
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 12 }}>
-        <table>
-          <tbody>
-            <tr><td style={{ fontWeight: 600, padding: '8px 12px', width: 140 }}>Slug</td><td style={{ padding: '8px 12px' }}><code>{tenant.slug}</code></td></tr>
-            <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>Auth Header</td><td style={{ padding: '8px 12px' }}><code>{tenant.auth_header}</code></td></tr>
-            <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>Retention Mode</td><td style={{ padding: '8px 12px' }}>{tenant.retention_mode ?? 'full'}</td></tr>
-            <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>Created</td><td style={{ padding: '8px 12px' }}>{new Date(tenant.created_at).toLocaleString()}</td></tr>
-            <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>Updated</td><td style={{ padding: '8px 12px' }}>{new Date(tenant.updated_at).toLocaleString()}</td></tr>
-          </tbody>
-        </table>
+      {hasDeviation && reportPack && (
+        <div className="banner amber">
+          <AlertTriangle size={16} />
+          <div className="text"><b>Compliance deviation.</b> Pack <b>{reportPack}</b> has {deviated.length} rule{deviated.length > 1 ? 's' : ''} out of sync — review the diff and re-apply.</div>
+          <Button size="small" onClick={() => setTab('compliance')}>Review diff</Button>
+          <Button size="small" variant="primary" onClick={() => handleApplyPack(reportPack)} disabled={applyingPack === reportPack}>
+            <RefreshCw size={13} /> Re-apply
+          </Button>
+        </div>
+      )}
+
+      <div className="tabs" role="tablist">
+        {([['overview', 'Overview'], ['policies', 'Policies & Shield'], ['compliance', 'Compliance'], ['activity', 'Activity']] as [Tab, string][]).map(([key, label]) => (
+          <button key={key} role="tab" aria-selected={tab === key} className={`tab${tab === key ? ' active' : ''}`} onClick={() => setTab(key)}>
+            {label}
+            {key === 'compliance' && hasDeviation && <span className="pill amber mini">{deviated.length}</span>}
+          </button>
+        ))}
       </div>
+
+      {tab === 'overview' && (
+        <div className="card">
+          <div className="kv">
+            <div className="k">Slug</div><div className="v mono">{tenant.slug}</div>
+            <div className="k">Auth header</div><div className="v mono">{tenant.auth_header}</div>
+            <div className="k">Retention mode</div><div className="v">{tenant.retention_mode ?? 'full'}</div>
+            <div className="k">Created</div><div className="v">{absDate(tenant.created_at)}</div>
+            <div className="k">Updated</div><div className="v">{absDate(tenant.updated_at)}</div>
+          </div>
+        </div>
+      )}
+
+      {tab === 'policies' && (
+        <div className="stack">
+          {tenant.pii_config && (
+            <div className="card">
+              <div className="card-header-row"><h3>PII shield</h3><StatusPill tone={tenant.pii_config.enabled ? 'green' : 'gray'}>{tenant.pii_config.enabled ? 'enabled' : 'disabled'}</StatusPill></div>
+              <div className="kv u-mb12">
+                <div className="k">Default action</div><div className="v mono">{tenant.pii_config.default_action}</div>
+              </div>
+              {tenant.pii_config.rules.length > 0 && (
+                <div className="table-wrap">
+                  <table className="tbl">
+                    <thead><tr><th>Label</th><th>Type</th><th>Pattern</th><th>Action</th></tr></thead>
+                    <tbody>
+                      {tenant.pii_config.rules.map((r, i) => (
+                        <tr key={i}><td className="mono">{r.label}</td><td>{r.type}</td><td className="mono">{r.pattern}</td><td>{r.action}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tenant.dictionaries && tenant.dictionaries.length > 0 && (
+            <div className="card">
+              <div className="card-header-row"><h3>Dictionaries</h3></div>
+              <div className="stack u-gap10">
+                {tenant.dictionaries.map((d, i) => {
+                  const entries = Array.isArray(d.entries) ? d.entries : []
+                  return (
+                    <div key={i} className="box">
+                      <div className="card-header-row">
+                        <h3 className="u-h3">{d.name} <span className="muted">· {d.match_mode}</span></h3>
+                        <Button size="small" onClick={() => setModalDict(d)}>View all ({entries.length})</Button>
+                      </div>
+                      <div className="muted dict-scroll">
+                        {entries.slice(0, 8).map((e: any, j: number) => <div key={j}>{typeof e === 'string' ? e : JSON.stringify(e)}</div>)}
+                        {entries.length > 8 && <div>…and {entries.length - 8} more</div>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'compliance' && (
+        <div className="stack">
+          <div className="card">
+            <div className="card-header-row"><h3>Apply compliance packs</h3></div>
+            <div className="u-wrap">
+              {COMPLIANCE_PACKS.map((p) => (
+                <Button key={p} size="small" onClick={() => handleApplyPack(p)} disabled={applyingPack === p}>
+                  {applyingPack === p ? 'Applying…' : `Apply ${p}`}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="card">
+            <div className="card-header-row"><h3>Reports</h3></div>
+            <div className="u-wrap u-mb12">
+              {COMPLIANCE_PACKS.map((p) => (
+                <Button
+                  key={p}
+                  size="small"
+                  variant={reportPack === p ? 'primary' : 'default'}
+                  onClick={() => handleShowReport(p)}
+                >
+                  {p} report
+                </Button>
+              ))}
+            </div>
+            {reportLoading && <Spinner label="Loading compliance report..." />}
+            {report && (
+              <div className="table-wrap">
+                <table className="tbl">
+                  <thead><tr><th>Detector</th><th>Expected</th><th>Actual</th><th>Masking</th><th>Status</th></tr></thead>
+                  <tbody>
+                    {report.rules.map((r, i) => (
+                      <tr key={i}>
+                        <td className="mono">{r.detector_type}</td>
+                        <td>{r.expected_reaction}</td>
+                        <td>{r.actual_reaction ?? '—'}</td>
+                        <td>{r.masking ? 'yes' : 'no'}</td>
+                        <td><StatusPill tone={ruleTone(r.status)}>{r.status}</StatusPill></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === 'activity' && (
+        <div className="card">
+          <div className="card-header-row"><h3>Recent requests</h3><span className="muted">last 30</span></div>
+          {activity.length === 0 ? (
+            <div className="empty-state u-center">No traffic for this tenant yet.</div>
+          ) : (
+            <div className="table-wrap">
+              <table className="tbl">
+                <thead><tr><th>Model</th><th>Status</th><th>When</th></tr></thead>
+                <tbody>
+                  {activity.map((a) => (
+                    <tr key={a.id}>
+                      <td className="mono">{a.model || '—'}</td>
+                      <td><StatusPill tone={a.status === 'ok' ? 'green' : a.status === 'blocked' ? 'amber' : 'red'}>{a.status}</StatusPill></td>
+                      <td className="muted">{relativeTime(a.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {showConfirm && (
         <ConfirmModal
@@ -152,124 +295,7 @@ export function TenantDetail() {
         />
       )}
 
-      {tenant.pii_config && (
-        <div className="card">
-          <h3>PII Config</h3>
-          <table>
-            <tbody>
-              <tr><td style={{ fontWeight: 600, padding: '8px 12px', width: 140 }}>Enabled</td><td style={{ padding: '8px 12px' }}><span className={`badge ${tenant.pii_config.enabled ? 'badge-up' : 'badge-warn'}`}>{tenant.pii_config.enabled ? 'Yes' : 'No'}</span></td></tr>
-              <tr><td style={{ fontWeight: 600, padding: '8px 12px' }}>Default Action</td><td style={{ padding: '8px 12px' }}>{tenant.pii_config.default_action}</td></tr>
-            </tbody>
-          </table>
-          {tenant.pii_config.rules.length > 0 && (
-            <div className="table-wrap" style={{ marginTop: 8 }}>
-              <table>
-                <thead>
-                  <tr><th>Label</th><th>Type</th><th>Pattern</th><th>Action</th></tr>
-                </thead>
-                <tbody>
-                  {tenant.pii_config.rules.map((r, i) => (
-                    <tr key={i}>
-                      <td><code>{r.label}</code></td>
-                      <td>{r.type}</td>
-                      <td><code>{r.pattern}</code></td>
-                      <td>{r.action}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="card">
-        <h3>Compliance</h3>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-          {COMPLIANCE_PACKS.map((p) => (
-            <button
-              key={p}
-              type="button"
-              className="btn btn-small"
-              disabled={applyingPack === p}
-              onClick={() => handleApplyPack(p)}
-            >
-              {applyingPack === p ? 'Applying...' : `Apply ${p}`}
-            </button>
-          ))}
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-          {COMPLIANCE_PACKS.map((p) => (
-            <button
-              key={p}
-              type="button"
-              className={`btn btn-small ${reportPack === p ? 'btn-primary' : ''}`}
-              onClick={() => handleShowReport(p)}
-            >
-              {p} report
-            </button>
-          ))}
-        </div>
-        {reportLoading && <Spinner label="Loading compliance report..." />}
-        {report && (
-          <div className="table-wrap" style={{ marginTop: 8 }}>
-            <table>
-              <thead>
-                <tr><th>Detector</th><th>Expected</th><th>Actual</th><th>Masking</th><th>Status</th></tr>
-              </thead>
-              <tbody>
-                {report.rules.map((r, i) => (
-                  <tr key={i}>
-                    <td><code>{r.detector_type}</code></td>
-                    <td>{r.expected_reaction}</td>
-                    <td>{r.actual_reaction ?? '—'}</td>
-                    <td>{r.masking ? 'yes' : 'no'}</td>
-                    <td><span className={`badge ${statusBadge(r.status)}`}>{r.status}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {tenant.dictionaries && tenant.dictionaries.length > 0 && (
-        <section>
-          <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>Dictionaries</h2>
-          {tenant.dictionaries.map((d, i) => {
-            const entries = Array.isArray(d.entries) ? d.entries : []
-            return (
-              <div key={i} className="card">
-                <div className="card-header-row">
-                  <h3>{d.name}</h3>
-                  <button
-                    type="button"
-                    className="btn btn-small"
-                    onClick={() => setModalDict(d)}
-                  >
-                    View all ({entries.length})
-                  </button>
-                </div>
-                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>Match mode: <code>{d.match_mode}</code></p>
-                <ul>
-                  {entries.slice(0, 10).map((e: any, j: number) => (
-                    <li key={j} style={{ padding: '4px 0', borderBottom: '1px solid var(--border)', fontSize: 13, listStyle: 'none' }}>
-                      {typeof e === 'string' ? e : JSON.stringify(e)}
-                    </li>
-                  ))}
-                  {entries.length > 10 && (
-                    <li style={{ padding: '4px 0', fontSize: 13, listStyle: 'none', color: 'var(--text-muted)' }}>...and {entries.length - 10} more</li>
-                  )}
-                </ul>
-              </div>
-            )
-          })}
-        </section>
-      )}
-
-      {modalDict && (
-        <DictionaryModal dict={modalDict} onClose={() => setModalDict(null)} />
-      )}
+      {modalDict && <DictionaryModal dict={modalDict} onClose={() => setModalDict(null)} />}
     </div>
   )
 }

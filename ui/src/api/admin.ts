@@ -66,3 +66,40 @@ export async function logout(): Promise<void> {
   })
   setAdminToken(null)
 }
+
+export interface SystemHealthCheck {
+  status: string
+  latency_ms: number
+  error?: string
+}
+
+export interface SystemStatus {
+  version: string
+  uptime_seconds: number
+  key_at_rest: {
+    configured: boolean
+    cipher?: string
+  }
+  health: {
+    status: string
+    checks?: Record<string, SystemHealthCheck>
+  }
+  config_diff: {
+    watched: boolean
+    sections?: string[]
+  }
+}
+
+export function getSystemStatus(): Promise<SystemStatus> {
+  const headers: Record<string, string> = {}
+  const token = getAdminToken()
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  return fetch(`${BASE}/status`, { headers, credentials: 'include' })
+    .then((res) => {
+      if (!res.ok) throw new Error('failed to load system status')
+      return res.json()
+    })
+    .then((body: any) => (body?.data?.data ?? body?.data ?? body) as SystemStatus)
+}

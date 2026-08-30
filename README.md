@@ -14,24 +14,24 @@ Content shield proxy — PII/PHI/financial/secrets detection, dictionary masking
 
 ## Why MaskChain?
 
-| Feature | MaskChain | PasteGuard | CloakPipe | Bifrost | GoModel | privacy-filter |
-|---------|-----------|------------|-----------|---------|---------|----------------|
-| **Language** | Go (native) | TypeScript (Bun) | Rust | Go | Go | Go |
-| **LLM Proxy** | ✅ Full proxy | ✅ Proxy | ❌ Mask-only | ✅ Full proxy | ✅ Proxy | ❌ Redact-only |
-| **Content Shield** | ✅ PII/PHI/finance/secrets/dictionary | ✅ PII+secrets (Presidio) | ✅ PII+secrets (ONNX NER) | ✅ Prompt injection + PII | ❌ | ✅ PII+secrets only |
-| **Streaming Unmask** | ✅ SSE response restore | ✅ SSE (partial buffer) | ✅ SSE rehydration | ❌ | ❌ | ❌ |
-| **Tenant Isolation** | ✅ Per-tenant API keys + config | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **Dictionary Masking** | ✅ Per-tenant, 4 match modes (exact/contains/regex/fuzzy) | ❌ NER-only | ❌ NER-only | ❌ | ❌ | ❌ |
-| **Routing** | ✅ Per-tenant per-model + fallback + CB | ❌ Single provider | ❌ | ✅ Multi-provider | ✅ Multi-provider | ❌ |
-| **Circuit Breaker** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **Rate Limiting** | ✅ Sliding window (Valkey) | ❌ | ❌ | ✅ | ❌ | ❌ |
-| **Cost Tracking** | ✅ Token + cost analytics | ❌ | ❌ | ✅ | ❌ | ❌ |
-| **Admin UI** | ✅ React SPA | ✅ Dashboard (SQLite) | ❌ | ❌ | ❌ | ❌ |
-| **Helm Chart** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **OTel Tracing** | ✅ gRPC exporter | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **Binary Size** | ~18 MB (gateway) | ~200 MB+ (Bun+Presidio) | ~15 MB | ~18 MB | ~20 MB | ~15 MB |
-| **Startup Time** | <100ms | ~2-5s | <50ms | <100ms | <100ms | <50ms |
-| **License** | Apache 2.0 | Apache 2.0 | MIT | Open source | MIT | MIT |
+| Feature                | MaskChain                                                 | PasteGuard                | CloakPipe                 | Bifrost                   | GoModel           | privacy-filter      |
+| ---------------------- | --------------------------------------------------------- | ------------------------- | ------------------------- | ------------------------- | ----------------- | ------------------- |
+| **Language**           | Go (native)                                               | TypeScript (Bun)          | Rust                      | Go                        | Go                | Go                  |
+| **LLM Proxy**          | ✅ Full proxy                                             | ✅ Proxy                  | ❌ Mask-only              | ✅ Full proxy             | ✅ Proxy          | ❌ Redact-only      |
+| **Content Shield**     | ✅ PII/PHI/finance/secrets/dictionary                     | ✅ PII+secrets (Presidio) | ✅ PII+secrets (ONNX NER) | ✅ Prompt injection + PII | ❌                | ✅ PII+secrets only |
+| **Streaming Unmask**   | ✅ SSE response restore                                   | ✅ SSE (partial buffer)   | ✅ SSE rehydration        | ❌                        | ❌                | ❌                  |
+| **Tenant Isolation**   | ✅ Per-tenant API keys + config                           | ❌                        | ❌                        | ❌                        | ❌                | ❌                  |
+| **Dictionary Masking** | ✅ Per-tenant, 4 match modes (exact/contains/regex/fuzzy) | ❌ NER-only               | ❌ NER-only               | ❌                        | ❌                | ❌                  |
+| **Routing**            | ✅ Per-tenant per-model + fallback + CB                   | ❌ Single provider        | ❌                        | ✅ Multi-provider         | ✅ Multi-provider | ❌                  |
+| **Circuit Breaker**    | ✅                                                        | ❌                        | ❌                        | ❌                        | ❌                | ❌                  |
+| **Rate Limiting**      | ✅ Sliding window (Valkey)                                | ❌                        | ❌                        | ✅                        | ❌                | ❌                  |
+| **Cost Tracking**      | ✅ Token + cost analytics                                 | ❌                        | ❌                        | ✅                        | ❌                | ❌                  |
+| **Admin UI**           | ✅ React SPA                                              | ✅ Dashboard (SQLite)     | ❌                        | ❌                        | ❌                | ❌                  |
+| **Helm Chart**         | ✅                                                        | ❌                        | ❌                        | ❌                        | ❌                | ❌                  |
+| **OTel Tracing**       | ✅ gRPC exporter                                          | ❌                        | ❌                        | ❌                        | ❌                | ❌                  |
+| **Binary Size**        | ~18 MB (gateway)                                          | ~200 MB+ (Bun+Presidio)   | ~15 MB                    | ~18 MB                    | ~20 MB            | ~15 MB              |
+| **Startup Time**       | <100ms                                                    | ~2-5s                     | <50ms                     | <100ms                    | <100ms            | <50ms               |
+| **License**            | Apache 2.0                                                | Apache 2.0                | MIT                       | Open source               | MIT               | MIT                 |
 
 MaskChain is the **only Go-native LLM gateway with per-tenant dictionary masking** — PII/PHI/financial/secrets regex detection plus Aho-Corasick dictionary matching (exact/contains/regex/fuzzy) and streaming SSE unmask. Unlike NER-only tools (PasteGuard, CloakPipe), it masks internal business terms — product codenames, patient IDs, trading signals — with deterministic, reversible placeholders. Unlike Python-based solutions (LiteLLM), it starts in under 100ms with a ~18 MB static binary. Unlike PII-only tools (privacy-filter, Bifrost), it's a complete proxy with routing, circuit breaker, rate limiting, tenant isolation, and an admin UI.
 
@@ -90,35 +90,37 @@ See [examples/README.md](examples/README.md) for tenant setup and test flows.
 
 Pre-built images are available on Docker Hub:
 
-| Image | Description |
-|-------|-------------|
-| `bzdvdn/maskchain` | Combined gateway + admin (2-in-1) |
+| Image                      | Description                       |
+| -------------------------- | --------------------------------- |
+| `bzdvdn/maskchain`         | Combined gateway + admin (2-in-1) |
 | `bzdvdn/maskchain-gateway` | Gateway only (LLM proxy + shield) |
-| `bzdvdn/maskchain-admin` | Admin only (management API + UI) |
+| `bzdvdn/maskchain-admin`   | Admin only (management API + UI)  |
 
 Images are tagged with `latest` (main branch), commit SHA, and SemVer tags on release.
 
 ## Services
 
-| Service    | Port | Image                          | Description                     |
-|-----------|------|--------------------------------|----------------------------------|
-| Gateway   | 8080 | `bzdvdn/maskchain-gateway`    | LLM proxy + shield scan         |
-| Admin     | 8081 | `bzdvdn/maskchain-admin`      | Management API + UI             |
-| Combined  | 8080/8081 | `bzdvdn/maskchain`       | Both services in one binary     |
-| PostgreSQL| 5432 | `postgres:16-alpine`           | Primary store                   |
-| Valkey    | 6379 | `valkey/valkey:8-alpine`       | Rate limit + cache              |
-| Prometheus| 9090 | `prom/prometheus`              | Metrics (examples stack)        |
-| Grafana   | 3000 | `grafana/grafana`              | Dashboards (examples stack)     |
+| Service    | Port      | Image                      | Description                 |
+| ---------- | --------- | -------------------------- | --------------------------- |
+| Gateway    | 8080      | `bzdvdn/maskchain-gateway` | LLM proxy + shield scan     |
+| Admin      | 8081      | `bzdvdn/maskchain-admin`   | Management API + UI         |
+| Combined   | 8080/8081 | `bzdvdn/maskchain`         | Both services in one binary |
+| PostgreSQL | 5432      | `postgres:16-alpine`       | Primary store               |
+| Valkey     | 6379      | `valkey/valkey:8-alpine`   | Rate limit + cache          |
+| Prometheus | 9090      | `prom/prometheus`          | Metrics (examples stack)    |
+| Grafana    | 3000      | `grafana/grafana`          | Dashboards (examples stack) |
 
 ## Key Features
 
 ### Content Shield
+
 - PII/PHI/financial/secrets regex detection
 - Dictionary-based entity matching per tenant
 - Placeholder masking with restore via admin API
 - Streaming response unmask (SSE)
 
 ### Routing
+
 - Per-tenant per-model provider routing
 - Automatic fallback + circuit breaker
 - Provider health checking
@@ -126,6 +128,7 @@ Images are tagged with `latest` (main branch), commit SHA, and SemVer tags on re
 - Supported `api_type`: `openai`, `anthropic`, `gemini`, `bedrock` (AWS Bedrock), `proxy` (OpenAI-compatible), `ollama`
 
 ### Observability
+
 - OpenTelemetry tracing (gRPC exporter)
 - Prometheus metrics (request rate, latency, shield stats, pool stats)
 - Structured logging (slog) with trace IDs via OTel enrichment
@@ -162,17 +165,17 @@ routing:
       api_type: gemini
       api_keys: ["${GEMINI_API_KEY}"]
     - name: groq
-      api_type: proxy                            # generic OpenAI-compatible
+      api_type: proxy # generic OpenAI-compatible
       base_url: https://api.groq.com/openai/v1
       api_keys: ["${GROQ_API_KEY}"]
     - name: bedrock
       api_type: bedrock
-      aws_region: "us-east-1"                    # required; credentials via env/IAM
+      aws_region: "us-east-1" # required; credentials via env/IAM
       timeout: 120s
     - name: anthropic-via-corp
       api_type: anthropic
       api_keys: ["sk-ant-..."]
-      proxy_url: http://corp-proxy:3128      # per-provider egress proxy
+      proxy_url: http://corp-proxy:3128 # per-provider egress proxy
 tenants:
   default:
     auth_header: "Authorization"
@@ -208,8 +211,8 @@ src/
 
 ## Demos
 
-| Aho-Corasick 1000-term matching (<1ms) | Real mask/unmask round-trip (Docker) |
-|:---:|:---:|
+|  Aho-Corasick 1000-term matching (<1ms)  |   Real mask/unmask round-trip (Docker)    |
+| :--------------------------------------: | :---------------------------------------: |
 | ![Benchmark](demo/bench-ahocorasick.gif) | ![Mask/Unmask](demo/mask-unmask-live.gif) |
 
 ```bash
@@ -224,14 +227,14 @@ bash demo/run-mask-unmask-live.sh
 
 The CI pipeline (GitHub Actions) runs on every push/PR to main:
 
-| Stage | What it does |
-|-------|-------------|
-| Lint  | `go mod tidy`, `go mod verify`, `golangci-lint`, `go vet` |
-| Test  | `go test -race -count=1 ./...` with coverage artifact |
-| Build | Cross-compiles gateway, admin, and combined binaries |
-| Docker| Builds all three Docker images (distroless multi-stage) |
-| Helm  | Lints the Helm chart |
-| Smoke | Starts compose stack and runs API consistency tests |
+| Stage  | What it does                                              |
+| ------ | --------------------------------------------------------- |
+| Lint   | `go mod tidy`, `go mod verify`, `golangci-lint`, `go vet` |
+| Test   | `go test -race -count=1 ./...` with coverage artifact     |
+| Build  | Cross-compiles gateway, admin, and combined binaries      |
+| Docker | Builds all three Docker images (distroless multi-stage)   |
+| Helm   | Lints the Helm chart                                      |
+| Smoke  | Starts compose stack and runs API consistency tests       |
 
 See `.github/workflows/ci.yml` for full workflow definition.
 

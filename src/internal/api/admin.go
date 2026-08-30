@@ -95,6 +95,15 @@ func (s *AdminServer) RegisterAdminAuthRoutes(h *admin.AdminAuthHandler) {
 	verify.GET("/verify", h.HandleVerify)
 }
 
+// @sk-task ui-v2-console#T2.2: Register read-only status route under admin session (AC-010)
+func (s *AdminServer) RegisterStatusHandler(h *admin.StatusHandler) {
+	group := s.engine.Group("/api/v1/admin")
+	if s.adminSessionMw != nil {
+		group.Use(s.adminSessionMw)
+	}
+	group.GET("/status", h.HandleStatus)
+}
+
 func (s *AdminServer) RegisterMetricsRoute(handler gin.HandlerFunc) {
 	s.engine.GET("/metrics", handler)
 }

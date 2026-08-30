@@ -78,13 +78,10 @@ export function Conversations() {
 
   function fmtTime(t: string) {
     if (!t) return '—'
-    return new Date(t).toLocaleString([], {
-      year: '2-digit',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
+    const d = new Date(t)
+    if (Number.isNaN(d.getTime())) return '—'
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${String(d.getFullYear()).slice(2)}`
   }
 
   const totalPages = Math.max(1, Math.ceil(total / perPage))

@@ -21,4 +21,6 @@ type UsageStore interface {
 	AggregateByDay(ctx context.Context, tenantID value.TenantID, from, to time.Time) ([]Aggregation, error)
 	// @sk-task timeseries-grafana#T1.2: QueryTimeSeries returns bucketed aggregation
 	QueryTimeSeries(ctx context.Context, from, to time.Time) ([]TimeSeriesPoint, error)
+	// @sk-task ui-v2-console#T2.1: QueryTimeSeriesByTenant scopes the bucketed aggregation to one tenant (AC-003, AC-007)
+	QueryTimeSeriesByTenant(ctx context.Context, tenantID value.TenantID, from, to time.Time) ([]TimeSeriesPoint, error)
 }

@@ -1,277 +1,226 @@
-import { useEffect, useMemo, useState } from 'react'
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
-import { TimeRangePicker, useRange, type RangeValue } from '../components/TimeRangePicker'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Download } from 'lucide-react'
+import { TimeRangePicker, useRange, usePersistedRange } from '../components/TimeRangePicker'
 import { TimeSeriesChart } from '../components/TimeSeriesChart'
-import { EmptyState, SortHeader, TableSkeleton } from '../components/ui'
-import { useSort, sortRows } from '../hooks/useSort'
-import { listConversations } from '../api/conversations'
+import { StatusPill, type StatusTone } from '../components/ui'
+import { fmtTokens, groupNum, money } from '../utils/format'
 import {
   getAnalyticsCost,
   getAnalyticsSeries,
   getAnalyticsTokens,
-  type CostRecord,
-  type SeriesPoint,
-  type TokenRecord,
+  withTenant as withTenantParam,
 } from '../api/analytics'
 
-function fmtTokens(n: number): string {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
-  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K'
-  return String(n)
+type Tab = 'day' | 'model' | 'tenant'
+
+function shiftWindow(from: string, to: string): { from: string; to: string } {
+  const f = new Date(from)
+  const t = new Date(to)
+  if (Number.isNaN(f.getTime()) || Number.isNaN(t.getTime())) return { from, to }
+  const span = t.getTime() - f.getTime()
+  return { from: new Date(f.getTime() - span).toISOString(), to: f.toISOString() }
+}
+
+function deltaPct(cur: number, prev: number): number | null {
+  if (prev <= 0) return cur > 0 ? 100 : null
+  return Math.round(((cur - prev) / prev) * 1000) / 10
+}
+
+function DeltaBadge({ delta }: { delta: number | null }) {
+  if (delta === null) return <span className="muted">—</span>
+  const tone: StatusTone = delta >= 0 ? 'green' : 'red'
+  return <StatusPill tone={tone}>{delta >= 0 ? '▲' : '▼'} {Math.abs(delta)}%</StatusPill>
 }
 
 export function Analytics() {
-  const [range, setRange] = useState<RangeValue>({ mode: '30d', from: '', to: '' })
+  const [range, setRange] = usePersistedRange('maskchain.analytics.range')
   const { from, to } = useRange(range)
-  const [tokenRecords, setTokenRecords] = useState<TokenRecord[]>([])
-  const [costRecords, setCostRecords] = useState<CostRecord[]>([])
-  const [series, setSeries] = useState<SeriesPoint[]>([])
+  const [workspace, setWorkspace] = useState<string>(() => localStorage.getItem('maskchain.workspace') ?? '')
+  const [compare, setCompare] = useState(false)
+  const [tab, setTab] = useState<Tab>('day')
+
+  const [tokens, setTokens] = useState<{ records: any[]; totals: { total_input_tokens: number; total_output_tokens: number } }>({ records: [], totals: { total_input_tokens: 0, total_output_tokens: 0 } })
+  const [cost, setCost] = useState<{ records: any[]; totals: { total_cost: number; request_count: number } }>({ records: [], totals: { total_cost: 0, request_count: 0 } })
+  const [series, setSeries] = useState<{ bucket: string; input_tokens: number; output_tokens: number; cost: number; requests: number }[]>([])
+  const [prev, setPrev] = useState({ total_cost: 0, request_count: 0, total_tokens: 0 })
+  const [prevSeries, setPrevSeries] = useState<{ bucket: string; input_tokens: number; output_tokens: number }[]>([])
   const [loading, setLoading] = useState(true)
-  const [rateByModel, setRateByModel] = useState<Record<string, { ok: number; error: number; blocked: number }>>({})
+
+  useEffect(() => {
+    const onWorkspace = (e: Event) => setWorkspace((e as CustomEvent<string>).detail)
+    window.addEventListener('maskchain:workspace', onWorkspace)
+    return () => window.removeEventListener('maskchain:workspace', onWorkspace)
+  }, [])
 
   useEffect(() => {
     setLoading(true)
+    const prevWin = shiftWindow(from, to)
     Promise.all([
-      getAnalyticsTokens(from, to),
-      getAnalyticsCost(from, to),
-      getAnalyticsSeries(from, to),
+      getAnalyticsTokens(from, to, workspace),
+      getAnalyticsCost(from, to, workspace),
+      getAnalyticsSeries(from, to, workspace),
+      getAnalyticsCost(prevWin.from, prevWin.to, workspace),
+      getAnalyticsSeries(prevWin.from, prevWin.to, workspace),
     ])
-      .then(([t, c, s]) => {
-        setTokenRecords(t.records ?? [])
-        setCostRecords(c.records ?? [])
+      .then(([t, c, s, pc, ps]) => {
+        setTokens(t)
+        setCost(c)
         setSeries(Array.isArray(s.series) ? s.series : [])
+        const prevCost = pc.totals?.total_cost ?? 0
+        const prevReq = pc.totals?.request_count ?? 0
+        const prevToks = (ps?.series ?? []).reduce((sum, p) => sum + (p.input_tokens || 0) + (p.output_tokens || 0), 0)
+        setPrev({ total_cost: prevCost, request_count: prevReq, total_tokens: prevToks })
+        setPrevSeries(Array.isArray(ps.series) ? ps.series : [])
       })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [from, to])
+  }, [from, to, workspace])
 
-  useEffect(() => {
-    listConversations(1, 100)
-      .then((res) => {
-        const agg: Record<string, { ok: number; error: number; blocked: number }> = {}
-        for (const c of res.items) {
-          const m = c.model || 'unknown'
-          if (!agg[m]) agg[m] = { ok: 0, error: 0, blocked: 0 }
-          if (c.status === 'ok') agg[m].ok++
-          else if (c.status === 'blocked') agg[m].blocked++
-          else agg[m].error++
-        }
-        setRateByModel(agg)
-      })
-      .catch(() => {})
-  }, [])
-
-  const totalInput = tokenRecords.reduce((s, r) => s + r.total_input_tokens, 0)
-  const totalOutput = tokenRecords.reduce((s, r) => s + r.total_output_tokens, 0)
-  const totalTokens = totalInput + totalOutput
-  const totalCost = costRecords.reduce((s, r) => s + r.total_cost, 0)
-  const totalRequests = costRecords.reduce((s, r) => s + r.request_count, 0)
+  const totalTokens = (tokens.totals?.total_input_tokens ?? 0) + (tokens.totals?.total_output_tokens ?? 0)
+  const totalCost = cost.totals?.total_cost ?? 0
+  const totalRequests = cost.totals?.request_count ?? 0
   const avgTokens = totalRequests > 0 ? Math.round(totalTokens / totalRequests) : 0
 
-  function exportCSV(kind: 'tokens' | 'cost' | 'timeseries') {
-    const qs = `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&format=csv`
-    window.open(`/api/v1/analytics/${kind}${qs}`, '_blank')
-  }
-
-  const merged: Record<string, {
-    input: number; output: number; cost: number; requests: number; tenants: Set<string>; currency: string
-  }> = {}
-  for (const r of tokenRecords) {
-    if (!merged[r.model]) merged[r.model] = { input: 0, output: 0, cost: 0, requests: 0, tenants: new Set(), currency: 'USD' }
-    merged[r.model].input += r.total_input_tokens
-    merged[r.model].output += r.total_output_tokens
-    merged[r.model].tenants.add(r.tenant_id)
-  }
-  for (const r of costRecords) {
-    if (!merged[r.model]) merged[r.model] = { input: 0, output: 0, cost: 0, requests: 0, tenants: new Set(), currency: 'USD' }
-    merged[r.model].cost += r.total_cost
-    merged[r.model].requests += r.request_count
-    merged[r.model].tenants.add(r.tenant_id)
-    if (r.currency) merged[r.model].currency = r.currency
-  }
-
-  interface ModelRow { model: string; tenants: number; input: number; output: number; total: number; requests: number; cost: number; currency: string }
-  const modelRows: ModelRow[] = Object.entries(merged).map(([model, m]) => ({
-    model,
-    tenants: m.tenants.size,
-    input: m.input,
-    output: m.output,
-    total: m.input + m.output,
-    requests: m.requests,
-    cost: m.cost,
-    currency: m.currency,
-  }))
-  const sort = useSort<ModelRow>('total', 'desc')
-  const rows = useMemo(() => sortRows(modelRows, sort.key, sort.dir), [modelRows, sort])
-
-  const tenantCost = useMemo(() => {
-    const agg: Record<string, { cost: number; requests: number }> = {}
-    for (const r of costRecords) {
-      if (!agg[r.tenant_id]) agg[r.tenant_id] = { cost: 0, requests: 0 }
-      agg[r.tenant_id].cost += r.total_cost
-      agg[r.tenant_id].requests += r.request_count
+  const modelRows = useMemo(() => {
+    const merged: Record<string, { tenants: Set<string>; input: number; output: number; requests: number; cost: number }> = {}
+    for (const r of tokens.records ?? []) {
+      const m = r.model || 'unknown'
+      if (!merged[m]) merged[m] = { tenants: new Set(), input: 0, output: 0, requests: 0, cost: 0 }
+      merged[m].input += r.total_input_tokens || 0
+      merged[m].output += r.total_output_tokens || 0
+      merged[m].tenants.add(r.tenant_id)
     }
-    return Object.entries(agg)
+    for (const r of cost.records ?? []) {
+      const m = r.model || 'unknown'
+      if (!merged[m]) merged[m] = { tenants: new Set(), input: 0, output: 0, requests: 0, cost: 0 }
+      merged[m].requests += r.request_count || 0
+      merged[m].cost += r.total_cost || 0
+      merged[m].tenants.add(r.tenant_id)
+    }
+    return Object.entries(merged)
+      .map(([model, v]) => ({ model, tenants: v.tenants.size, input: v.input, output: v.output, total: v.input + v.output, requests: v.requests, cost: v.cost }))
+      .sort((a, b) => b.cost - a.cost)
+  }, [tokens.records, cost.records])
+
+  const tenantRows = useMemo(() => {
+    const merged: Record<string, { cost: number; requests: number }> = {}
+    for (const r of cost.records ?? []) {
+      if (!merged[r.tenant_id]) merged[r.tenant_id] = { cost: 0, requests: 0 }
+      merged[r.tenant_id].cost += r.total_cost || 0
+      merged[r.tenant_id].requests += r.request_count || 0
+    }
+    return Object.entries(merged)
       .map(([tenant, v]) => ({ tenant, ...v }))
       .sort((a, b) => b.cost - a.cost)
-      .slice(0, 10)
-  }, [costRecords])
+  }, [cost.records])
 
-  const topModels = useMemo(() => {
-    const agg: Record<string, number> = {}
-    for (const r of costRecords) agg[r.model] = (agg[r.model] ?? 0) + r.request_count
-    return Object.entries(agg)
-      .map(([model, requests]) => ({ model, requests }))
-      .sort((a, b) => b.requests - a.requests)
-      .slice(0, 6)
-  }, [costRecords])
-
-  const rateData = useMemo(
-    () => Object.entries(rateByModel)
-      .map(([model, v]) => ({ model, ...v }))
-      .sort((a, b) => (b.ok + b.error + b.blocked) - (a.ok + a.error + a.blocked)),
-    [rateByModel],
-  )
-
-  const th = (k: keyof ModelRow, label: string, num = false) => (
-    <th className={num ? 'num' : undefined}>
-      <SortHeader active={sort.key === k} dir={sort.dir} onClick={() => sort.toggle(k)}>{label}</SortHeader>
-    </th>
-  )
+  const exportCSV = useCallback((kind: 'tokens' | 'cost' | 'timeseries') => {
+    const base = `/api/v1/analytics/${kind}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&format=csv`
+    window.open(withTenantParam(base, workspace), '_blank')
+  }, [from, to, workspace])
 
   return (
     <div>
-      <div className="card">
-        <div className="card-header-row">
-          <h3>Usage Over Time</h3>
-          <div className="header-actions">
-            <button type="button" className="btn btn-small" onClick={() => exportCSV('tokens')}>Export CSV</button>
-            <TimeRangePicker value={range} onChange={setRange} />
-          </div>
+      <div className="card tight u-mb16">
+        <div className="toolbar u-mb0">
+          <span className="toolbar-label">Range</span>
+          <TimeRangePicker value={range} onChange={setRange} />
+          <span className="vsep" />
+          <span className="toolbar-label">Compare</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={compare}
+            className={`mc-switch${compare ? ' on' : ''}`}
+            aria-label="Compare to previous period"
+            onClick={() => setCompare((c) => !c)}
+          />
+          <span className="toolbar-hint">vs previous period</span>
+          <span className="u-grow" />
+          <button className="btn btn-small" onClick={() => exportCSV('cost')}><Download size={13} /> CSV</button>
         </div>
-        <TimeSeriesChart data={series} height={220} />
       </div>
 
       <div className="stats-grid">
-        <div className="stat-card"><div className="label">Total Tokens</div><div className="value">{fmtTokens(totalTokens)}</div></div>
-        <div className="stat-card"><div className="label">Est. Cost</div><div className="value">${totalCost.toFixed(2)}</div></div>
-        <div className="stat-card"><div className="label">Requests</div><div className="value">{totalRequests.toLocaleString()}</div></div>
-        <div className="stat-card"><div className="label">Avg Tokens/Req</div><div className="value">{avgTokens}</div></div>
+        {[
+          { label: 'Estimated cost', value: money(totalCost), delta: deltaPct(totalCost, prev.total_cost) },
+          { label: 'Requests', value: groupNum(totalRequests), delta: deltaPct(totalRequests, prev.request_count) },
+          { label: 'Tokens', value: fmtTokens(totalTokens), delta: deltaPct(totalTokens, prev.total_tokens) },
+          { label: 'Avg tokens / request', value: groupNum(avgTokens), delta: null },
+        ].map((kpi) => (
+          <div key={kpi.label} className="stat-card">
+            <div className="label">{kpi.label}</div>
+            <div className="value">{kpi.value}</div>
+            <div className="change u-mt4">{kpi.delta !== null && <DeltaBadge delta={kpi.delta} />}</div>
+          </div>
+        ))}
       </div>
 
-      <div className="dash-grid">
+      <div className="tabs" role="tablist">
+        {(['day', 'model', 'tenant'] as Tab[]).map((t) => (
+          <button key={t} role="tab" aria-selected={tab === t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
+            {t === 'day' ? 'By day' : t === 'model' ? 'By model' : 'By tenant'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'day' && (
         <div className="card">
-          <h3>Cost by Tenant</h3>
-          {tenantCost.length === 0 ? (
-            <EmptyState message="No cost data" />
-          ) : (
-            <>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={tenantCost} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="tenant" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} tickLine={false} axisLine={{ stroke: 'var(--border)' }} />
-                  <YAxis tickFormatter={(v: number) => `$${v.toFixed(0)}`} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} tickLine={false} axisLine={false} width={44} />
-                  <Tooltip formatter={(v) => `$${Number(v).toFixed(2)}`} cursor={{ fill: 'var(--row-hover)' }} />
-                  <Bar dataKey="cost" fill="var(--accent)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-              <div className="table-wrap">
-                <table>
-                  <tbody>
-                    {tenantCost.slice(0, 5).map((t) => (
-                      <tr key={t.tenant}>
-                        <td><code>{t.tenant}</code></td>
-                        <td className="num">${t.cost.toFixed(2)}</td>
-                        <td className="num">{t.requests.toLocaleString()} req</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
+          <div className="card-header-row">
+            <h3>Usage over time</h3>
+            {compare && <StatusPill tone="blue">compare on</StatusPill>}
+          </div>
+          {loading && series.length === 0 ? <div className="loading">Loading…</div> : <TimeSeriesChart data={series} height={240} compare={compare ? prevSeries : undefined} />}
         </div>
+      )}
 
-        <div className="card">
-          <h3>Top Models by Requests</h3>
-          {topModels.length === 0 ? (
-            <EmptyState message="No traffic data" />
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={topModels} layout="vertical" margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} tickLine={false} axisLine={false} />
-                <YAxis type="category" dataKey="model" width={110} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} tickLine={false} axisLine={false} />
-                <Tooltip formatter={(v) => Number(v).toLocaleString()} cursor={{ fill: 'var(--row-hover)' }} />
-                <Bar dataKey="requests" fill="var(--green)" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+      {tab === 'model' && (
+        <div className="card table-card">
+          <div className="table-wrap table-flush">
+            <table className="tbl">
+              <thead>
+                <tr><th>Model</th><th className="num">Tenants</th><th className="num">Input</th><th className="num">Output</th><th className="num">Total</th><th className="num">Requests</th><th className="num">Cost</th></tr>
+              </thead>
+              <tbody>
+                {modelRows.map((m) => (
+                  <tr key={m.model}>
+                    <td className="mono">{m.model}</td>
+                    <td className="num">{m.tenants}</td>
+                    <td className="num">{fmtTokens(m.input)}</td>
+                    <td className="num">{fmtTokens(m.output)}</td>
+                    <td className="num">{fmtTokens(m.total)}</td>
+                    <td className="num">{groupNum(m.requests)}</td>
+                    <td className="num">{money(m.cost)}</td>
+                  </tr>
+                ))}
+                {!loading && modelRows.length === 0 && <tr><td colSpan={7}><div className="empty-state">No data</div></td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
+      )}
 
-        <div className="card" style={{ gridColumn: '1 / -1' }}>
-          <h3>Request Status by Model <span className="text-muted" style={{ fontSize: 12, fontWeight: 400 }}>(last 100)</span></h3>
-          {rateData.length === 0 ? (
-            <EmptyState message="No conversation data yet" />
-          ) : (
-            <ResponsiveContainer width="100%" height={Math.max(120, rateData.length * 44)}>
-              <BarChart data={rateData} layout="vertical" margin={{ top: 4, right: 12, left: 40, bottom: 0 }} barCategoryGap={6}>
-                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} tickLine={false} axisLine={false} />
-                <YAxis type="category" dataKey="model" width={120} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} tickLine={false} axisLine={false} />
-                <Tooltip cursor={{ fill: 'var(--row-hover)' }} />
-                <Bar dataKey="ok" name="OK" stackId="s" fill="var(--green)" />
-                <Bar dataKey="blocked" name="Blocked" stackId="s" fill="var(--orange)" />
-                <Bar dataKey="error" name="Error" stackId="s" fill="var(--red)" />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+      {tab === 'tenant' && (
+        <div className="card table-card">
+          <div className="table-wrap table-flush">
+            <table className="tbl">
+              <thead>
+                <tr><th>Tenant</th><th className="num">Requests</th><th className="num">Cost</th></tr>
+              </thead>
+              <tbody>
+                {tenantRows.map((t) => (
+                  <tr key={t.tenant}>
+                    <td className="mono">{t.tenant}</td>
+                    <td className="num">{groupNum(t.requests)}</td>
+                    <td className="num">{money(t.cost)}</td>
+                  </tr>
+                ))}
+                {!loading && tenantRows.length === 0 && <tr><td colSpan={3}><div className="empty-state">No data</div></td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
-
-      <div className="card">
-        <h3>Token Usage by Model</h3>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                {th('model', 'Model')}
-                {th('tenants', 'Tenants', true)}
-                {th('input', 'Input', true)}
-                {th('output', 'Output', true)}
-                {th('total', 'Total', true)}
-                {th('requests', 'Requests', true)}
-                {th('cost', 'Cost', true)}
-                <th>Currency</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((m) => (
-                <tr key={m.model}>
-                  <td>{m.model}</td>
-                  <td className="num">{m.tenants}</td>
-                  <td className="num">{fmtTokens(m.input)}</td>
-                  <td className="num">{fmtTokens(m.output)}</td>
-                  <td className="num">{fmtTokens(m.total)}</td>
-                  <td className="num">{m.requests}</td>
-                  <td className="num">{m.currency === 'USD' ? '$' : ''}{m.cost.toFixed(2)} {m.currency !== 'USD' ? m.currency : ''}</td>
-                  <td>{m.currency}</td>
-                </tr>
-              ))}
-              {!loading && Object.keys(merged).length === 0 && <tr><td colSpan={8}><EmptyState message="No data" /></td></tr>}
-              {loading && <tr><td colSpan={8}><TableSkeleton rows={4} cols={8} /></td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      )}
     </div>
   )
 }

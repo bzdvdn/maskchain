@@ -19,6 +19,10 @@ type mockUsageStore struct {
 	records      []analytics.UsageRecord
 	aggregations []analytics.Aggregation
 	err          error
+
+	tenantQueried    value.TenantID
+	queryAllCalled   bool
+	timeSeriesTenant value.TenantID
 }
 
 func (m *mockUsageStore) Record(ctx context.Context, usage analytics.TokenUsage) error {
@@ -34,6 +38,7 @@ func (m *mockUsageStore) DeleteOlderThan(ctx context.Context, before time.Time) 
 }
 
 func (m *mockUsageStore) QueryByTenant(ctx context.Context, tenantID value.TenantID, from, to time.Time) ([]analytics.UsageRecord, error) {
+	m.tenantQueried = tenantID
 	return m.records, m.err
 }
 
@@ -42,6 +47,7 @@ func (m *mockUsageStore) QueryByModel(ctx context.Context, model string, from, t
 }
 
 func (m *mockUsageStore) QueryAll(ctx context.Context, from, to time.Time) ([]analytics.UsageRecord, error) {
+	m.queryAllCalled = true
 	return m.records, m.err
 }
 
@@ -50,6 +56,11 @@ func (m *mockUsageStore) AggregateByDay(ctx context.Context, tenantID value.Tena
 }
 
 func (m *mockUsageStore) QueryTimeSeries(ctx context.Context, from, to time.Time) ([]analytics.TimeSeriesPoint, error) {
+	return nil, m.err
+}
+
+func (m *mockUsageStore) QueryTimeSeriesByTenant(ctx context.Context, tenantID value.TenantID, from, to time.Time) ([]analytics.TimeSeriesPoint, error) {
+	m.timeSeriesTenant = tenantID
 	return nil, m.err
 }
 
@@ -62,6 +73,7 @@ func setupTest(t *testing.T, store *mockUsageStore) *gin.Engine {
 	group.GET("/tokens", h.HandleTokens)
 	group.GET("/cost", h.HandleCost)
 	group.GET("/traffic", h.HandleTraffic)
+	group.GET("/timeseries", h.HandleTimeSeries)
 	return engine
 }
 
@@ -283,5 +295,66 @@ func TestAnalyticsHandler_Pagination(t *testing.T) {
 	}
 	if resp.Pagination.Total != 25 {
 		t.Errorf("expected total=25, got %d", resp.Pagination.Total)
+	}
+}
+
+// @sk-test ui-v2-console#T2.1: tenant param routes tokens to tenant-scoped query (AC-003)
+func TestAnalyticsHandler_Tokens_TenantParam(t *testing.T) {
+	store := &mockUsageStore{records: []analytics.UsageRecord{
+		{TenantID: "tenant-a", Model: "gpt-4", TotalInputTokens: 100, TotalOutputTokens: 50, PeriodStart: now().AddDate(0, 0, -1), PeriodEnd: now()},
+	}}
+	engine := setupTest(t, store)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/analytics/tokens?period=week&tenant=tenant-a", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if store.tenantQueried.String() != "tenant-a" {
+		t.Errorf("expected tenant-scoped store query, got %q", store.tenantQueried.String())
+	}
+	if store.queryAllCalled {
+		t.Errorf("expected QueryByTenant, got QueryAll")
+	}
+}
+
+// @sk-test ui-v2-console#T2.1: absent tenant param keeps the aggregate path (AC-003)
+func TestAnalyticsHandler_Tokens_NoTenantParamStaysAggregate(t *testing.T) {
+	store := &mockUsageStore{records: []analytics.UsageRecord{
+		{TenantID: "tenant-a", Model: "gpt-4", TotalInputTokens: 100, TotalOutputTokens: 50, PeriodStart: now().AddDate(0, 0, -1), PeriodEnd: now()},
+	}}
+	engine := setupTest(t, store)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/analytics/tokens?period=week", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if !store.queryAllCalled {
+		t.Errorf("expected QueryAll when tenant param is absent")
+	}
+	if store.tenantQueried.String() != "" {
+		t.Errorf("expected no tenant-scoped query, got %q", store.tenantQueried.String())
+	}
+}
+
+// @sk-test ui-v2-console#T2.1: tenant param scopes timeseries (AC-007)
+func TestAnalyticsHandler_TimeSeries_TenantParam(t *testing.T) {
+	store := &mockUsageStore{}
+	engine := setupTest(t, store)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/analytics/timeseries?period=week&tenant=tenant-a", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if store.timeSeriesTenant.String() != "tenant-a" {
+		t.Errorf("expected tenant-scoped timeseries, got %q", store.timeSeriesTenant.String())
 	}
 }

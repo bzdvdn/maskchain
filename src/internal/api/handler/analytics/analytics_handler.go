@@ -42,7 +42,12 @@ const defaultPerPage = 50
 func (h *AnalyticsHandler) HandleTokens(c *gin.Context) {
 	q := parseQuery(c)
 	from, to := resolvePeriod(q)
-	records, err := h.fetchRecords(c, from, to)
+	tid, err := resolveTenant(c, q)
+	if err != nil {
+		middleware.AbortWithError(c, http.StatusBadRequest, middleware.ErrorCodeValidationError, "invalid tenant")
+		return
+	}
+	records, err := h.fetchRecords(c, from, to, tid)
 	if err != nil {
 		_ = c.Error(err)
 		return
@@ -73,7 +78,12 @@ func (h *AnalyticsHandler) HandleTokens(c *gin.Context) {
 func (h *AnalyticsHandler) HandleCost(c *gin.Context) {
 	q := parseQuery(c)
 	from, to := resolvePeriod(q)
-	records, err := h.fetchRecords(c, from, to)
+	tid, err := resolveTenant(c, q)
+	if err != nil {
+		middleware.AbortWithError(c, http.StatusBadRequest, middleware.ErrorCodeValidationError, "invalid tenant")
+		return
+	}
+	records, err := h.fetchRecords(c, from, to, tid)
 	if err != nil {
 		_ = c.Error(err)
 		return
@@ -127,16 +137,17 @@ func (h *AnalyticsHandler) currencyByModel(ctx context.Context) map[string]strin
 func (h *AnalyticsHandler) HandleTimeSeries(c *gin.Context) {
 	q := parseQuery(c)
 	from, to := resolvePeriod(q)
+	tid, err := resolveTenant(c, q)
+	if err != nil {
+		middleware.AbortWithError(c, http.StatusBadRequest, middleware.ErrorCodeValidationError, "invalid tenant")
+		return
+	}
 
-	tid := tenantID(c)
 	var pts []analytics.TimeSeriesPoint
-	var err error
 	if tid.String() == "" {
 		pts, err = h.store.QueryTimeSeries(c.Request.Context(), from, to)
 	} else {
-		pts, err = h.store.QueryTimeSeries(c.Request.Context(), from, to)
-		// filter by tenant post-query since QueryTimeSeries ignores tenant
-		// TODO: add tenant filter to QueryTimeSeries if perf becomes an issue
+		pts, err = h.store.QueryTimeSeriesByTenant(c.Request.Context(), tid, from, to)
 	}
 	if err != nil {
 		_ = c.Error(err)
@@ -164,7 +175,12 @@ func (h *AnalyticsHandler) HandleTimeSeries(c *gin.Context) {
 func (h *AnalyticsHandler) HandleTraffic(c *gin.Context) {
 	q := parseQuery(c)
 	from, to := resolvePeriod(q)
-	records, err := h.fetchRecords(c, from, to)
+	tid, err := resolveTenant(c, q)
+	if err != nil {
+		middleware.AbortWithError(c, http.StatusBadRequest, middleware.ErrorCodeValidationError, "invalid tenant")
+		return
+	}
+	records, err := h.fetchRecords(c, from, to, tid)
 	if err != nil {
 		_ = c.Error(err)
 		return
@@ -243,8 +259,14 @@ func tenantID(c *gin.Context) value.TenantID {
 	return id
 }
 
-func (h *AnalyticsHandler) fetchRecords(c *gin.Context, from, to time.Time) ([]analytics.UsageRecord, error) {
-	tid := tenantID(c)
+func resolveTenant(c *gin.Context, q dto.AnalyticsQuery) (value.TenantID, error) {
+	if q.Tenant != "" {
+		return value.NewTenantID(q.Tenant)
+	}
+	return tenantID(c), nil
+}
+
+func (h *AnalyticsHandler) fetchRecords(c *gin.Context, from, to time.Time, tid value.TenantID) ([]analytics.UsageRecord, error) {
 	if tid.String() == "" {
 		return h.store.QueryAll(c.Request.Context(), from, to)
 	}

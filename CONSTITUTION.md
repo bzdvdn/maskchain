@@ -65,7 +65,7 @@ Preference: plugins, interfaces, adapters, declarative policies, extensible dete
 
 - Content Shield is a mandatory gateway capability, not opt-in.
 - Tenants (dictionaries, PII rules, preprocessors) are stored in PostgreSQL; Valkey is only for caching.
-- React UI is only for tenant management and viewing logs/incidents; it is not a real-time AI traffic control panel.
+- React UI is the operator control-plane console (dashboards, analytics, virtual keys, budgets, routing health, compliance, tenant policies, settings/status, audit); it is not an end-user chat/playground UI.
 - Dictionary profiles are removed and MUST NOT return; all policy configuration lives at the tenant level.
 - Envoy mode is PostMVP; native mode is the only option until core domains are stabilized.
 - No chatbot UI, no prompt playground, no agent framework, no low-code platform.
@@ -79,7 +79,7 @@ Preference: plugins, interfaces, adapters, declarative policies, extensible dete
 - **Web framework:** Gin
 - **Config:** viper + cobra
 - **Architecture:** DDD, Clean Architecture (ports/adapters)
-- **UI:** React (TypeScript, Vite)
+- **UI:** React (TypeScript, Vite) — operator control-plane console
 - **Data Plane:** Native (Go, in-process). Envoy — PostMVP.
 - **Content Shield / AI DLP:** Microsoft Presidio (PII detection), custom patterns engine (secrets, API keys, financial data)
 - **Observability:** OpenTelemetry, Prometheus, Grafana, Loki, Tempo
@@ -94,7 +94,7 @@ Client → Gateway Runtime → Shield Engine → Routing → Egress → AI Provi
                             ↕
                    Tenant Repository (PG)
                             ↕
-                    React UI (tenants, logs)
+                    React UI — Operator Console
 ```
 
 ### Gateway Runtime
@@ -120,8 +120,8 @@ Outbound proxy routing, retry orchestration, timeout management.
 ### Observability Layer
 OpenTelemetry, Prometheus, structured logging, distributed tracing.
 
-### React UI
-Tenant management (dictionaries, PII rules), Shield incident viewing, audit logs.
+### React UI — Operator Control-Plane Console
+Operator console for LLM gateway operations: Operations HQ (KPI + needs-attention), analytics, virtual keys, budgets, routing health/fallbacks, compliance packs + deviation, tenant policies and Dictionaries, live system status, config diff, audit logs.
 
 ## Language Policy
 
@@ -242,9 +242,9 @@ Follow ports/adapters, dependency inversion, explicit boundaries, isolated domai
 
 ## Constitution Metadata
 
-- Version: 1.3.0
+- Version: 1.4.0
 - Ratified: 2026-07-10
-- Last Amended: 2026-08-13
+- Last Amended: 2026-08-30
 
 ## Last Updated
 
@@ -252,3 +252,4 @@ Follow ports/adapters, dependency inversion, explicit boundaries, isolated domai
 2026-07-15 — v1.1.0: dictionary profiles removed, policies configured on the tenant (dictionaries, PII rules, preprocessors).
 2026-07-20 — v1.2.0: GoDoc clean — marker placement rule: `@sk-task` → blank line → GoDoc → declaration. Marker always above the declaration, GoDoc separated by a blank line below.
 2026-08-13 — v1.3.0: full English translation per language policy (docs=en, agent=en, comments=en).
+2026-08-30 — v1.4.0: React UI is the operator control-plane console (dashboards, analytics, keys, budgets, routing, compliance, settings, audit), not an end-user chat/playground UI.

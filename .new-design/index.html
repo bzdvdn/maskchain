@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MaskChain UI v2 — mockup overview</title>
+<link rel="stylesheet" href="assets/design.css">
+<style>
+  .hub { max-width: 1120px; margin: 0 auto; padding: 40px 28px; }
+  .hub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 18px; margin-top: 26px; }
+  .hub-card {
+    display: flex; flex-direction: column; gap: 12px;
+    background: var(--surface); border: 1px solid var(--border-soft);
+    border-radius: var(--radius-lg); padding: 20px;
+    transition: all 0.16s var(--ease);
+  }
+  .hub-card:hover { border-color: var(--accent-border); transform: translateY(-2px); box-shadow: var(--shadow); }
+  .hub-card .thumb {
+    height: 148px; border-radius: 10px; overflow: hidden;
+    background:
+      radial-gradient(300px 160px at 20% 0%, rgba(108,138,255,0.16), transparent 65%),
+      var(--bg-soft);
+    border: 1px solid var(--border-soft);
+    display: grid; place-items: center;
+    color: var(--muted-2);
+  }
+  .hub-card .thumb i { font-style: normal; font-size: 12px; letter-spacing: 0.04em; }
+  .hub-card h3 { font-size: 15px; font-weight: 700; }
+  .hub-card p { font-size: 13px; color: var(--muted); line-height: 1.55; flex: 1; }
+  .hub-card .tag-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .hero { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: end; }
+  .hero h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.03em; }
+  .hero p { color: var(--muted); margin-top: 8px; max-width: 620px; font-size: 14.5px; line-height: 1.6; }
+  .chip-static { white-space: nowrap; }
+</style>
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-3.6 8-10V5l-8-3-8 3v7c0 6.4 8 10 8 10Z"/></symbol>
+</svg>
+
+<body>
+<div class="hub">
+  <div style="display:flex;align-items:center;gap:12px">
+    <div class="brand" style="padding:0">
+      <span class="mark"><svg class="ic" width="15" height="15"><use href="#i-shield"/></svg></span>
+      MaskChain
+    </div>
+    <span class="pill blue">UI v2 · static mockups</span>
+    <a class="hint" href="assets/design.css" style="color:var(--accent);font-weight:600">design.css →</a>
+  </div>
+
+  <div class="hero" style="margin-top:34px">
+    <div>
+      <h1>Product-grade console, screen by screen</h1>
+      <p>Проект «UI v2» — операторская консоль уровня LiteLLM: тёмная тема как основа, реальные данные из API, статусы/дельта-метрики, контекстные действия в топбаре, чипсы вместо CSV-списков. Все экраны — статичные HTML, открываются без сервера.</p>
+    </div>
+    <div>
+      <div class="seg">
+        <button class="active">Dark</button><button>Light (future)</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="hub-grid">
+    <a class="hub-card" href="dashboard.html">
+      <div class="thumb">
+        <svg viewBox="0 0 200 120" width="200" height="120">
+          <rect x="0" y="60" width="600" height="60" fill="rgba(108,138,255,0.14)"/>
+          <path d="M0,80 L18,72 L36,76 L54,60 L72,64 L90,52 L108,56 L126,44 L144,48 L162,34 L180,38 L200,26" fill="none" stroke="#6c8aff" stroke-width="2"/>
+        </svg>
+      </div>
+      <h3>Operations HQ <span class="pill green">flagship</span></h3>
+      <p>KPI с sparkline и дельтой vs prev период, тренд-график с переключателем Tokens/Cost/Requests, панель «Needs attention» из реальных сигналов, лента активности.</p>
+      <div class="tag-row"><span class="chip chip-static">KPI+spark</span><span class="chip chip-static">delta</span><span class="chip chip-static">attention panel</span><span class="chip chip-static">quick actions</span></div>
+    </a>
+
+    <a class="hub-card" href="keys.html">
+      <div class="thumb" style="justify-content:flex-start;padding:14px">
+        <div style="width:100%">
+          <div style="height:22px;border-radius:6px;background:var(--accent-soft);border:1px solid var(--accent-border);margin-bottom:10px;position:relative"><span style="position:absolute;right:8px;top:5px;font-size:9px;color:var(--accent)">POST /v1/keys</span></div>
+          <div style="height:14px;border-radius:4px;background:var(--surface-3);border:1px solid var(--border);margin-bottom:6px;width:80%"></div>
+          <div style="height:14px;border-radius:4px;background:var(--surface-3);border:1px solid var(--border);margin-bottom:6px;width:55%"></div>
+          <div style="display:flex;gap:4px"><span style="height:14px;width:44px;border-radius:4px;background:var(--green-soft);border:1px solid var(--green-border)"></span><span style="height:14px;width:60px;border-radius:4px;background:var(--surface-3);border:1px solid var(--border)"></span></div>
+        </div>
+      </div>
+      <h3>Virtual Keys <span class="pill blue">quickstart + drawer</span></h3>
+      <p>Карточка «Connect your app» (base URL + curl), поиск и фильтры, чипсы моделей, spend-прогресс, switch, открытый drawer создания ключа с tag-input.</p>
+      <div class="tag-row"><span class="chip chip-static">endpoint</span><span class="chip chip-static">model chips</span><span class="chip chip-static">budget bar</span><span class="chip chip-static">drawer</span></div>
+    </a>
+
+    <a class="hub-card" href="analytics.html">
+      <div class="thumb">
+        <svg viewBox="0 0 200 120" width="200" height="120">
+          <path d="M0,70 L20,52 L40,60 L60,40 L80,48 L100,30 L120,38 L140,24 L160,30 L180,16 L200,22" fill="none" stroke="#34d399" stroke-width="2"/>
+          <path d="M0,90 L20,84 L40,88 L60,74 L80,78 L100,66 L120,70 L140,58 L160,62 L180,50 L200,54" fill="none" stroke="#6c8aff" stroke-width="2"/>
+        </svg>
+      </div>
+      <h3>Analytics</h3>
+      <p>Глобальный range (персеться в предпочтениях), toggle «vs previous period», вкладки breakdown (day/model/tenant), KPI и таблица моделей с Δ.</p>
+      <div class="tag-row"><span class="chip chip-static">persist range</span><span class="chip chip-static">compare</span><span class="chip chip-static">breakdown tabs</span></div>
+    </a>
+
+    <a class="hub-card" href="routing.html">
+      <div class="thumb">
+        <div style="padding:14px;width:100%">
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <span style="flex:1;height:16px;border-radius:5px;background:var(--green-soft);border:1px solid var(--green-border)"></span>
+            <span style="flex:1;height:16px;border-radius:5px;background:var(--red-soft);border:1px solid var(--red-border)"></span>
+            <span style="flex:1;height:16px;border-radius:5px;background:var(--amber-soft);border:1px solid var(--amber-border)"></span>
+          </div>
+          <div style="height:14px;border-radius:4px;background:var(--surface-3);width:70%;margin-bottom:4px"></div>
+          <div style="height:14px;border-radius:4px;background:var(--surface-3);width:45%"></div>
+        </div>
+      </div>
+      <h3>Providers &amp; routing</h3>
+      <p>Карточки провайдеров со live-точками (healthy/degraded/down), p50 latency, ok-rate за 24h, активные роуты и цепочка fallback + таблица правил.</p>
+      <div class="tag-row"><span class="chip chip-static">health dots</span><span class="chip chip-static">fallback chain</span><span class="chip chip-static">rules</span></div>
+    </a>
+
+    <a class="hub-card" href="tenant.html">
+      <div class="thumb">
+        <div style="padding:14px;width:100%">
+          <div style="height:14px;border-radius:4px;background:var(--amber-soft);border:1px solid var(--amber-border);width:85%;margin-bottom:8px"></div>
+          <div style="display:flex;gap:6px;margin-bottom:8px">
+            <span style="height:10px;width:52px;border-radius:4px;background:var(--surface-3)"></span>
+            <span style="height:10px;width:70px;border-radius:4px;background:var(--surface-3)"></span>
+            <span style="height:10px;width:60px;border-radius:4px;background:var(--surface-3)"></span>
+          </div>
+          <div style="height:52px;border-radius:6px;background:var(--surface-3);border:1px solid var(--border-soft)"></div>
+        </div>
+      </div>
+      <h3>Tenant profile</h3>
+      <p>Вкладки Overview / Policies / Compliance / Activity, баннер отклонения от compliance-pack с кнопкой re-apply, shield-статус и мета-инфо.</p>
+      <div class="tag-row"><span class="chip chip-static">tabs</span><span class="chip chip-static">deviation banner</span><span class="chip chip-static">compliance packs</span></div>
+    </a>
+
+    <a class="hub-card" href="settings.html">
+      <div class="thumb">
+        <div style="padding:14px;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <span style="height:30px;border-radius:6px;background:var(--surface-3);border:1px solid var(--border-soft)"></span>
+          <span style="height:30px;border-radius:6px;background:var(--surface-3);border:1px solid var(--border-soft)"></span>
+          <span style="height:30px;border-radius:6px;background:var(--amber-soft);border:1px solid var(--amber-border)"></span>
+          <span style="height:30px;border-radius:6px;background:var(--surface-3);border:1px solid var(--border-soft)"></span>
+          <span style="height:30px;grid-column:1/-1;border-radius:6px;background:var(--bg-soft);border:1px dashed var(--border)"></span>
+        </div>
+      </div>
+      <h3>System status</h3>
+      <p>Здоровье PostgreSQL/Valkey/key-at-rest/TLS/telemetry из API, watcher с diff конфигурации и «Apply changes», реальная серверная информация.</p>
+      <div class="tag-row"><span class="chip chip-static">health cards</span><span class="chip chip-static">config diff</span><span class="chip chip-static">no hardcodes</span></div>
+    </a>
+
+    <a class="hub-card" href="login.html">
+      <div class="thumb">
+        <div style="width:100%;padding:14px;display:flex;gap:12px">
+          <div style="flex:1;border-radius:6px;background:var(--accent-soft);border:1px solid var(--accent-border);display:grid;place-items:center;font-size:10px;color:var(--accent)">brand panel</div>
+          <div style="width:90px;border-radius:6px;background:var(--surface-3);border:1px solid var(--border-soft)"></div>
+        </div>
+      </div>
+      <h3>Login</h3>
+      <p>Сплит-экран: брендовая панель с ценностью продукта слева, форма с показом пароля и подсказкой про дефолтного пользователя.</p>
+      <div class="tag-row"><span class="chip chip-static">split-screen</span><span class="chip chip-static">login</span></div>
+    </a>
+  </div>
+
+  <div class="card" style="margin-top:30px">
+    <div class="card-head"><h3>Как смотреть</h3><span class="hint">локально, без сборки</span></div>
+    <div class="codebox" style="margin-bottom:12px">
+      cd .new-design && python3 -m http.server 8090<br>
+      <span class="cm"># открыть</span> http://localhost:8090
+    </div>
+    <p class="muted">Либо просто открой <span class="mono">.new-design/index.html</span> двойным кликом — файлы самодостаточны (общий <span class="mono">assets/design.css</span>, шрифты с сервера Google с fallback). Все данные — примерные, только для оценки дизайна.</p>
+  </div>
+</div>
+</body>
+</html>

@@ -56,6 +56,10 @@ func (m *mockUsageStore) QueryTimeSeries(_ context.Context, _, _ time.Time) ([]a
 	return nil, nil
 }
 
+func (m *mockUsageStore) QueryTimeSeriesByTenant(_ context.Context, _ value.TenantID, _, _ time.Time) ([]analytics.TimeSeriesPoint, error) {
+	return nil, nil
+}
+
 func testTokenUsage() analytics.TokenUsage {
 	tid, _ := value.NewTenantID("test-tenant")
 	return analytics.TokenUsage{

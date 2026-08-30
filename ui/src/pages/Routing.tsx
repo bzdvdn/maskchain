@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useAsyncData } from '../hooks/useAsyncData'
-import { Badge, Button, EmptyState, SortHeader, TableSkeleton } from '../components/ui'
+import { Button, EmptyState, StatusDot, StatusPill, type StatusTone } from '../components/ui'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { useToast } from '../components/Toast'
-import { useSort, sortRows } from '../hooks/useSort'
+import { relativeTime } from '../utils/format'
 import {
   deleteCostRate,
   deleteProvider,
@@ -20,19 +20,11 @@ import {
   type RouteDto,
 } from '../api/routing'
 
-function timeAgo(unix: number | undefined): string {
-  if (!unix) return '—'
-  const sec = Math.floor((Date.now() / 1000) - unix)
-  if (sec < 0) return 'now'
-  if (sec < 60) return `${sec}s ago`
-  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`
-  return `${Math.floor(sec / 3600)}h ago`
-}
-
-function SourceBadge({ source }: { source?: string }) {
-  if (source === 'yaml') return <Badge value="yaml" />
-  if (source === 'ui') return <Badge value="ui" />
-  return <span className="text-muted">—</span>
+function toneForStatus(status?: string): StatusTone {
+  if (status === 'up') return 'green'
+  if (status === 'down') return 'red'
+  if (status === 'degraded') return 'amber'
+  return 'gray'
 }
 
 export function Routing() {
@@ -61,26 +53,15 @@ export function Routing() {
     return null
   }, [])
 
-  const providerSort = useSort<ProviderDto>('name', 'asc')
-  const providerRows = useMemo(() => sortRows(providers, providerSort.key, providerSort.dir), [providers, providerSort])
-  const ruleSort = useSort<RouteDto>('model', 'asc')
-  const ruleRows = useMemo(() => sortRows(rules, ruleSort.key, ruleSort.dir), [rules, ruleSort])
-  const rateSort = useSort<CostRateDto>('model', 'asc')
-  const rateRows = useMemo(() => sortRows(rates, rateSort.key, rateSort.dir), [rates, rateSort])
+  const statusOf = (name: string) => providers.find((p) => p.name === name)?.status
+
+  const cards = useMemo(() => [...providers].sort((a, b) => (a.name < b.name ? -1 : 1)), [providers])
 
   const [editingProvider, setEditingProvider] = useState<ProviderDto | null>(null)
   const [editingRoute, setEditingRoute] = useState<RouteDto | null>(null)
   const [editingRate, setEditingRate] = useState<CostRateDto | null>(null)
   const [deleting, setDeleting] = useState<null | { kind: 'provider' | 'route' | 'rate'; name: string; payload?: unknown }>(null)
   const [busy, setBusy] = useState(false)
-
-  const availableTypes = ['openai', 'anthropic', 'ollama', 'proxy', 'gemini', 'bedrock']
-
-  const providerTh = (k: keyof ProviderDto, label: string, num = false) => (
-    <th className={num ? 'num' : undefined}>
-      <SortHeader active={providerSort.key === k} dir={providerSort.dir} onClick={() => providerSort.toggle(k)}>{label}</SortHeader>
-    </th>
-  )
 
   const doDelete = async () => {
     if (!deleting) return
@@ -107,134 +88,133 @@ export function Routing() {
 
   return (
     <div>
-      <div className="card">
+      <div className="card u-mb16">
         <div className="card-header-row">
           <h3>Providers</h3>
           <div className="header-actions">
             <Button size="small" onClick={() => setEditingProvider({} as ProviderDto)}>Add Provider</Button>
           </div>
         </div>
-        <div className="table-wrap">
-          <table>
+        {!loading && cards.length === 0 ? (
+          <EmptyState message="No providers configured" action={<Button size="small" onClick={() => setEditingProvider({} as ProviderDto)}>Add Provider</Button>} />
+        ) : (
+          <div className="providers">
+            {cards.map((p) => {
+              const tone = toneForStatus(p.status)
+              const routes = rules.filter((r) => (r.providers ?? []).includes(p.name))
+              const fallbackRules = rules.filter((r) => {
+                const idx = (r.providers ?? []).indexOf(p.name)
+                return idx > 0
+              })
+              return (
+                <div key={p.name} className="provider">
+                  <div className="card-header-row u-mb10">
+                    <div>
+                      <div className="name">{p.name}</div>
+                      <div className="sub muted">{p.api_type} · <code>{p.base_url}</code></div>
+                    </div>
+                    <StatusPill tone={tone}>{p.status ?? 'unknown'}</StatusPill>
+                  </div>
+                  <div className="metric-row provider-metrics">
+                    <div>
+                      <div className="num m-v">{p.latency_ms != null ? `${p.latency_ms}ms` : '—'}</div>
+                      <div className="muted m-k">latency</div>
+                    </div>
+                    <div>
+                      <div className="num m-v">{p.last_check ? relativeTime(new Date(p.last_check * 1000).toISOString()) : '—'}</div>
+                      <div className="muted m-k">last check</div>
+                    </div>
+                    <div>
+                      <div className="num m-v">{routes.length}</div>
+                      <div className="muted m-k">routes</div>
+                    </div>
+                  </div>
+                  <div className="u-wrap u-mb10">
+                    {routes.slice(0, 3).map((r) => (
+                      <span key={`${r.tenant}/${r.model}`} className="chip">{r.model}@{r.tenant || 'default'}</span>
+                    ))}
+                    {routes.length > 3 && <span className="chip">+{routes.length - 3}</span>}
+                    {routes.length === 0 && <span className="muted">no active routes</span>}
+                  </div>
+                  {fallbackRules.length > 0 && (
+                    <div className="muted meta-sm u-mb10">
+                      used as fallback for {fallbackRules.length} rule{fallbackRules.length > 1 ? 's' : ''}
+                    </div>
+                  )}
+                  <div className="row-actions">
+                    <Button size="small" onClick={() => setEditingProvider(p)}>Edit</Button>
+                    <Button size="small" variant="danger" onClick={() => setDeleting({ kind: 'provider', name: p.name })}>Delete</Button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="card table-card">
+        <div className="table-wrap table-flush">
+          <table className="tbl">
             <thead>
-              <tr>
-                {providerTh('name', 'Name')}
-                {providerTh('api_type', 'Type')}
-                <th>Base URL</th>
-                <th>Keys</th>
-                <th>Source</th>
-                {providerTh('status', 'Status')}
-                {providerTh('latency_ms', 'Latency', true)}
-                <th>Last Check</th>
-                <th>Actions</th>
-              </tr>
+              <tr><th>Model</th><th>Tenant</th><th>Providers</th><th>Health</th><th>Source</th><th className="num">Actions</th></tr>
             </thead>
             <tbody>
-              {providerRows.map((p, i) => (
-                <tr key={i}>
-                  <td>{p.name}</td><td>{p.api_type}</td>
-                  <td><code>{p.base_url}</code></td>
-                  <td><code>{p.api_keys?.join(', ') || (p.aws_access_key_id ? `${p.aws_access_key_id}` : '—')}</code></td>
-                  <td><SourceBadge source={p.source} /></td>
-                  <td><Badge value={p.status ?? 'unknown'} /></td>
-                  <td className="num">{p.latency_ms != null ? `${p.latency_ms}ms` : '—'}</td>
-                  <td>{timeAgo(p.last_check)}</td>
-                  <td>
-                    <div className="header-actions">
-                      <Button size="small" onClick={() => setEditingProvider(p)}>Edit</Button>
-                      <Button size="small" variant="danger" onClick={() => setDeleting({ kind: 'provider', name: p.name })}>Delete</Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {!loading && providerRows.length === 0 && <tr><td colSpan={9}><EmptyState message="No providers configured" /></td></tr>}
-              {loading && <tr><td colSpan={9}><TableSkeleton rows={4} cols={9} /></td></tr>}
+              {rules.map((r) => {
+                const first = (r.providers ?? [])[0]
+                const health = statusOf(first)
+                return (
+                  <tr key={`${r.tenant}/${r.model}`}>
+                    <td className="mono">{r.model}</td>
+                    <td>{r.tenant || 'default'}</td>
+                    <td>
+                      {r.providers.map((p, i) => (
+                        <span key={p}>
+                          <span className="chip">{p}</span>
+                          {i === r.providers.length - 1 ? '' : <span className="mono route-arr"> → </span>}
+                        </span>
+                      ))}
+                    </td>
+                    <td><StatusDot tone={toneForStatus(health)} title={health ?? 'unknown'} /></td>
+                    <td><span className="muted">{r.source ?? '—'}</span></td>
+                    <td>
+                      <div className="u-actions">
+                        <Button size="small" onClick={() => setEditingRoute(r)}>Edit</Button>
+                        <Button size="small" variant="danger" onClick={() => setDeleting({ kind: 'route', name: `${r.tenant}/${r.model}`, payload: r })}>Delete</Button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+              {!loading && rules.length === 0 && <tr><td colSpan={6}><EmptyState message="No routing rules" /></td></tr>}
+              {loading && <tr><td colSpan={6} className="tbl-progress">Loading routing rules…</td></tr>}
             </tbody>
           </table>
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-header-row">
-          <h3>Routing Rules</h3>
-          <div className="header-actions">
-            <Button size="small" onClick={() => setEditingRoute({ tenant: '', model: '', providers: [] })}>Add Rule</Button>
-          </div>
-        </div>
-        <div className="table-wrap">
-          <table>
+      <div className="card table-card u-mt16">
+        <div className="table-wrap table-flush">
+          <table className="tbl">
             <thead>
-              <tr>
-                <th>
-                  <SortHeader active={ruleSort.key === 'model'} dir={ruleSort.dir} onClick={() => ruleSort.toggle('model')}>Model</SortHeader>
-                </th>
-                <th>Tenant</th>
-                <th>Providers</th>
-                <th>Source</th>
-                <th>Actions</th>
-              </tr>
+              <tr><th>Model</th><th className="num">Input / 1K</th><th className="num">Output / 1K</th><th>Currency</th><th>Source</th><th className="num">Actions</th></tr>
             </thead>
             <tbody>
-              {ruleRows.map((r, i) => (
-                <tr key={i}>
-                  <td><code>{r.model}</code></td>
-                  <td>{r.tenant}</td>
-                  <td><code>{r.providers.join(', ')}</code></td>
-                  <td><SourceBadge source={r.source} /></td>
-                  <td>
-                    <div className="header-actions">
-                      <Button size="small" onClick={() => setEditingRoute(r)}>Edit</Button>
-                      <Button size="small" variant="danger" onClick={() => setDeleting({ kind: 'route', name: `${r.tenant}/${r.model}`, payload: r })}>Delete</Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {!loading && ruleRows.length === 0 && <tr><td colSpan={5}><EmptyState message="No routing rules" /></td></tr>}
-              {loading && <tr><td colSpan={5}><TableSkeleton rows={4} cols={5} /></td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-header-row">
-          <h3>Cost Rates</h3>
-          <div className="header-actions">
-            <Button size="small" onClick={() => setEditingRate({ model: '', input_price_per_1k: 0, output_price_per_1k: 0, currency: 'USD' })}>Add Cost Rate</Button>
-          </div>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>
-                  <SortHeader active={rateSort.key === 'model'} dir={rateSort.dir} onClick={() => rateSort.toggle('model')}>Model</SortHeader>
-                </th>
-                <th>Input / 1K</th>
-                <th>Output / 1K</th>
-                <th>Currency</th>
-                <th>Source</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rateRows.map((r, i) => (
-                <tr key={i}>
-                  <td><code>{r.model}</code></td>
+              {rates.map((r) => (
+                <tr key={r.model}>
+                  <td className="mono">{r.model}</td>
                   <td className="num">{r.input_price_per_1k}</td>
                   <td className="num">{r.output_price_per_1k}</td>
                   <td>{r.currency || 'USD'}</td>
-                  <td><SourceBadge source={r.source} /></td>
+                  <td><span className="muted">{r.source ?? '—'}</span></td>
                   <td>
-                    <div className="header-actions">
+                    <div className="u-actions">
                       <Button size="small" onClick={() => setEditingRate(r)}>Edit</Button>
                       <Button size="small" variant="danger" onClick={() => setDeleting({ kind: 'rate', name: r.model })}>Delete</Button>
                     </div>
                   </td>
                 </tr>
               ))}
-              {!loading && rateRows.length === 0 && <tr><td colSpan={6}><EmptyState message="No cost rates configured" /></td></tr>}
-              {loading && <tr><td colSpan={6}><TableSkeleton rows={4} cols={6} /></td></tr>}
+              {!loading && rates.length === 0 && <tr><td colSpan={6}><EmptyState message="No cost rates configured" /></td></tr>}
             </tbody>
           </table>
         </div>
@@ -242,8 +222,9 @@ export function Routing() {
 
       {(editingProvider || editingRoute || editingRate) && (
         <CrudModal
+          key={`${editingProvider?.name ?? ''}-${editingRoute?.model ?? ''}-${editingRate?.model ?? ''}`}
           kind={editingProvider ? 'provider' : editingRoute ? 'route' : 'rate'}
-          availableTypes={availableTypes}
+          availableTypes={['openai', 'anthropic', 'ollama', 'proxy', 'gemini', 'bedrock']}
           initialProvider={editingProvider}
           initialRoute={editingRoute}
           initialRate={editingRate}
@@ -313,8 +294,6 @@ function CrudModal({
       const keys = p.api_keys ?? []
       const hasEditableKey = keys.some((k) => k && !isMaskedKey(k))
       const hasAWSCreds = (p.aws_access_key_id && !isMaskedKey(p.aws_access_key_id) && p.aws_secret_access_key && !isMaskedKey(p.aws_secret_access_key)) ?? false
-      // A provider is valid when it has a real key or real AWS credentials.
-      // Masked/empty values on edit keep the previously stored secrets.
       if (!hasEditableKey && !hasAWSCreds) { setErr('Add at least one API key or AWS access key'); return }
       onSaved('provider', p)
     } else if (kind === 'route') {
@@ -330,84 +309,34 @@ function CrudModal({
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal generic-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <h3>{kind === 'provider' ? (initialProvider ? 'Edit Provider' : 'Add Provider') : kind === 'route' ? (initialRoute ? 'Edit Rule' : 'Add Rule') : (initialRate ? 'Edit Cost Rate' : 'Add Cost Rate')}</h3>
-        {err && <div className="confirm-dialog" style={{ marginTop: 8 }}><p>{err}</p></div>}
+        {err && <div className="confirm-dialog u-mt8"><p>{err}</p></div>}
         <div className="modal-body">
           {kind === 'provider' && (
             <>
-              <div className="form-field">
-                <label>Name</label>
-                <input value={p.name} onChange={(e) => set({ ...p, name: e.target.value })} placeholder="my-provider" />
-              </div>
-              <div className="form-field">
-                <label>API Type</label>
-                <select value={p.api_type} onChange={(e) => set({ ...p, api_type: e.target.value })}>
-                  {availableTypes.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div className="form-field">
-                <label>Base URL</label>
-                <input value={p.base_url} onChange={(e) => set({ ...p, base_url: e.target.value })} placeholder="https://api.openai.com/v1" />
-              </div>
-              <div className="form-field">
-                <label>Health Endpoint</label>
-                <input value={p.health_endpoint ?? ''} onChange={(e) => set({ ...p, health_endpoint: e.target.value })} />
-              </div>
-              <div className="form-field">
-                <label>API Keys (comma separated)</label>
-                <input value={p.api_keys?.join(', ') ?? ''} onChange={(e) => set({ ...p, api_keys: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} />
-              </div>
-              <div className="form-field">
-                <label>Auth Scheme</label>
-                <input value={p.auth_scheme ?? ''} onChange={(e) => set({ ...p, auth_scheme: e.target.value })} placeholder="Bearer" />
-              </div>
-              <div className="form-field">
-                <label>Auth Header</label>
-                <input value={p.auth_header ?? ''} onChange={(e) => set({ ...p, auth_header: e.target.value })} placeholder="Authorization" />
-              </div>
-              <div className="form-field">
-                <label>Timeout</label>
-                <input value={p.timeout ?? ''} onChange={(e) => set({ ...p, timeout: e.target.value })} placeholder="30s" />
-              </div>
-              <div className="form-field">
-                <label>Priority</label>
-                <input type="number" value={p.priority ?? 0} onChange={(e) => set({ ...p, priority: Number(e.target.value) })} />
-              </div>
+              <div className="form-field"><label>Name</label><input value={p.name} onChange={(e) => set({ ...p, name: e.target.value })} placeholder="my-provider" /></div>
+              <div className="form-field"><label>API Type</label><select value={p.api_type} onChange={(e) => set({ ...p, api_type: e.target.value })}>{availableTypes.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
+              <div className="form-field"><label>Base URL</label><input value={p.base_url} onChange={(e) => set({ ...p, base_url: e.target.value })} placeholder="https://api.openai.com/v1" /></div>
+              <div className="form-field"><label>Health Endpoint</label><input value={p.health_endpoint ?? ''} onChange={(e) => set({ ...p, health_endpoint: e.target.value })} /></div>
+              <div className="form-field"><label>API Keys (comma separated)</label><input value={p.api_keys?.join(', ') ?? ''} onChange={(e) => set({ ...p, api_keys: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} /></div>
+              <div className="form-field"><label>Auth Scheme</label><input value={p.auth_scheme ?? ''} onChange={(e) => set({ ...p, auth_scheme: e.target.value })} placeholder="Bearer" /></div>
+              <div className="form-field"><label>Auth Header</label><input value={p.auth_header ?? ''} onChange={(e) => set({ ...p, auth_header: e.target.value })} placeholder="Authorization" /></div>
+              <div className="form-field"><label>Timeout</label><input value={p.timeout ?? ''} onChange={(e) => set({ ...p, timeout: e.target.value })} placeholder="30s" /></div>
+              <div className="form-field"><label>Priority</label><input type="number" value={p.priority ?? 0} onChange={(e) => set({ ...p, priority: Number(e.target.value) })} /></div>
             </>
           )}
           {kind === 'route' && (
             <>
-              <div className="form-field">
-                <label>Model</label>
-                <input value={r.model} onChange={(e) => setR({ ...r, model: e.target.value })} placeholder="gpt-4o" />
-              </div>
-              <div className="form-field">
-                <label>Tenant</label>
-                <input value={r.tenant} onChange={(e) => setR({ ...r, tenant: e.target.value })} placeholder="default" />
-              </div>
-              <div className="form-field">
-                <label>Providers (comma separated)</label>
-                <input value={r.providers.join(', ')} onChange={(e) => setR({ ...r, providers: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="openai, fallback" />
-              </div>
+              <div className="form-field"><label>Model</label><input value={r.model} onChange={(e) => setR({ ...r, model: e.target.value })} placeholder="gpt-4o" /></div>
+              <div className="form-field"><label>Tenant</label><input value={r.tenant} onChange={(e) => setR({ ...r, tenant: e.target.value })} placeholder="default" /></div>
+              <div className="form-field"><label>Providers (comma separated, first = primary)</label><input value={r.providers.join(', ')} onChange={(e) => setR({ ...r, providers: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="openai, fallback" /></div>
             </>
           )}
           {kind === 'rate' && (
             <>
-              <div className="form-field">
-                <label>Model</label>
-                <input value={c.model} onChange={(e) => setC({ ...c, model: e.target.value })} placeholder="gpt-4o" />
-              </div>
-              <div className="form-field">
-                <label>Input Price / 1K</label>
-                <input type="number" step="any" value={c.input_price_per_1k} onChange={(e) => setC({ ...c, input_price_per_1k: Number(e.target.value) })} />
-              </div>
-              <div className="form-field">
-                <label>Output Price / 1K</label>
-                <input type="number" step="any" value={c.output_price_per_1k} onChange={(e) => setC({ ...c, output_price_per_1k: Number(e.target.value) })} />
-              </div>
-              <div className="form-field">
-                <label>Currency</label>
-                <input value={c.currency} onChange={(e) => setC({ ...c, currency: e.target.value.toUpperCase() })} placeholder="USD" />
-              </div>
+              <div className="form-field"><label>Model</label><input value={c.model} onChange={(e) => setC({ ...c, model: e.target.value })} placeholder="gpt-4o" /></div>
+              <div className="form-field"><label>Input Price / 1K</label><input type="number" step="any" value={c.input_price_per_1k} onChange={(e) => setC({ ...c, input_price_per_1k: Number(e.target.value) })} /></div>
+              <div className="form-field"><label>Output Price / 1K</label><input type="number" step="any" value={c.output_price_per_1k} onChange={(e) => setC({ ...c, output_price_per_1k: Number(e.target.value) })} /></div>
+              <div className="form-field"><label>Currency</label><input value={c.currency} onChange={(e) => setC({ ...c, currency: e.target.value.toUpperCase() })} placeholder="USD" /></div>
             </>
           )}
         </div>

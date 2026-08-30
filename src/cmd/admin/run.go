@@ -75,11 +75,16 @@ func run() {
 	srv := api.NewAdminServer(cfg.Server, logger, adminServiceName(cfg), b.HealthSvc)
 	srv.RegisterMetricsRoute(metrics.Handler(b.PromRegistry))
 	srv.RegisterVersionRoute(version.Info())
+	srv.RegisterStatusHandler(admin.NewStatusHandler(version.Info(), cfg, b.HealthSvc))
 	if err := srv.RegisterStaticFiles(ui.DistFiles); err != nil {
 		logger.Error("register static files", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 	srv.RegisterDebugRoutes(middleware.AdminAuth(cfg.Debug))
+
+	if err := srv.RegisterSwaggerUI(); err != nil {
+		logger.Error("register swagger ui", slog.String("error", err.Error()))
+	}
 
 	initAdminTenants(cfg, b.PGPool, srv, logger)
 

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings — MaskChain UI v2 mockup</title>
+<link rel="stylesheet" href="assets/design.css">
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m4 12.5 5 5L20 6.5"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4m0 4h.01"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-3.6 8-10V5l-8-3-8 3v7c0 6.4 8 10 8 10Z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></symbol>
+  <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+  <symbol id="i-dash" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14v4m4-8v8m4-12v12m4-8v8"/></symbol>
+  <symbol id="i-radio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4m-8.4 0a6 6 0 0 1 0-8.4m10.9-2.9a10 10 0 0 1 0 14.2M5.3 4.9a10 10 0 0 0 0 14.2"/></symbol>
+  <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><path d="m21 2-2 2m-7.6 7.6a5.5 5.5 0 1 0-2.2 2.2L21 3l1 1-4 4"/><path d="M7.5 16.5 6 15"/></symbol>
+  <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3"/><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-8"/><circle cx="17" cy="14" r="1"/></symbol>
+  <symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/><path d="M12 19h4.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H12"/></symbol>
+  <symbol id="i-log" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8m8 4H8m2-8H8"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
+</svg>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><span class="mark"><svg class="ic" width="15" height="15"><use href="#i-shield"/></svg></span>MaskChain<span class="env ok">prod</span></div>
+    <nav class="nav">
+      <div class="nav-section">Overview</div>
+      <a class="nav-item" href="dashboard.html"><svg class="ic"><use href="#i-dash"/></svg>Operations HQ</a>
+      <a class="nav-item" href="analytics.html"><svg class="ic"><use href="#i-chart"/></svg>Analytics</a>
+      <div class="nav-section">Traffic</div>
+      <a class="nav-item" href="#"><svg class="ic"><use href="#i-radio"/></svg>Live Sessions <span class="count">7</span></a>
+      <a class="nav-item" href="#"><svg class="ic"><use href="#i-message"/></svg>Conversations <span class="count warn">4</span></a>
+      <div class="nav-section">Governance</div>
+      <a class="nav-item" href="#"><svg class="ic"><use href="#i-users"/></svg>Tenants</a>
+      <a class="nav-item" href="keys.html"><svg class="ic"><use href="#i-key"/></svg>Keys</a>
+      <a class="nav-item" href="#"><svg class="ic"><use href="#i-wallet"/></svg>Budgets <span class="count warn">2</span></a>
+      <a class="nav-item" href="#"><svg class="ic"><use href="#i-shield"/></svg>Compliance</a>
+      <div class="nav-section">Operations</div>
+      <a class="nav-item" href="routing.html"><svg class="ic"><use href="#i-route"/></svg>Routing <span class="count danger">1</span></a>
+      <a class="nav-item" href="#">Incidents <span class="count danger">3</span></a>
+      <a class="nav-item" href="#"><svg class="ic"><use href="#i-log"/></svg>Audit Log</a>
+      <div class="nav-section">System</div>
+      <a class="nav-item active" href="settings.html"><svg class="ic"><use href="#i-settings"/></svg>Settings</a>
+      <a class="nav-item" href="#">API Reference</a>
+    </nav>
+    <div class="side-footer">
+      <div class="avatar">A</div>
+      <div class="user-meta"><div class="name">admin</div><div class="role">platform owner</div></div>
+      <button class="signout" title="Sign out"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg></button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="breadcrumb"><span>System</span><span class="sep">/</span><span class="here">Settings</span></div>
+      <div class="topbar-spacer"></div>
+      <div class="vision"><span class="live-dot"></span> Config watcher: live</div>
+      <button class="icon-btn" title="Search (Ctrl+K)"><svg class="ic"><use href="#i-search"/></svg></button>
+      <button class="icon-btn" title="Refresh"><svg class="ic"><use href="#i-refresh"/></svg></button>
+    </header>
+
+    <div class="content wide">
+      <div class="page">
+        <div>
+          <div class="title">System status</div>
+          <div class="sub">Live health of the gateway, its stores and security posture.</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn">View audit log</button>
+          <button class="btn btn-primary">Apply config</button>
+        </div>
+      </div>
+
+      <!-- Status cards (data from API, not hardcoded) -->
+      <div class="kpis">
+        <div class="kpi">
+          <div class="row"><span class="dot green"></span><div class="label">PostgreSQL</div><span class="pill green" style="margin-left:auto">connected</span></div>
+          <div class="row" style="margin-top:8px"><span class="value num" style="font-size:20px">2<span style="font-size:12px;color:var(--muted)">ms</span></span><span class="muted">p50 · read</span></div>
+          <div class="row"><span class="muted">pool 12 / 25 · uptime 43d</span></div>
+        </div>
+        <div class="kpi">
+          <div class="row"><span class="dot green"></span><div class="label">Valkey</div><span class="pill green" style="margin-left:auto">connected</span></div>
+          <div class="row" style="margin-top:8px"><span class="value num" style="font-size:20px">0.6<span style="font-size:12px;color:var(--muted)">ms</span></span><span class="muted">p50 · set/get</span></div>
+          <div class="row"><span class="muted">spend counter + semantic cache</span></div>
+        </div>
+        <div class="kpi">
+          <div class="row"><span class="dot green"></span><div class="label">At-rest encryption</div><span class="pill green" style="margin-left:auto">configured</span></div>
+          <div class="row" style="margin-top:8px"><span class="value num" style="font-size:20px">AES-256<span style="font-size:12px;color:var(--muted)">-GCM</span></span><span class="muted">MASKCHAIN_KEYS_KEY</span></div>
+          <div class="row"><span class="muted">provider secrets encrypted · key rotated 12d ago</span></div>
+        </div>
+        <div class="kpi">
+          <div class="row"><span class="dot amber"></span><div class="label">TLS certificate</div><span class="pill amber" style="margin-left:auto">expiring</span></div>
+          <div class="row" style="margin-top:8px"><span class="value num" style="font-size:20px">60<span style="font-size:12px;color:var(--muted)">days</span></span><span class="muted">left · gw.maskchain.dev</span></div>
+          <div class="row"><span class="muted">renews automatically via cert-manager</span></div>
+        </div>
+        <div class="kpi">
+          <div class="row"><span class="dot green"></span><div class="label">Telemetry</div><span class="pill green" style="margin-left:auto">exporting</span></div>
+          <div class="row" style="margin-top:8px"><span class="value num" style="font-size:20px">OTLP</span><span class="muted">HTTP · collector:otel:4318</span></div>
+          <div class="row"><span class="muted">traces + metrics · last export 3s ago</span></div>
+        </div>
+      </div>
+
+      <div style="height:16px"></div>
+
+      <!-- Config diff viewer -->
+      <div class="card">
+        <div class="card-head">
+          <h3>Configuration</h3>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="pill amber"><span class="dot"></span> 2 changes detected</span>
+            <div class="seg"><button class="active">Unified diff</button><button>Side by side</button></div>
+          </div>
+        </div>
+        <div class="codebox" style="font-size:12px;line-height:1.8">
+          <span class="cm"># deployments/docker-compose/config.yaml</span><br>
+          <span class="cm" style="color:var(--red)">-    phonetic: false</span><br>
+          <span class="cm" style="color:var(--green)">+    phonetic: true</span>&nbsp;<span class="cm" style="color:var(--muted-2)"># mask phone numbers</span><br>
+          &nbsp;&nbsp;mapping_mode: keep<br>
+          &nbsp;&nbsp;mask:&nbsp;&nbsp;[email, uuid, <span style="color:var(--amber)">iban</span>]<br>
+          <span class="cm" style="color:var(--red)">-  budget.hard_limit: 500</span><br>
+          <span class="cm" style="color:var(--green)">+  budget.hard_limit: 750</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;justify-content:flex-end;margin-top:12px">
+          <span class="hint">Live config diverged from the file — reload watcher or apply now.</span>
+          <button class="btn">Discard</button>
+          <button class="btn btn-primary">Apply changes</button>
+        </div>
+      </div>
+
+      <div style="height:16px"></div>
+
+      <!-- Server info -->
+      <div class="card">
+        <div class="card-head"><h3>Server</h3><span class="hint">gateway node · 192.168.1.14</span></div>
+        <div class="kv" style="grid-template-columns:200px 1fr">
+          <div class="k">Version</div><div class="v mono">v2.4.1 · build 8cb33ef</div>
+          <div class="k">Ports</div><div class="v mono">gateway :8080 · admin :8081</div>
+          <div class="k">Log level</div><div class="v"><span class="pill gray">info</span> <span class="muted">· structured JSON + OTel trace_id</span></div>
+          <div class="k">Config reload</div><div class="v"><span class="pill green">watcher active</span> <span class="muted">· 15s poll · 2 pending</span></div>
+          <div class="k">Shutdown timeout</div><div class="v mono">10s grace</div>
+          <div class="k">Uptime</div><div class="v num">43d 07h 12m</div>
+          <div class="k">Go runtime</div><div class="v mono">go1.24 · GC 0.8% · heap 48MiB</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
