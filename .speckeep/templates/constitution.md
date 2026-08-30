@@ -1,108 +1,108 @@
-# Конституция проекта [PROJECT_NAME]
+# [PROJECT_NAME] Constitution
 
-## Назначение
+## Purpose
 
 [PURPOSE]
 
-## Ключевые принципы
+## Core Principles
 
 ### [PRINCIPLE_1_NAME]
-<!-- Пример: I. Дисциплина scope -->
+<!-- Example: I. Scope Discipline -->
 
 [PRINCIPLE_1_RULES]
 
 ### [PRINCIPLE_2_NAME]
-<!-- Пример: II. Границы архитектуры -->
+<!-- Example: II. Architecture Boundaries -->
 
 [PRINCIPLE_2_RULES]
 
 ### [PRINCIPLE_3_NAME]
-<!-- Пример: III. Traceability (NON-NEGOTIABLE) -->
+<!-- Example: III. Traceability (NON-NEGOTIABLE) -->
 
 [PRINCIPLE_3_RULES]
 
 ### [PRINCIPLE_4_NAME]
-<!-- Пример: IV. Verify перед Archive -->
+<!-- Example: IV. Verify Before Archive -->
 
 [PRINCIPLE_4_RULES]
 
 ### [PRINCIPLE_5_NAME]
-<!-- Пример: V. Простота и эксплуатация -->
+<!-- Example: V. Simplicity and Operability -->
 
 [PRINCIPLE_5_RULES]
 
 [ADDITIONAL_PRINCIPLES]
 
-## Непересматриваемые правила
+## Non-Negotiable Rules
 
-- Правила этого раздела имеют статус `MUST` / `MUST NOT` и должны проверяться на практике.
-- Реализация `MUST` идти по активным spec/plan/tasks и оставаться в заявленном scope.
-- Работа `MUST NOT` продолжаться из неоднозначных требований или placeholder-контента.
-- Изменения публичного поведения `MUST` отражаться в spec/tasks до merge.
-- Если реализация конфликтует с конституцией, сначала обновляется конституция.
+- Rules in this section are `MUST` / `MUST NOT` and are enforceable.
+- Implementation `MUST` follow active spec/plan/tasks and remain in declared scope.
+- Work `MUST NOT` proceed from ambiguous or placeholder requirements.
+- Public behavior changes `MUST` be reflected in specs/tasks before merge.
+- If implementation conflicts with this constitution, amend constitution first.
 
-## Ограничения
+## Constraints
 
 [CONSTRAINTS]
 
-## Технологический стек
+## Tech Stack
 
 [TECH_STACK]
 
-## Основная архитектура
+## Core Architecture
 
 [ARCHITECTURE]
 
-## Языковая политика
+## Language Policy
 
-- Язык документации: русский
-- Язык общения с агентом: английский
-- Язык комментариев в коде: английский
+- Documentation language: English
+- Agent interaction language: English
+- Code comment language: English
 
-## Процесс разработки
+## Development Workflow
 
-- Каждая фича ДОЛЖНА разрабатываться в отдельной git-ветке.
-- Именование веток SHOULD следовать принятому в проекте соглашению для feature-веток, например `feature/<slug>`.
-- Реализация SHOULD начинаться с явной спецификации до начала кодинга.
-- Планы и задачи SHOULD выводиться из актуальной спецификации и оставаться с ней согласованными.
-- Реализация, спецификации, планы и задачи ДОЛЖНЫ соответствовать этой конституции.
-- Если работа выявляет конфликт с этой конституцией, конституция ДОЛЖНА быть изменена до продолжения несовместимой реализации.
+- Each feature MUST be developed in a dedicated git branch.
+- Feature branches SHOULD follow the project's feature branch naming convention such as `feature/<slug>`.
+- Work SHOULD begin from an explicit spec before implementation starts.
+- Plans and tasks SHOULD be derived from the active spec and remain aligned with it.
+- Implementation, specs, plans, and tasks MUST comply with this constitution.
+- If work reveals a conflict with this constitution, the constitution MUST be amended before incompatible implementation proceeds.
 
 ## Definition of Done
 
-- Задача считается завершенной только при observable proof: измененные файлы, вывод целевых тестов или результат команды.
-- Доказательство для завершенных задач фиксируется в `tasks.md` строкой `Proof:` непосредственно под отмеченной задачей:
-  - формат: `Proof: <kind> <path> [<anchor>]`, где `kind` — `code|test|docs|chore`, `path` — путь от корня репозитория, `anchor` — имя owning function/test/type (опционально, но рекомендуется).
-  - примеры:
+- A task is done only with observable proof: changed files, targeted test output, or command result.
+- Evidence for completed tasks is recorded in `tasks.md` as a `Proof:` line directly under the checked task:
+  - format: `Proof: <kind> <path> [<anchor>]`, where `kind` is `code|test|docs|chore`, `path` is a repo-root-relative path, and `anchor` is the owning function/test/type name (optional but recommended).
+  - examples:
     - `Proof: code src/handlers/export.go ExportHandler`
     - `Proof: test src/tests/export_test.go TestExportFlow`
     - `Proof: docs docs/export.md`
-- Каждая завершённая задача (`[x]`) ОБЯЗАНА иметь минимум одну строку `Proof:`; отмеченная задача без неё не завершена и будет заблокирована `speckeep check` и `speckeep archive`. Evidence живёт только в `tasks.md`, где его читают `speckeep trace` и архивные проверки.
-- Записи `Proof:` обязаны указывать на существующие файлы; `anchor` должен разрешаться в owning symbol. Отсутствующий файл — жесткая ошибка, отсутствующий якорь — предупреждение.
-- Перед archive должна быть подтверждена покрываемость acceptance criteria.
+- Every completed task (`[x]`) MUST have at least one `Proof:` entry; a checked task without one is not done and will be blocked by `speckeep check` and `speckeep archive`. Evidence lives only in `tasks.md`, which is what `speckeep trace` and the archive gates read.
+- Proof entries MUST point to existing files; anchors SHOULD resolve to the owning symbol. Missing files are hardened errors, missing anchors are warnings.
+- Verification MUST confirm acceptance-criteria coverage before archive.
 
-## Политика Repository Map
+## Repository Map Policy
 
-- `REPOSITORY_MAP.md` — компактный индекс навигации по коду, а не процессный документ.
-- Карта обновляется только при существенном изменении структуры/навигации кода.
-- Обновление карты выполняется in-place с минимальным diff; неизменные секции не переписываются.
-- Операционные/spec-артефакты исключаются из индексации согласно политике проекта.
+- `REPOSITORY_MAP.md` is a compact code-navigation index, not a process document.
+- Update the map only when code structure/navigation changes materially.
+- Map updates MUST be minimal-diff and in-place; do not rewrite unchanged sections.
+- Exclude operational/spec artifacts from indexing when configured by project policy.
 
 [ADDITIONAL_REQUIRED_SECTIONS]
 
-## Управление
+## Governance
 
-- Эта конституция является авторитетным источником для проектных решений.
-- Изменения архитектуры, спецификаций, планов и задач ДОЛЖНЫ соответствовать этим принципам.
-- Если реализация конфликтует с конституцией, приоритет у конституции, пока она явно не изменена.
-- Изменяйте этот файл patch-обновлениями, сохраняя обязательные секции и делая правила конкретными и проверяемыми.
+- This constitution is authoritative for project decisions.
+- Changes to architecture, specs, plans, and tasks MUST comply with these principles.
+- If implementation conflicts with this constitution, the constitution wins unless it is explicitly amended first.
+- Amend by patching this file, preserving mandatory sections and keeping guidance concrete and testable.
 
-## Метаданные конституции
+## Constitution Metadata
 
 - Version: [CONSTITUTION_VERSION]
 - Ratified: [RATIFICATION_DATE]
 - Last Amended: [LAST_AMENDED_DATE]
 
-## Последнее обновление
+## Last Updated
 
 [YYYY-MM-DD]

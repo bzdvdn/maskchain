@@ -1,5 +1,10 @@
 # MaskChain production config — монтируется в gateway/admin/all контейнеры.
 # В K8s — через ConfigMap. Оверрайды через CONFIG_* env vars.
+#
+# At-rest encryption (обязательно!): с DB-backed routing и/или tenancy сервис не
+# стартует без валидного 32-байтового base64 ключа. Задайте первым делом:
+#   MASKCHAIN_KEYS_KEY=$(openssl rand -base64 32)
+# Провайдерские секреты (routing.providers[*].api_keys, aws_*) шифруются этим ключом.
 
 log:
   level: info

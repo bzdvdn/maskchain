@@ -1,27 +1,27 @@
-# API Контракт
+# API Contract
 
-> **Создавайте этот файл только когда** фича трогает API-границу (новый endpoint, изменённая форма request/response, новый error-contract, breaking client-visible изменение). Если API contract не нужен — не создавайте файл.
+> **Create this file only when** the feature touches an API boundary (new endpoint, changed request/response shape, new error contract, or breaking client-visible change). If no API contract is needed, do not create this file.
 
 ## Scope
 
-- Связанные `AC-*`: `AC-001`
-- Связанные `DEC-*`: `DEC-001`
+- Related acceptance IDs: `AC-001`
+- Related decision IDs: `DEC-001`
 
-## API-001 Граница 1
+## API-001 Boundary 1
 
-- Назначение:
+- Purpose:
 - Trigger:
 - Inputs:
-  - `field_name` - тип или shape, required или optional, смысл
+  - `field_name` - type or shape, required or optional, meaning
 - Outputs:
-  - `field_name` - тип или shape, смысл
-- Ошибки:
+  - `field_name` - type or shape, meaning
+- Errors:
 - Idempotency / Ordering:
 - Notes:
-- Связанные `AC-*`:
+- Related acceptance IDs:
 
-## API-002 Граница 2 — та же структура (Назначение / Trigger / Inputs / Outputs / Ошибки / Idempotency / Notes / Связанные AC)
+## API-002 Boundary 2 — same structure (Purpose / Trigger / Inputs / Outputs / Errors / Idempotency / Notes / Related AC)
 
-## Заметки
+## Notes
 
-- Фиксируйте только те границы API, которые существенно влияют на реализацию
+- Record only boundaries that materially affect implementation

@@ -1,10 +1,10 @@
-# <Spec Title> Задачи
+# <Spec Title> Tasks
 
 ## Phase Contract
 
-Inputs: plan и минимальные supporting артефакты для этой фичи.
-Outputs: упорядоченные исполнимые задачи с покрытием критериев.
-Stop if: задачи получаются расплывчатыми или coverage не удается сопоставить.
+Inputs: plan and minimal supporting artifacts for this feature.
+Outputs: ordered executable tasks with coverage mapping.
+Stop if: tasks would be vague or acceptance coverage cannot be mapped.
 
 ## Surface Map
 
@@ -16,59 +16,59 @@ Stop if: задачи получаются расплывчатыми или cov
 
 ## Implementation Context
 
-- Цель MVP: <1 строка>
-- Границы приемки: AC-001, AC-002
-- Ключевые правила: <2-4 bullets из конституции/плана>
-- Инварианты данных/домена: <2-4 bullets>
-- Контракты/протокол: <1-3 bullets>
-- Proof signals: <что считаем доказательством завершения>
-- Вне scope: <что осознанно не делаем>
+- MVP Goal: <1 line>
+- Acceptance Boundaries: AC-001, AC-002
+- Key Rules: <2-4 bullets from constitution/plan>
+- Data/Domain Invariants: <2-4 bullets>
+- Contracts/Protocols: <1-3 bullets>
+- Proof Signals: <what counts as completion evidence>
+- Out of Scope: <what is intentionally excluded>
 
-## Фаза 1: Основа
+## Phase 1: Foundation
 
-Цель: подготовить минимальную структуру, contracts или data prerequisites, чтобы дальнейшая работа была предсказуемой.
+Goal: establish the minimum structure, contracts, or data prerequisites so later work stays predictable.
 
-- [ ] T1.1 Создать или выровнять базовый каркас фичи — implementation entrypoint существует и соответствует запланированной поверхности. Touches: src/models/feature.ts
-- [ ] T1.2 Добавить базовые model, contract, migration или flag-изменения, если без них зависят последующие фазы. Touches: src/models/feature.ts, src/db/migrations/
+- [ ] T1.1 Establish or align the feature scaffold — the implementation entrypoint exists and matches the planned surface area. Touches: src/models/feature.ts
+- [ ] T1.2 Add foundational model, contract, migration, or flag work when the later phases depend on it. Touches: src/models/feature.ts, src/db/migrations/
 
-## Фаза 2: MVP Slice
+## Phase 2: MVP Slice
 
-Цель: поставить минимальную независимо демонстрируемую продуктовую ценность до расширения scope.
+Goal: deliver the smallest independently demonstrable product value before broader expansion.
 
-- [ ] T2.1 Реализовать MVP acceptance path — первое полезное поведение работает end to end. Touches: src/handlers/feature.ts, src/models/feature.ts
-- [x] T2.2 Подтвердить MVP path — точечные tests или checks делают срез reviewable. Touches: src/tests/feature.test.ts
+- [ ] T2.1 Implement the MVP acceptance path — the first usable behavior works end to end. Touches: src/handlers/feature.ts, src/models/feature.ts
+- [x] T2.2 Prove the MVP path — focused checks or tests confirm the slice is reviewable. Touches: src/tests/feature.test.ts
       Proof: test src/tests/feature.test.ts testFeatureMvpPath
-- [ ] T2.3 … (открытая задача: без `[x]` Proof не требуется)
+- [ ] T2.3 … (open task: no `Proof` required until `[x]`)
 
-## Фаза 3: Основная реализация
+## Phase 3: Core Implementation
 
-Цель: реализовать основное поведение фичи и важные edge или failure paths.
+Goal: deliver the primary feature behavior and the important edge or failure paths.
 
-- [ ] T3.1 Реализовать основной acceptance path сверх MVP — оставшееся ключевое поведение работает на нужной поверхности. Touches: src/handlers/feature.ts, src/models/feature.ts
-- [ ] T3.2 Реализовать edge, failure, permission или conflicting-state поведение, если оно меняет наблюдаемый результат. Touches: src/handlers/feature.ts
+- [ ] T3.1 Implement the main acceptance path beyond MVP — the remaining primary behavior works on the intended surface. Touches: src/handlers/feature.ts, src/models/feature.ts
+- [ ] T3.2 Implement edge, failure, permission, or conflicting-state behavior when it changes user-visible outcomes. Touches: src/handlers/feature.ts
 
-## Фаза 4: Проверка
+## Phase 4: Validation
 
-Цель: доказать, что фича работает, и оставить пакет в reviewable состоянии.
+Goal: prove the feature works and leave the package in a reviewable state.
 
-- [ ] T4.1 Добавить или обновить automated coverage — tests или checks подтверждают поведение и страхуют от регрессий. Touches: src/tests/feature.test.ts
-- [ ] T4.2 Выполнить verify, cleanup или documentation updates, нужные для review или verify
+- [ ] T4.1 Add or update automated coverage — tests or checks prove the intended behavior and guard regressions. Touches: src/tests/feature.test.ts
+- [ ] T4.2 Run verification, cleanup, or documentation updates required to leave the feature ready for review or verify
 
-## Покрытие критериев приемки
+## Acceptance Coverage
 
 - AC-001 -> T1.2, T2.1, T4.1
 - AC-002 -> T3.2, T4.1, T4.2
 
-## Заметки
+## Notes
 
-- Сохраняйте порядок задач согласованным с планом и переносите работу в поздние фазы только если она реально зависит от ранних
-- Используйте phase-scoped task IDs в формате `T<phase>.<index>`
-- Делайте каждую задачу конкретной, измеримой и исполнимой как один связный кусок работы
-- Предпочитайте action verbs, связанные с наблюдаемым результатом: implement, add, migrate, validate, remove, backfill
-- Для greenfield или первой фичи предпочитайте MVP-first sequencing, а не широкую техническую полноту с самого начала
-- По возможности ссылайтесь в тексте задач на 1-2 стабильных ID (`AC-*`, `RQ-*`, `DEC-*`)
-- Не прячьте proof внутри большой implementation-задачи, а выносите validation отдельно
-- Отмечайте задачи выполненными по мере реализации и не оставляйте критерии приемки без покрытия задачами
-- Каждая закрытая задача (`[x]`) обязана иметь строку `Proof:` на следующей строке: `Proof: <kind> <path> [<anchor>]`, где `kind` — `code|test|docs|chore`, `path` — путь от корня репо, `anchor` — имя функции/теста/типа (опционально). Без `Proof` задача считается незавершённой, а `check`/`archive` её заблокируют
-- Явно укажите, если какая-то фаза осознанно пропущена, потому что фиче она не нужна
-- Держите `Implementation Context` коротким, но достаточным, чтобы implement и verify редко перечитывали `spec.md` или `plan.md`
+- Keep task ordering aligned with the plan and use later phases only for work that truly depends on earlier ones
+- Use phase-scoped task IDs in the form `T<phase>.<index>`
+- Make each task concrete, measurable, and executable as a single coherent slice of work
+- Prefer action verbs tied to observable outcomes: implement, add, migrate, validate, remove, backfill
+- For greenfield or first-feature work, prefer MVP-first sequencing over broad technical completeness
+- Reference 1-2 stable IDs in task text when useful (`AC-*`, `RQ-*`, `DEC-*`)
+- Separate validation work from broad implementation work instead of hiding proof inside a large task
+- Mark tasks complete as implementation progresses and do not leave acceptance criteria without task coverage
+- Every completed task (`[x]`) must carry a `Proof:` line on the following line: `Proof: <kind> <path> [<anchor>]`, where `kind` is `code|test|docs|chore`, `path` is a repo-root-relative path, and `anchor` is the function/test/type name (optional). Without `Proof` the task is not complete and `check`/`archive` will block it
+- State explicitly when a phase is intentionally omitted because the feature does not need it
+- Keep `Implementation Context` short but sufficient so implement and verify rarely need to re-read `spec.md` or `plan.md`

@@ -1,27 +1,27 @@
-# Контракт событий
+# Event Contract
 
-> **Создавайте этот файл только когда** фича продюсит или консьюмит события (новый тип события, изменённая форма payload, новое предположение о delivery/ordering/retry, breaking consumer-visible изменение). Если event contract не нужен — не создавайте файл.
+> **Create this file only when** the feature produces or consumes events (new event type, changed payload shape, new delivery/ordering/retry assumption, or breaking consumer-visible change). If no event contract is needed, do not create this file.
 
 ## Scope
 
-- Связанные `AC-*`: `AC-001`
-- Связанные `DEC-*`: `DEC-001`
+- Related acceptance IDs: `AC-001`
+- Related decision IDs: `DEC-001`
 
-## EVT-001 Событие 1
+## EVT-001 Event 1
 
-- Продюсер:
-- Консьюмер:
-- Назначение:
+- Producer:
+- Consumer:
+- Purpose:
 - Trigger:
 - Payload:
-  - `field_name` - тип или shape, смысл
+  - `field_name` - type or shape, meaning
 - Delivery Expectation:
 - Ordering / Retry Assumptions:
-- Обработка ошибок:
-- Связанные `AC-*`:
+- Failure handling:
+- Related acceptance IDs:
 
-## EVT-002 Событие 2 — та же структура (Продюсер / Консьюмер / Назначение / Trigger / Payload / Delivery / Ordering / Обработка ошибок / Связанные AC)
+## EVT-002 Event 2 — same structure (Producer / Consumer / Purpose / Trigger / Payload / Delivery / Ordering / Failure handling / Related AC)
 
-## Заметки
+## Notes
 
-- Фиксируйте только те границы событий, которые существенно влияют на реализацию
+- Record only event boundaries that materially affect implementation

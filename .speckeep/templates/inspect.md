@@ -10,7 +10,7 @@ generated_at: <YYYY-MM-DD>
 
 ## Scope
 
-- snapshot: однострочное резюме того, что проверили
+- snapshot: one-line summary of what was inspected
 - artifacts:
   - CONSTITUTION.md
   - <specs_dir>/<slug>/spec.md
@@ -37,7 +37,7 @@ generated_at: <YYYY-MM-DD>
 
 ## Traceability
 
-- кратко опишите покрытие acceptance criteria и связь с задачами, если tasks уже существуют
+- summarize acceptance criteria coverage and task mapping when tasks exist
 
 ## Next Step
 

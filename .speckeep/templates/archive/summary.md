@@ -1,20 +1,20 @@
-# Сводка архива
+# Archive Summary
 
-## Спецификация
+## Spec
 
-- snapshot: однострочное резюме того, что архивировано
+- snapshot: one-line summary of what was archived
 - slug: <slug>
 - archived_at: <YYYY-MM-DD>
 - status: completed
 
-## Причина
+## Reason
 
-Опишите, почему этот feature package был архивирован.
+Explain why this feature package was archived.
 
-## Результат
+## Outcome
 
-- Результат 1
+- Outcome 1
 
-## Продолжение
+## Follow-up
 
 - none

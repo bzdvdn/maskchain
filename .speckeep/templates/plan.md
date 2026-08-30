@@ -1,114 +1,115 @@
-# <Spec Title> План
+# <Spec Title> Plan
 
 ## Phase Contract
 
-Inputs: spec и минимальный repo-контекст.
-Outputs: plan, data model и contracts при необходимости.
-Stop if: spec слишком расплывчата для безопасного планирования.
+Inputs: spec and minimal repo context.
+Outputs: plan, data model, and contracts when required.
+Stop if: the spec is too vague to plan safely.
 
-## Цель
+## Goal
 
-Форма реализации фичи без пересказа спеки. Ясно: что меняется, где живёт работа, почему подход безопасен.
+Describe the implementation shape without restating the full spec. Make clear what changes, where the work lives, and why the approach is safe.
 
 ## MVP Slice
 
-- Назовите минимальный независимо демонстрируемый инкремент.
-- Перечислите `AC-*`, которые должны быть закрыты до расширения scope.
+- Name the smallest independently demonstrable increment.
+- List the `AC-*` that must be satisfied before expanding scope.
 
 ## First Validation Path
 
-- Объясните, как человек или агент быстро докажет, что MVP работает.
-- Предпочитайте короткий manual или scripted validation path вместо широкого чеклиста.
+- Explain how a human or agent can prove the MVP works quickly.
+- Prefer a short manual or scripted validation path over a broad checklist.
 
 ## Scope
 
-- Зона реализации 1
-- Зона реализации 2
-- Явно назовите важную границу, которая остаётся нетронутой
+- In-scope implementation area 1
+- In-scope implementation area 2
+- Call out the important boundary that remains untouched
 
 ## Performance Budget
 
-- P99 / p95 latency для критических путей (напр., «query < 50ms p99», «index < 200ms p95»)
-- Memory: peak RSS или per-operation лимит аллокаций (напр., «peak RSS < 64 MB», «не более 1 KB alloc на chunk»)
-- `alloc/op`-потолок для горячих путей, если важно
-- `none`, если для данной фичи нет значимых performance-ограничений
+- P99 / p95 latency target for critical paths (e.g., "query < 50ms p99", "index < 200ms p95")
+- Memory: peak RSS or per-operation allocation budget (e.g., "peak RSS < 64 MB", "no alloc > 1 KB per chunk")
+- Allocations: `alloc/op` ceiling for hot paths when relevant
+- State `none` when there are no meaningful performance constraints for this feature
 
 ## Implementation Surfaces
 
-- Пакет/модуль/файл/граница, которые меняются, почему участвуют, новая или существующая
-- Явно: если нужна новая surface — почему существующих недостаточно
+- Package/module/file/boundary expected to change, plus why it is involved and whether new or existing
+- Say explicitly when a new surface must be introduced and why existing ones are insufficient
 
 ## Bootstrapping Surfaces
 
-- Первые директории/файлы/границы, которые должны существовать до реализации поведения фичи
-- Пишите `none`, если нужная структура в репозитории уже есть
+- First directories/files/boundaries that must exist before feature behavior can land
+- State `none` when the repository already has the needed structure
 
-## Влияние на архитектуру
+## Architecture Impact
 
-- Локальное влияние на компонент/пакет
-- Влияние на интеграции или границы системы, если есть
-- Migration/compatibility/rollout-последствия, если важны
+- Local component or package impact
+- Cross-boundary or integration impact when relevant
+- Migration, compatibility, or rollout implication when relevant
 
 ## Acceptance Approach
 
-- AC-001 -> подход, затрагиваемые surfaces, как будет наблюдаться результат
-- AC-002 -> подход, затрагиваемые surfaces, как будет наблюдаться результат
-- Явно: если AC зависит от contracts, расширения data model, rollout steps или migration work
+- AC-001 -> implementation approach, touched surfaces, and proof that the result will be observable
+- AC-002 -> implementation approach, touched surfaces, and proof that the result will be observable
+- State explicitly when an AC depends on contracts, data-model expansion, rollout, or migration
 
-## Данные и контракты
+## Data and Contracts
 
-- Сошлитесь на `AC-*`, сущности, границы, определяющие реализацию
-- Какие изменения data model нужны, какие осознанно не нужны
-- Какие API/event contracts меняются и как сохраняется compatibility
-- Явно: если расширение контрактов не требуется
-- `data-model.md` обязателен всегда: либо описывает изменения модели, либо ссылается на явный no-change stub
+- Reference `AC-*`, entities, and boundaries driving implementation design
+- Call out which data-model updates are required and which are intentionally unnecessary
+- Call out which API/event contracts are affected and how compatibility is preserved
+- State explicitly when no extra contract expansion is needed
+- `data-model.md` is optional on-demand: create it only when the feature really changes data model/state/persistence; otherwise record `Data model: no change` inline here
+- `plan.md` itself is optional for tiny/low-risk changes — close such features from `spec.md` + `tasks.md` (express mode)
 
-## Стратегия реализации
+## Implementation Strategy
 
-- DEC-001 Название решения
-  Why: почему этот подход, а не очевидная альтернатива
-  Tradeoff: чем решение платит или что ограничивает
-  Affects: какие пакеты/модули/файлы/границы затрагиваются
-  Validation: какой тест/check/наблюдаемое условие подтверждает
-- DEC-002 Название решения — та же структура (Why / Tradeoff / Affects / Validation)
+- DEC-001 Decision title
+  Why: why this approach over the obvious alternative
+  Tradeoff: what this decision costs or constrains
+  Affects: packages/modules/files/boundaries touched
+  Validation: test, check, or observable condition proving it works
+- DEC-002 Decision title — same structure (Why / Tradeoff / Affects / Validation)
 
 ## Incremental Delivery
 
-### MVP (Первая ценность)
+### MVP (First Value)
 
-- Минимальный набор задач, реализуемый и тестируемый независимо
-- Критерий готовности MVP: какие AC покрываются и как быстро проверить
+- Minimal set of tasks implementable and testable independently
+- MVP readiness criteria: which ACs covered and how to quickly verify
 
-### Итеративное расширение
+### Iterative Expansion
 
-- Что добавить после MVP для следующего инкремента
-- Какие AC покрываются на каждом шаге и как независимо валидировать
+- What to add after MVP for the next value increment
+- Which ACs covered at each step and how to validate them independently
 
-## Порядок реализации
+## Sequencing Notes
 
-- Что должно произойти первым и почему
-- Что можно безопасно параллелить
-- Что должно оставаться за флагом/migration/guarded rollout step
+- What must happen first and why
+- What can be parallelized safely
+- What must stay behind a flag, migration, or guarded rollout step when relevant
 
-## Риски
+## Risks
 
-- Риск 1
-  Mitigation: как план уменьшает/ограничивает
-- Риск 2
-  Mitigation: как план уменьшает/ограничивает
+- Risk 1
+  Mitigation: how the plan reduces or contains it
+- Risk 2
+  Mitigation: how the plan reduces or contains it
 
-## Rollout и compatibility
+## Rollout and Compatibility
 
-- Backfill/migration/feature flag/compatibility-особенность
-- Monitoring/auditability/операционное действие после релиза, если поведение меняется в production
-- Явно: если специальных rollout-действий не требуется
+- Backfill, migration, feature-flag, or compatibility consideration
+- Monitoring, auditability, or operational follow-up if behavior changes in production
+- State explicitly when no special rollout handling is needed
 
-## Проверка
+## Validation
 
-- Какие automated tests добавить/обновить
-- Какие targeted manual checks/review evidence/operational checks выполнить
-- Какие `AC-*` и `DEC-*` подтверждает каждый шаг проверки
+- Automated tests to add or update
+- Targeted manual checks, review evidence, or operational checks
+- Acceptance IDs and decision IDs each validation step proves
 
-## Соответствие конституции
+## Constitution Compliance
 
-- нет конфликтов | список конкретных конфликтов с секциями конституции и как план разрешает/откладывает
+- no conflicts | list specific conflicts with constitution sections and how the plan resolves or defers them

@@ -10,27 +10,27 @@ generated_at: <YYYY-MM-DD>
 
 ## Scope
 
-- snapshot: однострочное резюме того, что проверили
+- snapshot: one-line summary of what was verified
 - verification_mode: default | deep
 - artifacts:
   - CONSTITUTION.md
   - <specs_dir>/<slug>/tasks.md
 - inspected_surfaces:
-  - перечислите только те code paths, endpoints, jobs, docs или migrations, которые реально проверили
+  - list only the code paths, endpoints, jobs, docs, or migrations you actually checked
 
 ## Verdict
 
 - status: pass
 - archive_readiness: safe
-- summary: однострочная причина, почему этот verdict обоснован
+- summary: one-line reason this verdict is justified
 
 ## Checks
 
-- task_state: completed=<n>, open=<n>; укажите still-open или спорные task IDs
+- task_state: completed=<n>, open=<n>; name any still-open or disputed task IDs
 - acceptance_evidence:
-  - AC-001 -> подтверждено через T1.1 и конкретную проверенную поверхность
+  - AC-001 -> confirmed via T1.1 and the specific surface inspected
 - implementation_alignment:
-  - назовите конкретное поведение, file, endpoint или flow, который подтвердил task claim
+  - name the concrete behavior, file, endpoint, or flow that matched the task claim
 
 ## Errors
 

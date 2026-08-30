@@ -179,6 +179,12 @@ tenants:
     api_keys: ["sk-test-default"]
 ```
 
+> **Required env:** when DB-backed routing or tenancy is enabled, the service
+> fails closed and will not start without a 32-byte base64 at-rest key:
+> `export MASKCHAIN_KEYS_KEY=$(openssl rand -base64 32)`. This key encrypts all
+> provider secrets (`routing.providers[*].api_keys`, `aws_*`) at rest. Tenant
+> `api_keys` are bootstrapped into SHA-256-hashed virtual keys on startup.
+
 See `examples/config.yaml` for full reference.
 
 ## Project Structure

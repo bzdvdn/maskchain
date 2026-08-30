@@ -306,7 +306,8 @@ apiKeys: {}
   # GEMINI_API_KEY: "..."             # required if gemini provider is configured
   # GROQ_API_KEY: "gsk-..."           # required for groq (proxy) provider is configured
   # ADMIN_PASSWORD: "admin-secret"
-  # DEFAULT_API_KEY: "dk-..."
+  # DEFAULT_API_KEY: "dk-..." # bootstrapped into a virtual key on startup
+  # MASKCHAIN_KEYS_KEY: "..." # REQUIRED for DB-backed routing/tenancy (32 bytes, base64; openssl rand -base64 32)
   # MASKCHAIN_CONVERSATION_KEY: "..." # required if conversations.enabled=true (32 bytes, base64; openssl rand -base64 32)
   # POSTGRES_DSN: "postgres://user:pass@host:5432/db?sslmode=disable"
   # VALKEY_ADDR: "host:6379"

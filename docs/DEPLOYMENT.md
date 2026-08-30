@@ -33,7 +33,8 @@ Environment variables with the `CONFIG_*` prefix override any YAML config value 
 | `CONFIG_VALKEY_ADDR` | Valkey address (`host:port`) |
 | `CONFIG_ROUTING_PROVIDERS_0_API_KEYS_0` | OpenAI API key |
 | `CONFIG_ROUTING_PROVIDERS_1_PROXY_URL` | Per-provider egress proxy (HTTP/HTTPS/SOCKS5) |
-| `CONFIG_TENANTS_DEFAULT_API_KEYS_0` | Default tenant API key |
+| `CONFIG_TENANTS_DEFAULT_API_KEYS_0` | Default tenant API key (bootstrapped into a virtual key on startup) |
+| `MASKCHAIN_KEYS_KEY` | **Required:** 32-byte base64 key for at-rest encryption of provider secrets (`openssl rand -base64 32`). Service fails closed without it when DB-backed routing/tenancy is enabled |
 
 The stack includes three services — `gateway` (port 8080, 2 replicas), `admin` (port 8081, 1 replica), and `combined` (single binary with both profiles, port 8080 + 9090). Config is loaded from `config-base.yaml` and `config-runtime.yaml` mounted into `/etc/maskchain/conf.d/`.
 
@@ -49,6 +50,7 @@ helm install maskchain deployments/helm/maskchain/ \
   --set gateway.image.tag=latest \
   --set postgresql.auth.password=mysecret \
   --set valkey.auth.password=mysecret \
+  --set apiKeys.MASKCHAIN_KEYS_KEY="$(openssl rand -base64 32)" \
   --set apiKeys.OPENAI_API_KEY=sk-... \
   --set apiKeys.ADMIN_PASSWORD=admin123 \
   --set apiKeys.DEFAULT_API_KEY=dk-...
@@ -64,7 +66,7 @@ helm install maskchain deployments/helm/maskchain/ \
 | `<component>.resources` | CPU/memory requests and limits per component |
 | `<component>.ingress.enabled` | Expose component via Ingress |
 | `<component>.gatewayAPI.enabled` | Use Gateway API (HTTPRoute) per component |
-| `apiKeys` | All secrets injected as env vars (`OPENAI_API_KEY`, `ADMIN_PASSWORD`, `DEFAULT_API_KEY`, `POSTGRES_DSN`, `VALKEY_ADDR`, `VALKEY_PASSWORD`) |
+| `apiKeys` | All secrets injected as env vars (`MASKCHAIN_KEYS_KEY`, `OPENAI_API_KEY`, `ADMIN_PASSWORD`, `DEFAULT_API_KEY`, `POSTGRES_DSN`, `VALKEY_ADDR`, `VALKEY_PASSWORD`) |
 | `postgresql.enabled` | Deploy bundled PostgreSQL (set `postgresql.external.enabled=true` to use external) |
 | `valkey.enabled` | Deploy bundled Valkey (set `valkey.external.enabled=true` to use external) |
 | `servicemonitor.enabled` | Prometheus ServiceMonitor integration |

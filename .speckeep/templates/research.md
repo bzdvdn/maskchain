@@ -1,38 +1,38 @@
-# <Spec Title> Исследование (Research)
+# <Spec Title> Research
 
-> **Создавайте этот файл только когда** план зависит от конкретной неопределённости: внешняя система/API/зависимость с неясным поведением, несколько реалистичных вариантов реализации с существенными trade-off, неочевидный performance/security/reliability/integration риск или repo-ограничение, которое нужно исследовать. 1–5 конкретных unknowns, привязанных к решению или границе. Не исследуйте подсистему в целом.
+> **Create this file only when** the plan depends on a concrete unknown: external system/API/dependency with unclear behavior, multiple realistic implementation options with meaningful trade-offs, non-obvious performance/security/reliability/integration risk, or a repo constraint that must be investigated. List 1–5 specific unknowns tied to a decision or boundary. Do not research a subsystem in general.
 
-## Цель
+## Goal
 
-Выявить и разрешить технические неопределенности, архитектурные компромиссы или интеграционные ограничения перед финализацией плана реализации.
+Identify and resolve technical unknowns, architecture trade-offs, or integration constraints before finalizing the implementation plan.
 
-## Вопросы исследования (Research Questions)
+## Research Questions
 
-- **RQ-001** Название вопроса
-  Контекст: почему эта неопределенность блокирует планирование
-  Результаты: краткое описание находки или бенчмарка
-  Вывод: решение или ограничение, вытекающее из находки
+- **RQ-001** Question title
+  Context: why this unknown is a blocker for planning
+  Findings: summary of the discovery or benchmark
+  Conclusion: decision or constraint derived from the finding
 
-- **RQ-002** Название вопроса — та же структура (Контекст / Результаты / Вывод)
+- **RQ-002** Question title — same structure (Context / Findings / Conclusion)
 
-## Область исследования 1
+## Exploration Area 1
 
-- Ссылка на библиотеку, сервис или существующий код
-- Найденное наблюдение или ограничение
-- Влияние на план реализации
+- Reference library, service, or existing code analyzed
+- Observation or constraint found
+- Impact on the implementation plan
 
-## Область исследования 2
+## Exploration Area 2
 
-- Ссылка на библиотеку, сервис или существующий код
-- Найденное наблюдение или ограничение
-- Влияние на план реализации
+- Reference library, service, or existing code analyzed
+- Observation or constraint found
+- Impact on the implementation plan
 
-## Рекомендации
+## Recommendations
 
-- DEC-R01 Рекомендуемое решение или архитектурный выбор
-- DEC-R02 Рекомендуемое решение или архитектурный выбор
+- DEC-R01 Recommended decision or architecture choice
+- DEC-R02 Recommended decision or architecture choice
 
-## Следующие шаги
+## Next Steps
 
-- Переход к полному плану со следующими ограничениями
-- Отмена или изменение направления из-за блокирующего фактора
+- Proceed to full plan with the following constraints
+- Abandon or pivot because of the following blocker

@@ -33,15 +33,21 @@ docker compose -f docker-compose.all.yml up -d --build
 
 | Service    | URL                          | Auth                          |
 |------------|------------------------------|-------------------------------|
-| Gateway    | http://localhost:8080        | Bearer sk-test-default        |
-| Admin      | http://localhost:9090        | Bearer sk-test-default        |
+| Gateway    | http://localhost:8080        | Bearer <virtual-key>          |
+| Admin      | http://localhost:9090        | Bearer <virtual-key> / admin session |
 
 ### Combined mode (`docker-compose.all.yml`)
 
 | Service    | URL                          | Auth                          |
 |------------|------------------------------|-------------------------------|
-| Gateway    | http://localhost:8080        | Bearer sk-test-default        |
+| Gateway    | http://localhost:8080        | Bearer <virtual-key>          |
 | Admin      | http://localhost:9090        | Session cookie                |
+
+> **Auth model (key-at-rest + virtual keys):** каждый tenant теперь аутентифицируется
+> виртуальным ключом, который создаётся через admin API `/api/v1/keys`. На сервере
+> хранится только SHA-256 hash ключа (не raw-значение), а сам raw показан ровно один
+> раз при создании. YAML-ключи из `config.yaml` бутстрапятся в виртуальные на старте,
+> поэтому `sk-test-default` из конфига продолжает работать как раньше.
 
 ### Both modes
 
@@ -84,8 +90,8 @@ See `test-prompt.md` for detailed Postman requests.
 3. PII rules are per-tenant via PIIConfig (email/phone/SSN block)
 
 ### Flow B: Shield scan with dictionary matching
-1. `POST /v1/chat/completions` with `Authorization: Bearer sk-test-default`
-2. Tenant `default` is identified by API key, its PIIConfig rules + dictionaries are used
+1. `POST /v1/chat/completions` with `Authorization: Bearer sk-test-default` (a virtual key bootstrapped from YAML)
+2. Tenant `default` is identified from the virtual key's SHA-256 hash, its PIIConfig rules + dictionaries are used
 3. Response shows `X-Shield-Status: suspicious` (dictionary match) or `X-Shield-Status: blocked` (PII block)
 
 ## Tenants
@@ -121,23 +127,24 @@ tenants:
 
 | Field        | Type     | Description |
 |--------------|----------|-------------|
-| `auth_header` | string  | HTTP header for API key (default: `X-Mask-Authorization`) |
-| `api_keys`    | []string | Valid API keys for this tenant |
+| `auth_header` | string  | HTTP header for the virtual key (default: `X-Mask-Authorization`) |
+| `api_keys`    | []string | Raw keys **bootstrap into virtual keys on startup** (idempotent). Not stored raw — only SHA-256 hashed. Keep for static YAML tenants; rotate/add on the fly via the admin API instead. |
 | `pii_config`  | object  | PII rules per-tenant (enabled, default_action, rules) |
 
-### Via API
+### Via API (virtual keys)
 
-Create a tenant at runtime through the admin API:
+Create a tenant at runtime, then issue a **virtual key** for it (the old
+`api_keys` field is gone from the tenant API — keys now live under `/api/v1/keys`):
 
 ```bash
-curl -X POST http://localhost:8082/api/v1/tenants \
+# 1) Create the tenant (no api_keys field anymore)
+curl -X POST http://localhost:9090/api/v1/tenants \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer sk-test-default" \
   -d '{
     "slug": "acme-corp",
     "name": "Acme Corp",
     "auth_header": "X-Acme-Key",
-    "api_keys": ["sk-acme-001"],
     "dictionaries": [
       {"name": "employees", "entries": ["Alice","Bob"], "match_mode": "exact"}
     ],
@@ -151,36 +158,19 @@ curl -X POST http://localhost:8082/api/v1/tenants \
   }'
 ```
 
-Update dictionaries separately:
-
 ```bash
-curl -X PUT http://localhost:8082/api/v1/tenants/acme-corp/dictionaries \
+# 2) Create a virtual key for the tenant.
+#    Response contains `key` (the raw secret) exactly once — save it now.
+curl -X POST http://localhost:9090/api/v1/keys \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer sk-test-default" \
   -d '{
-    "dictionaries": [
-      {"name": "employees", "entries": ["Alice","Bob","Charlie"], "match_mode": "exact"}
-    ]
+    "tenant_id": "acme-corp",
+    "label": "prod-app",
+    "allowed_models": ["gpt-4o"],
+    "budget_cap": 10.0
   }'
 ```
 
-Update tenant PIIConfig (requires admin API support):
-
-```bash
-curl -X PUT http://localhost:8082/api/v1/tenants/acme-corp \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sk-test-default" \
-  -d '{
-    "name": "Acme Corp",
-    "auth_header": "X-Acme-Key",
-    "api_keys": ["sk-acme-001"],
-    "pii_config": {
-      "enabled": true,
-      "default_action": "allow",
-      "rules": [
-        {"label": "email", "type": "pii", "pattern": "EMAIL", "action": "block"},
-        {"label": "phone", "type": "pii", "pattern": "PHONE", "action": "allow"}
-      ]
-    }
-  }'
-```
+Use the returned raw `key` as `Authorization: Bearer <key>` on the gateway. Only
+its SHA-256 hash is stored; revoke it any time via `DELETE /api/v1/keys/:id`.

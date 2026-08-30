@@ -1,6 +1,12 @@
 # MaskChain unified example config — монтируется в Docker-контейнеры
 # Оверрайды через CONFIG_* env vars (напр. CONFIG_VALKEY_ADDR) работают поверх YAML.
 # Аннотации ключей: provider | internal | platform
+#
+# At-rest encryption (обязательно!): когда включены DB-backed routing и/или tenancy,
+# сервис НЕ стартует без валидного ключа шифрования. Задайте 32-байтовый base64 ключ:
+#   MASKCHAIN_KEYS_KEY=$(openssl rand -base64 32)
+# (альтернатива — crypto.keys_key в конфиге; ключ нельзя коммитить в YAML).
+# Только этим ключом провайдерские секреты (routing.providers[*].api_keys, aws_*) шифруются at rest.
 
 log:
   level: debug
@@ -143,6 +149,11 @@ session:
   cleanup_interval: 5m
   cleanup_enabled: true
 
+# Tenants: на старте синхронизируются в БД (таблица tenants). Ключи из
+# tenants.*.api_keys НЕ хранятся как raw-ключи — они бутстрапятся в виртуальные
+# ключи (virtual_keys, BackfillVirtualKeys, idempotent): клиент продолжает ходить
+# с этим raw-ключом, а на стороне сервера хранится только его SHA-256 hash.
+# Добавление/отзыв ключей на лету — через admin API /api/v1/keys (не через YAML).
 tenants:
   default:
     name: "Default Tenant"

@@ -2,102 +2,102 @@
 
 ## Scope Snapshot
 
-- In scope: краткое однострочное резюме пользовательского изменения, которое обязана дать эта фича.
-- Out of scope: краткое однострочное резюме соседней работы, которую эта фича явно не берет.
+- In scope: one-line summary of the user-visible change this feature must deliver.
+- Out of scope: one-line summary of adjacent work this feature does not take on.
 
-## Цель
+## Goal
 
-Один короткий абзац: кто получает пользу, что для него меняется, и по чему будет видно, что фича удалась.
+One concise paragraph covering who benefits, what changes for them, and how success becomes visible.
 
-## Основной сценарий
+## Primary User Flow
 
-1. Стартовая точка: откуда пользователь или система начинает.
-2. Основное действие: что происходит дальше.
-3. Результат: что становится истинным, когда фича работает.
-4. Ошибка/fallback-путь, если он заметно влияет на опыт.
+1. Starting point: where the user or system begins.
+2. Main interaction: what they do or what event happens.
+3. Outcome: what becomes true when the feature works.
+4. Failure/fallback path when it materially changes the experience.
 
 ## User Stories
 
-- Для brownfield опционально; для greenfield рекомендуется, если это снимает неоднозначность.
-- P1 Story: наименьший независимо ценный пользовательский результат.
-- P2 Story: следующее ценное расширение после MVP.
-- Если grouping по историям не помогает, явно пишите `none`.
+- Optional for brownfield; recommended for greenfield when it reduces ambiguity.
+- P1 Story: the smallest independently valuable user outcome.
+- P2 Story: the next valuable extension after the MVP.
+- State `none` when the feature is better described without story grouping.
 
 ## MVP Slice
 
-- Наименьший срез, дающий независимо демонстрируемую ценность.
-- Укажите, какие `AC-*` этот срез обязан закрыть первым.
+- The smallest slice that delivers independently demonstrable value.
+- Name which `AC-*` this slice must satisfy first.
 
 ## First Deployable Outcome
 
-- Что можно показать, заревьюить или проверить руками после первого implementation pass.
-- Если фича не может поставляться независимо, напишите это явно и почему.
+- What can be demonstrated, reviewed, or manually validated after the first implementation pass.
+- State explicitly when the feature is not deployable independently and why.
 
 ## Scope
 
-- Что входит в scope 1
-- Что входит в scope 2
-- Какая поверхность продукта/репозитория осознанно включена
+- In-scope behavior or boundary 1
+- In-scope behavior or boundary 2
+- Repository or product surface intentionally included
 
-## Контекст
+## Context
 
-- Ограничение репо/зависимости/операционной среды, влияющее на решение
-- Существующий пользовательский/системный поток, который нужно сохранить или расширить
-- Предположение, которое должно оставаться истинным для корректности фичи
+- Existing repository constraint, dependency, or operational reality shaping the solution
+- Existing user workflow or system behavior this feature must preserve or extend
+- Assumption that must remain true for the feature to be valid
 
-## Зависимости
+## Dependencies
 
-- Меж-спековые зависимости, на которые полагается фича (напр., «зависит от интерфейса VectorStore из domain/retrieval»)
-- Внешний сервис/библиотека/платформа, требуемая фичей
-- `none`, если внешних и меж-спековых зависимостей нет
+- Cross-spec dependencies this feature relies on (e.g., "depends on VectorStore interface from domain/retrieval")
+- External service, library, or platform dependency required by the feature
+- State `none` when the feature has no cross-spec or external dependencies
 
-## Требования
+## Requirements
 
-- RQ-001 Одно чёткое, проверяемое требование как ожидаемое поведение/capability
-- RQ-002 Одно чёткое, проверяемое требование как ожидаемое поведение/capability
-- RQ-003 Система ДОЛЖНА [capability] [NEEDS CLARIFICATION: деталь — вариант A или B?]
-- Каждое требование достаточно узкое, чтобы reviewer мог понять, выполнено оно или нет
-- Неясные маркируйте inline: `[NEEDS CLARIFICATION: что неизвестно и почему важно]`
+- RQ-001 Clear, testable requirement written as expected behavior or capability
+- RQ-002 Clear, testable requirement written as expected behavior or capability
+- RQ-003 System MUST [capability] [NEEDS CLARIFICATION: detail — option A or option B?]
+- Scope each requirement tightly enough that a reviewer can confirm it is satisfied
+- Mark unclear requirements inline with `[NEEDS CLARIFICATION: what is unknown and why]`
 
-## Вне scope
+## Non-Goals
 
-- Поведение/соседнее улучшение вне scope 1
-- Поведение/соседнее улучшение вне scope 2
-- Отложенное уточнение, которое нельзя молча протащить в реализацию
+- Out-of-scope behavior or adjacent enhancement 1
+- Out-of-scope behavior or adjacent enhancement 2
+- Deferred refinement that should not be silently pulled into implementation
 
-## Критерии приемки
+## Acceptance Criteria
 
-### AC-001 Название критерия
+### AC-001 Criterion title
 
-- Почему это важно: одна строка о пользовательской или бизнес-ценности
-- **Given** начальное состояние или предусловие
-- **When** действие или событие
-- **Then** ожидаемый наблюдаемый результат
-- Evidence: что разработчик, reviewer или пользователь сможет прямо наблюдать
+- Why this matters: one line of user or business value
+- **Given** the initial state or precondition
+- **When** the action or event
+- **Then** the expected observable outcome
+- Evidence: what a developer, reviewer, or user can directly observe when this criterion passes
 
-### AC-002 Название критерия
+### AC-002 Criterion title
 
-- Почему важно / Given / When / Then / Evidence — та же структура, что в AC-001
+- Why this matters / Given / When / Then / Evidence — same structure as AC-001
 
-## Допущения
+## Assumptions
 
-- Допущение об окружении/пользователях/системе, которое должно выполняться
-- Разумный default, выбранный когда описание не указало деталь
-- Зависимость от системы/сервиса/поведения, считающегося стабильным
+- Assumption about environment, users, or system state that must hold
+- Reasonable default chosen when the feature description did not specify a detail
+- Dependency on an existing system, service, or behavior assumed stable
 
-## Критерии успеха
+## Success Criteria
 
-- SC-001 Измеримый результат сверх поведенческой корректности (напр., «Экспорт за <5с для 10k строк»)
-- SC-002 Измеримый результат (напр., «Error rate < 0.1% после rollout»)
-- Включайте только если есть значимые performance/reliability/UX-цели; для чисто поведенческих фич опускайте
+- SC-001 Measurable outcome defining quality beyond behavioral correctness (e.g., "Export completes in under 5s for 10k rows")
+- SC-002 Measurable outcome (e.g., "Error rate stays below 0.1% after rollout")
+- Include only when the feature has meaningful performance/reliability/UX targets; omit for purely behavioral features
 
-## Краевые случаи
+## Edge Cases
 
-- Пустое состояние/first-run/отсутствие данных
-- Ошибка/retry/timeout
-- Permission/role/конфликтующее состояние, если важно
+- Empty, first-run, or missing-data condition
+- Failure, retry, or timeout behavior
+- Permission, role, or conflicting-state condition when relevant
 
-## Открытые вопросы
+## Open Questions
 
-- Вопрос 1
-- `none`, если дополнительных уточнений не требуется
+- Question 1
+- State `none` when the feature is clear enough to proceed
