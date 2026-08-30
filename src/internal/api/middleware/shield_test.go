@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -799,5 +800,61 @@ func TestShieldNilEngine(t *testing.T) {
 	}
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+// @sk-test mask-token-format#T4.1: proxy dict tokens are clean per-request counters (AC-008)
+func TestDictMaskTokensAreCleanCounters(t *testing.T) {
+	engine, mockEng, log := setupTest(t)
+	mockEng.resp = &appshield.ScanResponse{
+		ScanResult: entity.NewScanResult(value.ScanStatusClean),
+	}
+
+	dict := dictionary.NewDictionary("names", []interface{}{"original-name"}, dictionary.MatchModeExact)
+	tenantSlug, _ := value.NewTenantSlug("test-tenant")
+	tenant := entity.NewTenant(tenantSlug, "test-tenant", "Authorization",
+		entity.WithTenantDictionaries([]*dictionary.Dictionary{dict}),
+	)
+
+	engine.Use(func(c *gin.Context) {
+		c.Set("tenant", tenant)
+		c.Next()
+	})
+	engine.Use(ShieldMiddleware(mockEng, testShieldConfig(), log))
+
+	var maskedContent string
+	engine.POST("/v1/chat/completions", func(c *gin.Context) {
+		buf := new(strings.Builder)
+		io.Copy(buf, c.Request.Body)
+		var chatReq chatRequest
+		_ = json.Unmarshal([]byte(buf.String()), &chatReq)
+		last := chatReq.Messages[len(chatReq.Messages)-1]
+		maskedContent = last.Content
+		c.JSON(http.StatusOK, map[string]interface{}{
+			"choices": []map[string]interface{}{
+				{"message": map[string]interface{}{"role": "assistant", "content": maskedContent}},
+			},
+		})
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatBody("gpt-4", "tell me about original-name")))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if w.Header().Get("X-Shield-Dict-Mask-ID") == "" {
+		t.Fatal("expected X-Shield-Dict-Mask-ID header")
+	}
+
+	tokRe := regexp.MustCompile(`\[MASK\.([0-9]+)\]`)
+	m := tokRe.FindStringSubmatch(maskedContent)
+	if m == nil {
+		t.Fatalf("expected a clean counter token in %q", maskedContent)
+	}
+	if strings.Contains(maskedContent, "MASK_") {
+		t.Errorf("expected no id-bearing tokens, got %q", maskedContent)
 	}
 }

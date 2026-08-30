@@ -250,7 +250,8 @@ func ShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *slog.Logger
 					return kept[i].StartPos > kept[j].StartPos
 				})
 				for _, r := range kept {
-					ph := fmt.Sprintf("[MASK_%s.%d]", dictMaskID, phCounter)
+					// @sk-task mask-token-format#T4.1: Proxy dict tokens are clean per-request counters (AC-008)
+					ph := fmt.Sprintf("[MASK.%d]", phCounter)
 					dictMaskMapping[ph] = r.Fragment
 					phCounter++
 					chatReq.Messages[mi].Content = chatReq.Messages[mi].Content[:r.StartPos] + ph + chatReq.Messages[mi].Content[r.StartPos+len(r.Fragment):]

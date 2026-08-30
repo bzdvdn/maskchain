@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -167,6 +168,7 @@ func TestHandleUnmask(t *testing.T) {
 		maskEntry := &mask.MaskEntry{
 			MaskID:       "test-mask-1",
 			Replacements: map[string]string{"[MASK_test.1]": "world"},
+			Reversible:   true,
 		}
 		if err := ms.Save(context.TODO(), maskEntry); err != nil {
 			t.Fatal(err)
@@ -267,7 +269,7 @@ func TestMaskUnmaskCycle(t *testing.T) {
 	if maskedText == origBody {
 		t.Fatal("masked text should differ from original")
 	}
-	if !strings.Contains(maskedText, "[MASK_") {
+	if !strings.Contains(maskedText, "[MASK") {
 		t.Fatal("masked text should contain placeholders")
 	}
 
@@ -312,5 +314,136 @@ func TestHandleMaskStorageError(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func maskFormatHandler() (http.Handler, *mockStorage) {
+	gin.SetMode(gin.TestMode)
+	cyc := &cycleDetector{}
+	reg := detector.NewDetectorRegistry()
+	_ = reg.Register(entity.DetectorType("test"), cyc)
+	ms := &mockStorage{}
+	uc := mask.NewMaskUseCase(reg, ms)
+	handler := NewMaskHandler(uc, reg)
+	engine := gin.New()
+	engine.POST("/mask", handler.HandleMask)
+	engine.POST("/unmask", handler.HandleUnmask)
+	return engine, ms
+}
+
+func singleMaskEntry(t *testing.T, ms *mockStorage) *mask.MaskEntry {
+	t.Helper()
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	if len(ms.entries) != 1 {
+		t.Fatalf("expected exactly one saved entry, got %d", len(ms.entries))
+	}
+	for _, e := range ms.entries {
+		return e
+	}
+	return nil
+}
+
+// @sk-test mask-token-format#T2.2: default format emits clean counter tokens (AC-001)
+func TestHandleMask_DefaultClean(t *testing.T) {
+	engine, ms := maskFormatHandler()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/mask", strings.NewReader("test@example.com"))
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if body := w.Body.String(); body != "[MASK.1]" {
+		t.Errorf("expected clean token, got %q", body)
+	}
+	if w.Header().Get("mask-id") == "" || w.Header().Get("data_mask_id") == "" {
+		t.Error("expected mask-id and data_mask_id headers")
+	}
+	if !singleMaskEntry(t, ms).Reversible {
+		t.Error("expected default entry to be reversible")
+	}
+}
+
+// @sk-test mask-token-format#T2.2: format=id keeps legacy tokens (AC-002)
+func TestHandleMask_LegacyFormat(t *testing.T) {
+	engine, ms := maskFormatHandler()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/mask?format=id", strings.NewReader("test@example.com"))
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	legacyRe := regexp.MustCompile(`^\[MASK_[A-Za-z0-9-]+\.[0-9]+\]$`)
+	if !legacyRe.MatchString(body) {
+		t.Errorf("expected legacy token, got %q", body)
+	}
+	if !singleMaskEntry(t, ms).Reversible {
+		t.Error("expected legacy entry to be reversible")
+	}
+}
+
+// @sk-test mask-token-format#T2.2: format=redact emits [REDACTED] and is non-reversible (AC-007)
+func TestHandleMask_RedactFormat(t *testing.T) {
+	engine, ms := maskFormatHandler()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/mask?format=redact", strings.NewReader("test@example.com"))
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if body := w.Body.String(); body != "[REDACTED]" {
+		t.Errorf("expected [REDACTED], got %q", body)
+	}
+	entry := singleMaskEntry(t, ms)
+	if entry.Reversible {
+		t.Error("expected redact entry to be non-reversible")
+	}
+	if len(entry.Replacements) != 0 {
+		t.Errorf("expected no replacement mapping, got %v", entry.Replacements)
+	}
+}
+
+// @sk-test mask-token-format#T2.2: invalid format returns 400 before saving (AC-003)
+func TestHandleMask_InvalidFormat(t *testing.T) {
+	engine, ms := maskFormatHandler()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/mask?format=plain", strings.NewReader("test@example.com"))
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(ms.entries) != 0 {
+		t.Error("expected no entry saved for invalid format")
+	}
+}
+
+// @sk-test mask-token-format#T2.2: unmask of a redact entry returns 400 (AC-007)
+func TestHandleUnmask_NotReversible(t *testing.T) {
+	engine, ms := maskFormatHandler()
+	_ = ms.Save(context.TODO(), &mask.MaskEntry{
+		MaskID:         "red",
+		DocumentMaskID: "red",
+		Replacements:   map[string]string{},
+		Reversible:     false,
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/unmask?mask_ids=red", strings.NewReader("[REDACTED]"))
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if w.Body.String() != "mask is not reversible" {
+		t.Errorf("unexpected body: %q", w.Body.String())
 	}
 }

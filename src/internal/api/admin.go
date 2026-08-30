@@ -96,6 +96,9 @@ func (s *AdminServer) RegisterAdminAuthRoutes(h *admin.AdminAuthHandler) {
 }
 
 // @sk-task ui-v2-console#T2.2: Register read-only status route under admin session (AC-010)
+//
+// RegisterStatusHandler mounts the read-only /api/v1/admin/status endpoint
+// behind the admin session middleware.
 func (s *AdminServer) RegisterStatusHandler(h *admin.StatusHandler) {
 	group := s.engine.Group("/api/v1/admin")
 	if s.adminSessionMw != nil {

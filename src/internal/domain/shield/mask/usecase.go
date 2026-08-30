@@ -26,7 +26,11 @@ func NewMaskUseCase(registry *detector.DetectorRegistry, storage MaskStorage) *M
 }
 
 // @sk-task 23-shield-reactions#T1.2: Implement MaskFromResults (DEC-002)
-func (uc *MaskUseCase) MaskFromResults(ctx context.Context, text string, maskID string, documentMaskID string, results []detector.DetectorResult) (maskedText string, entry *MaskEntry, err error) {
+// @sk-task mask-token-format#T1.3: Format-aware token builder (AC-001, AC-002, AC-007)
+//
+// MaskFromResults replaces detected fragments with format-specific tokens and
+// stores a MaskEntry so the document can be restored via UnmaskText.
+func (uc *MaskUseCase) MaskFromResults(ctx context.Context, text string, maskID string, documentMaskID string, results []detector.DetectorResult, format Format) (maskedText string, entry *MaskEntry, err error) {
 	docID := documentMaskID
 	if docID == "" {
 		docID = maskID
@@ -35,6 +39,7 @@ func (uc *MaskUseCase) MaskFromResults(ctx context.Context, text string, maskID 
 		MaskID:         maskID,
 		DocumentMaskID: docID,
 		Replacements:   make(map[string]string),
+		Reversible:     format != FormatRedact,
 		CreatedAt:      time.Now(),
 	}
 
@@ -50,17 +55,34 @@ func (uc *MaskUseCase) MaskFromResults(ctx context.Context, text string, maskID 
 		return kept[i].StartPos > kept[j].StartPos
 	})
 
+	// Assign counters left-to-right, then replace right-to-left so earlier
+	// byte offsets stay valid while the rendered tokens read in text order.
+	tokens := make([]string, len(kept))
+	for i := 0; i < len(kept); i++ {
+		leftIdx := len(kept) - 1 - i
+		var placeholder string
+		switch format {
+		case FormatID:
+			placeholder = fmt.Sprintf("[MASK_%s.%d]", docID, i+1)
+		case FormatRedact:
+			placeholder = "[REDACTED]"
+		default:
+			placeholder = fmt.Sprintf("[MASK.%d]", i+1)
+		}
+		tokens[leftIdx] = placeholder
+	}
+
 	masked := []byte(text)
-	counter := 1
-	for _, r := range kept {
-		placeholder := fmt.Sprintf("[MASK_%s.%d]", docID, counter)
-		entry.Replacements[placeholder] = r.Fragment
+	for idx, r := range kept {
+		placeholder := tokens[idx]
+
+		if format != FormatRedact {
+			entry.Replacements[placeholder] = r.Fragment
+		}
 
 		before := string(masked[:r.StartPos])
 		after := string(masked[r.EndPos:])
 		masked = []byte(before + placeholder + after)
-
-		counter++
 	}
 
 	if saveErr := uc.storage.Save(ctx, entry); saveErr != nil {
@@ -71,8 +93,12 @@ func (uc *MaskUseCase) MaskFromResults(ctx context.Context, text string, maskID 
 }
 
 // @sk-task 22-shield-mask-storage#T2.1: Implement UnmaskText (AC-003, AC-004)
+// @sk-task mask-token-format#T1.3: Sequential per-document unmask + reversible check (AC-004, AC-005, AC-006, AC-007)
+//
+// UnmaskText restores masked text by applying each entry's replacements for the
+// given ids in order; non-reversible (redact) entries are rejected.
 func (uc *MaskUseCase) UnmaskText(ctx context.Context, maskedText string, maskIDs []string) (string, error) {
-	merged := make(map[string]string)
+	result := maskedText
 
 	for _, id := range maskIDs {
 		id = strings.TrimSpace(id)
@@ -83,18 +109,12 @@ func (uc *MaskUseCase) UnmaskText(ctx context.Context, maskedText string, maskID
 		if getErr != nil {
 			return "", fmt.Errorf("get mask %s: %w", id, getErr)
 		}
-		for k, v := range entry.Replacements {
-			merged[k] = v
+		if !entry.Reversible {
+			return "", fmt.Errorf("unmask mask %s: %w", id, ErrNotReversible)
 		}
-	}
-
-	if len(merged) == 0 {
-		return maskedText, nil
-	}
-
-	result := maskedText
-	for placeholder, original := range merged {
-		result = strings.ReplaceAll(result, placeholder, original)
+		for placeholder, original := range entry.Replacements {
+			result = strings.ReplaceAll(result, placeholder, original)
+		}
 	}
 
 	return result, nil

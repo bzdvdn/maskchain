@@ -13,6 +13,18 @@ PII-правила per-tenant: email→block, phone→block, ssn→block (нас
 | Mask | POST | `http://localhost:8080/api/v1/shield/mask` | `text/plain` | `Authorization: Bearer sk-test-default` |
 | Unmask | POST | `http://localhost:8080/api/v1/shield/unmask` | `text/plain` | — |
 
+### Mask Format (`?format=`)
+
+| format | Токены | Обратимо |
+|--------|--------|----------|
+| `clean` (default) | `[MASK.1]`, `[MASK.2]`, … — без id документа | да |
+| `id` | `[MASK_<maskId>.<N>]` — legacy, id в тексте | да |
+| `redact` | `[REDACTED]` — без id и счётчика | **нет** (unmask → 400) |
+
+Без параметра работает `clean`. Для старого поведения укажите `?format=id`; для необратимой редакции — `?format=redact`.
+
+В conversation-пути (proxy, `/v1/chat/completions`) dictionary-токены — чистые per-request счётчики `[MASK.<N>]` без id; заголовок `X-Shield-Dict-Mask-ID` несёт mapping-id для корреляции.
+
 ### Mask Request
 
 Body (`text/plain`):

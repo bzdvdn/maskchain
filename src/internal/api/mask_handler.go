@@ -30,11 +30,19 @@ func NewMaskHandler(useCase *mask.MaskUseCase, registry *detector.DetectorRegist
 }
 
 // @sk-task 25-shield-preprocessors#T3.2: Add WithPreprocessors setter (AC-008)
+//
+// WithPreprocessors attaches the preprocessors applied before scanning.
 func (h *MaskHandler) WithPreprocessors(pps []preprocessor.Processor) {
 	h.preprocessors = pps
 }
 
 func (h *MaskHandler) HandleMask(c *gin.Context) {
+	format, err := mask.ParseFormat(c.Query("format"))
+	if err != nil {
+		c.String(http.StatusBadRequest, err.Error())
+		return
+	}
+
 	maskID := c.Query("mask_id")
 	var docMaskID string
 	if maskID == "" {
@@ -101,7 +109,7 @@ func (h *MaskHandler) HandleMask(c *gin.Context) {
 		}
 	}
 
-	maskedText, _, err := h.useCase.MaskFromResults(c.Request.Context(), processText, maskID, docMaskID, allResults)
+	maskedText, _, err := h.useCase.MaskFromResults(c.Request.Context(), processText, maskID, docMaskID, allResults, format)
 	if err != nil {
 		if errors.Is(err, mask.ErrMaskIDConflict) {
 			c.String(http.StatusConflict, "mask_id already exists")
@@ -148,6 +156,10 @@ func (h *MaskHandler) HandleUnmask(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, mask.ErrMaskNotFound) {
 			c.String(http.StatusNotFound, err.Error())
+			return
+		}
+		if errors.Is(err, mask.ErrNotReversible) {
+			c.String(http.StatusBadRequest, "mask is not reversible")
 			return
 		}
 		c.String(http.StatusInternalServerError, err.Error())

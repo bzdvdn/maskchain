@@ -13,6 +13,7 @@ import (
 )
 
 // @sk-task 22-shield-mask-storage#T3.1: Implement PostgresMaskRepo (AC-008, AC-012)
+// @sk-task mask-token-format#T1.4: Persist reversible column (AC-007)
 //
 // PostgresMaskRepo represents a domain entity or configuration.
 type PostgresMaskRepo struct {
@@ -33,10 +34,10 @@ func (r *PostgresMaskRepo) Save(ctx context.Context, entry *mask.MaskEntry) erro
 	}
 
 	tag, err := r.pool.Exec(ctx,
-		`INSERT INTO mask_entries (mask_id, document_mask_id, replacements, created_at)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO mask_entries (mask_id, document_mask_id, replacements, created_at, reversible)
+		 VALUES ($1, $2, $3, $4, $5)
 		 ON CONFLICT (mask_id) DO NOTHING`,
-		entry.MaskID, entry.DocumentMaskID, data, entry.CreatedAt)
+		entry.MaskID, entry.DocumentMaskID, data, entry.CreatedAt, entry.Reversible)
 	if err != nil {
 		return err
 	}
@@ -53,10 +54,11 @@ func (r *PostgresMaskRepo) Get(ctx context.Context, maskID string) (*mask.MaskEn
 	var replacementsJSON []byte
 	var documentMaskID string
 	var createdAt time.Time
+	var reversible bool
 
 	err := r.pool.QueryRow(ctx,
-		`SELECT mask_id, document_mask_id, replacements, created_at FROM mask_entries WHERE mask_id = $1`,
-		maskID).Scan(&maskID, &documentMaskID, &replacementsJSON, &createdAt)
+		`SELECT mask_id, document_mask_id, replacements, created_at, reversible FROM mask_entries WHERE mask_id = $1`,
+		maskID).Scan(&maskID, &documentMaskID, &replacementsJSON, &createdAt, &reversible)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, mask.ErrMaskNotFound
@@ -73,6 +75,7 @@ func (r *PostgresMaskRepo) Get(ctx context.Context, maskID string) (*mask.MaskEn
 		MaskID:         maskID,
 		DocumentMaskID: documentMaskID,
 		Replacements:   replacements,
+		Reversible:     reversible,
 		CreatedAt:      createdAt,
 	}, nil
 }
