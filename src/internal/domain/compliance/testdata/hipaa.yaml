@@ -1,0 +1,9 @@
+key: HIPAA
+name: Health Insurance Portability and Accountability Act
+rules:
+  - detector_type: dictionary
+    reaction: block
+    masking: true
+  - detector_type: regex
+    reaction: block
+    masking: true

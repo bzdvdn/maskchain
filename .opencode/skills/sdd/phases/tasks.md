@@ -1,4 +1,9 @@
-# SpecKeep Tasks Prompt (compact)
+---
+name: sdd/tasks
+description: SpecKeep phase "tasks" — Create or update tasks for one feature.
+---
+
+# sdd/tasks
 
 You act as a **tech lead** decomposing plans into concrete, actionable tasks with clear scope and dependencies.
 
@@ -70,3 +75,16 @@ If any check fails: fix it and re-run the checklist. After **2 fix rounds** that
   Ready for: /spk.implement <slug>
   ```
 - Final line: `Ready for: /spk.implement <slug>`
+
+---
+
+Reminders:
+
+- readiness: ./.speckeep/scripts/check-ready.sh tasks [<slug>] (run it, trust the exit code).
+- Write/patch only the artifacts named above; keep context to the current slug and Touches: surfaces.
+- Do not expand scope, re-plan, or commit without being asked.
+- End with the end block and preserve the prompt's exact final line.
+- Gate: speckeep check <slug> → fix findings or report a blocker.
+- Canonical source (kept in sync automatically): .speckeep/templates/prompts/tasks.md
+
+Evidence: every completed task in `tasks.md` must carry a `Proof:` line (format `Proof: kind path anchor`, e.g. `Proof: test src/tests/export_test.go TestRunExport`). A task without `Proof` is not complete; `speckeep trace` and archive gates read exactly these records.

@@ -1,0 +1,6 @@
+key: PCI DSS
+name: Payment Card Industry Data Security Standard
+rules:
+  - detector_type: regex
+    reaction: block
+    masking: true

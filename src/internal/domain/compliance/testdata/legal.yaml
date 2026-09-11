@@ -1,0 +1,6 @@
+key: Legal
+name: Legal Hold
+rules:
+  - detector_type: regex
+    reaction: log
+    masking: false

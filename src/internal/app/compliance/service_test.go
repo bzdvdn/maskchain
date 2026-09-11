@@ -81,7 +81,7 @@ func hipaaRegistry(t *testing.T) *compliance.Registry {
 		[]entity.DetectorType{entity.DetectorTypeRegex, entity.DetectorTypeDictionary, entity.DetectorTypePromptInjection},
 		[]entity.Reaction{entity.ReactionAllow, entity.ReactionBlock, entity.ReactionReview, entity.ReactionLog},
 	)
-	reg, errs := compliance.LoadPacksFromDir("../../../../specs/active/401-compliance-packs/testdata", catalog)
+	reg, errs := compliance.LoadPacksFromDir("../../domain/compliance/testdata", catalog)
 	if len(errs) != 1 {
 		t.Fatalf("expected 1 load error, got %v", errs)
 	}

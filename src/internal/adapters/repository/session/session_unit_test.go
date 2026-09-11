@@ -52,6 +52,7 @@ func TestPostgresSessionStore_NilPool(t *testing.T) {
 	}
 	if result == nil {
 		t.Fatal("expected non-nil ListResult")
+		return
 	}
 	if result.Total != 0 {
 		t.Errorf("ListByTenant Total: expected 0, got %d", result.Total)
@@ -63,6 +64,7 @@ func TestPostgresSessionStore_NilPool(t *testing.T) {
 	}
 	if result == nil {
 		t.Fatal("expected non-nil ListResult")
+		return
 	}
 	if result.Total != 0 {
 		t.Errorf("ListAll Total: expected 0, got %d", result.Total)

@@ -7,7 +7,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 )
 
-const testPresetDir = "../../../../specs/active/401-compliance-packs/testdata"
+const testPresetDir = "testdata"
 
 func TestLoadPacksFromDir_RegistersByKey(t *testing.T) {
 	catalog := NewCatalog([]entity.DetectorType{
@@ -114,6 +114,7 @@ func TestLoadPacksFromDir_NewYAMLBecomesPack(t *testing.T) {
 	pack := reg.Pack("SOC 2")
 	if pack == nil {
 		t.Fatal("expected SOC 2 pack to be registered from soc2.yaml without code change")
+		return
 	}
 	if pack.Name != "Service Organization Control 2" {
 		t.Fatalf("unexpected pack name %q", pack.Name)

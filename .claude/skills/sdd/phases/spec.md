@@ -1,4 +1,9 @@
-# SpecKeep Spec Prompt (compact)
+---
+name: sdd/spec
+description: SpecKeep phase "spec" — Create or update one feature spec.
+---
+
+# sdd/spec
 
 You act as a **senior software architect**. Design thoughtfully — weigh trade-offs, ensure consistency with the codebase, plan for maintainability.
 
@@ -81,3 +86,16 @@ If any check fails: fix it and re-run the checklist. After **2 fix rounds** that
   Ready for: /spk.inspect <slug>   (or /spk.plan <slug>)
   ```
 - Final line (mandatory): `Ready for: /spk.inspect <slug>` or `Ready for: /spk.plan <slug>`. Prefer `/spk.inspect` (deep quality review — constitution alignment, AC completeness, ambiguity) when ambiguity, risk, or open questions remain; prefer `/spk.plan` when the spec passed self-validation and looks solid.
+
+---
+
+Reminders:
+
+- readiness: ./.speckeep/scripts/check-ready.sh spec [<slug>] (run it, trust the exit code).
+- Write/patch only the artifacts named above; keep context to the current slug and Touches: surfaces.
+- Do not expand scope, re-plan, or commit without being asked.
+- End with the end block and preserve the prompt's exact final line.
+- Gate: speckeep check <slug> → fix findings or report a blocker.
+- Canonical source (kept in sync automatically): .speckeep/templates/prompts/spec.md
+
+Evidence: every completed task in `tasks.md` must carry a `Proof:` line (format `Proof: kind path anchor`, e.g. `Proof: test src/tests/export_test.go TestRunExport`). A task without `Proof` is not complete; `speckeep trace` and archive gates read exactly these records.

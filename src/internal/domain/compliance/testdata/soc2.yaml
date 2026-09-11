@@ -1,0 +1,9 @@
+key: SOC 2
+name: Service Organization Control 2
+rules:
+  - detector_type: regex
+    reaction: block
+    masking: true
+  - detector_type: prompt_injection
+    reaction: review
+    masking: true

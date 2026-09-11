@@ -1,0 +1,6 @@
+key: Broken
+name: Broken Preset
+rules:
+  - detector_type: nope
+    reaction: block
+    masking: false
