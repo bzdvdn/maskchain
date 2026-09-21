@@ -26,9 +26,11 @@ import (
 	analyticsapp "github.com/bzdvdn/maskchain/src/internal/app/analytics"
 	budgetapp "github.com/bzdvdn/maskchain/src/internal/app/budget"
 	conversationapp "github.com/bzdvdn/maskchain/src/internal/app/conversation"
+	logexportapp "github.com/bzdvdn/maskchain/src/internal/app/logexport"
 	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
 	"github.com/bzdvdn/maskchain/src/internal/app/worker"
 	"github.com/bzdvdn/maskchain/src/internal/domain/analytics"
+	domainlogexport "github.com/bzdvdn/maskchain/src/internal/domain/logexport"
 	routingSvc "github.com/bzdvdn/maskchain/src/internal/domain/routing/service"
 	"github.com/bzdvdn/maskchain/src/internal/domain/session"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/detector"
@@ -149,6 +151,17 @@ func run() {
 			srv.RegisterCacheMiddleware(middleware.NewSemanticCacheMiddleware(svc, cfg.Data.Cache, logger).Handler())
 			logger.Info("semantic cache middleware registered")
 		}
+	}
+
+	// @sk-task log-export#T2.5: wire the log export pipeline (AC-001)
+	if cfg.LogExport != nil && cfg.LogExport.Enabled {
+		sinks := bootstrap.BuildExportSinks(context.Background(), cfg.LogExport, logger)
+		pipeline := logexportapp.NewPipeline(sinks, domainlogexport.NewResolver(cfg.LogExport.Tenants),
+			cfg.LogExport.BatchSize, cfg.LogExport.QueueSize, cfg.LogExport.Timeout, logger)
+		go pipeline.Run(context.Background())
+		exportRates := newCostRateRegistry(cfg, bootstrap.LoadCostRatesFromDB(context.Background(), cfg, b.PGPool, logger))
+		srv.RegisterExportMiddleware(middleware.ExportMiddleware(pipeline, exportRates, logger))
+		logger.Info("log export pipeline started", slog.Int("sinks", len(sinks)))
 	}
 
 	// @sk-task embeddings-passthrough#T2.1: wire the embeddings input shield (AC-001)

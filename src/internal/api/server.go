@@ -36,6 +36,7 @@ type Server struct {
 	budgetMw          gin.HandlerFunc
 	cacheMw           gin.HandlerFunc
 	embeddingsShield  gin.HandlerFunc
+	exportMw          gin.HandlerFunc
 }
 
 // @sk-task 114-real-health-probes#T2.2: Accept healthSvc and replace static handlers (AC-001, AC-005, AC-008)
@@ -130,6 +131,11 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 	if s.budgetMw != nil {
 		chain = append(chain, s.budgetMw)
 	}
+	// @sk-task log-export#T2.4: export captures the masked response after all
+	// response-shaping stages and before the provider handler (AC-001, AC-002).
+	if s.exportMw != nil {
+		chain = append(chain, s.exportMw)
+	}
 	chain = append(chain, chatHandler)
 
 	// @sk-task embeddings-passthrough#T1.2: embeddings chain uses the dedicated
@@ -145,6 +151,9 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 	}
 	if s.budgetMw != nil {
 		embeddingsChain = append(embeddingsChain, s.budgetMw)
+	}
+	if s.exportMw != nil {
+		embeddingsChain = append(embeddingsChain, s.exportMw)
 	}
 	embeddingsChain = append(embeddingsChain, chatHandler)
 
@@ -202,6 +211,14 @@ func (s *Server) RegisterCacheMiddleware(mw gin.HandlerFunc) {
 // binary wires the shield.
 func (s *Server) RegisterEmbeddingsShield(mw gin.HandlerFunc) {
 	s.embeddingsShield = mw
+}
+
+// @sk-task log-export#T2.4: register the log export capture middleware (AC-001)
+//
+// RegisterExportMiddleware sets the middleware that captures masked traffic for
+// asynchronous export. When unset, no export capture runs.
+func (s *Server) RegisterExportMiddleware(mw gin.HandlerFunc) {
+	s.exportMw = mw
 }
 
 func (s *Server) withSessionMiddleware(next gin.HandlerFunc) gin.HandlerFunc {

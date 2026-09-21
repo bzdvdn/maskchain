@@ -173,6 +173,14 @@ The Playground relays through the admin process, so set `admin.gateway_url`
 - Gaps are never silent: `maskchain_usage_missing_total`, `maskchain_cost_rate_fallback_total`, and `maskchain_cost_rate_missing_total` expose unaccounted traffic.
 - `analytics.stream_usage` (default `true`) asks OpenAI-shaped providers for usage on streams via `stream_options.include_usage`.
 
+### Log export
+
+- Ship **masked** request/response records plus metadata to per-tenant sinks: a signed webhook, an S3-compatible bucket, or Langfuse.
+- Disabled by default; a tenant exports only when routed to at least one sink.
+- Retention-aware: `full` exports masked content + metadata, `meta` exports metadata only, `none` exports nothing.
+- Originals and the placeholder→original mask mapping are never exported.
+- Delivery is asynchronous and failure-isolated: a broken sink never affects the client response or other sinks (`maskchain_log_export_delivered_total`, `_failed_total`, `_dropped_total`).
+
 ### Observability
 
 - OpenTelemetry tracing (gRPC exporter)

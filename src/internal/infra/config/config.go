@@ -353,6 +353,49 @@ type ComplianceConfig struct {
 	EnabledPacks []string `mapstructure:"enabled_packs" yaml:"enabled_packs"`
 }
 
+// @sk-task log-export#T1.2: log export config (AC-001, AC-005)
+//
+// LogExportConfig configures the per-tenant export pipeline. It is disabled by
+// default; a tenant exports only when it is routed to at least one sink.
+type LogExportConfig struct {
+	Enabled   bool `mapstructure:"enabled" yaml:"enabled"`
+	QueueSize int  `mapstructure:"queue_size" yaml:"queue_size"`
+	BatchSize int  `mapstructure:"batch_size" yaml:"batch_size"`
+	// Timeout bounds a single sink delivery attempt.
+	Timeout  time.Duration             `mapstructure:"timeout" yaml:"timeout"`
+	Webhooks []LogExportWebhookConfig  `mapstructure:"webhooks" yaml:"webhooks"`
+	S3       []LogExportS3Config       `mapstructure:"s3" yaml:"s3"`
+	Langfuse []LogExportLangfuseConfig `mapstructure:"langfuse" yaml:"langfuse"`
+	// Tenants maps a tenant slug to the sink names it may export to.
+	Tenants map[string][]string `mapstructure:"tenants" yaml:"tenants"`
+}
+
+// LogExportWebhookConfig is a generic signed HTTP sink.
+type LogExportWebhookConfig struct {
+	Name   string `mapstructure:"name" yaml:"name"`
+	URL    string `mapstructure:"url" yaml:"url"`
+	Secret string `mapstructure:"secret" yaml:"secret"`
+}
+
+// LogExportS3Config is an S3-compatible object-store sink.
+type LogExportS3Config struct {
+	Name      string `mapstructure:"name" yaml:"name"`
+	Endpoint  string `mapstructure:"endpoint" yaml:"endpoint"`
+	Region    string `mapstructure:"region" yaml:"region"`
+	Bucket    string `mapstructure:"bucket" yaml:"bucket"`
+	Prefix    string `mapstructure:"prefix" yaml:"prefix"`
+	AccessKey string `mapstructure:"access_key" yaml:"access_key"`
+	SecretKey string `mapstructure:"secret_key" yaml:"secret_key"`
+}
+
+// LogExportLangfuseConfig is a Langfuse ingestion sink.
+type LogExportLangfuseConfig struct {
+	Name      string `mapstructure:"name" yaml:"name"`
+	Host      string `mapstructure:"host" yaml:"host"`
+	PublicKey string `mapstructure:"public_key" yaml:"public_key"`
+	SecretKey string `mapstructure:"secret_key" yaml:"secret_key"`
+}
+
 // @sk-task 80-tenant-isolation#T1.2: Add Tenants map to Config struct (AC-001, AC-003, AC-004, AC-005)
 // @sk-task 90-production-hardening#T1.1: Wire Debug into Config (<AC-001>)
 //
@@ -377,6 +420,7 @@ type Config struct {
 	Budgets         *BudgetsConfig           `mapstructure:"budgets" yaml:"budgets"`
 	Compliance      *ComplianceConfig        `mapstructure:"compliance" yaml:"compliance"`
 	Data            *DataConfig              `mapstructure:"data" yaml:"data"`
+	LogExport       *LogExportConfig         `mapstructure:"log_export" yaml:"log_export"`
 	Tenants         map[string]*TenantConfig `mapstructure:"tenants" yaml:"tenants"`
 	Admin           *AdminConfig             `mapstructure:"admin" yaml:"admin"`
 }

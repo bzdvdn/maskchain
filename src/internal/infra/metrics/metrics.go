@@ -39,6 +39,10 @@ func RegisterMetrics(reg *prometheus.Registry) {
 	reg.MustRegister(UsageMissingTotal)
 	reg.MustRegister(CostRateFallbackTotal)
 	reg.MustRegister(CostRateMissingTotal)
+	// @sk-task log-export#T1.3: register export delivery metrics (AC-008)
+	reg.MustRegister(LogExportDeliveredTotal)
+	reg.MustRegister(LogExportFailedTotal)
+	reg.MustRegister(LogExportDroppedTotal)
 }
 
 // @sk-task 90-production-hardening#T3.2: Register PG pool metrics collector (<AC-003>)
@@ -281,6 +285,34 @@ var (
 		},
 		[]string{"model"},
 	)
+
+	// @sk-task log-export#T1.3: export delivery metrics (AC-008)
+	LogExportDeliveredTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "log_export_delivered_total",
+			Help:      "Total number of records delivered per sink",
+		},
+		[]string{"sink"},
+	)
+
+	LogExportFailedTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "log_export_failed_total",
+			Help:      "Total number of failed export deliveries per sink",
+		},
+		[]string{"sink"},
+	)
+
+	LogExportDroppedTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "log_export_dropped_total",
+			Help:      "Total number of export records dropped before delivery, by reason",
+		},
+		[]string{"reason"},
+	)
 )
 
 // @sk-task 131-analytics-pipeline#T4.1: Reset clears analytics metrics for test isolation
@@ -294,4 +326,8 @@ func Reset() {
 	UsageMissingTotal.Reset()
 	CostRateFallbackTotal.Reset()
 	CostRateMissingTotal.Reset()
+	// @sk-task log-export#T1.3: reset export metrics for test isolation
+	LogExportDeliveredTotal.Reset()
+	LogExportFailedTotal.Reset()
+	LogExportDroppedTotal.Reset()
 }

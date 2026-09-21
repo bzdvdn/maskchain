@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/domain/analytics"
+	domainlogexport "github.com/bzdvdn/maskchain/src/internal/domain/logexport"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 	"github.com/bzdvdn/maskchain/src/internal/domain/virtualkey"
@@ -269,6 +271,62 @@ func TestCompletionsUsesFullChain(t *testing.T) {
 	}
 	if usageRan == 0 || budgetRan == 0 {
 		t.Errorf("expected usage and budget middleware to run on /completions (usage=%d budget=%d)", usageRan, budgetRan)
+	}
+}
+
+type exportRecorderSpy struct {
+	mu      sync.Mutex
+	records []domainlogexport.Record
+}
+
+func (s *exportRecorderSpy) Enqueue(rec domainlogexport.Record) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.records = append(s.records, rec)
+}
+
+func (s *exportRecorderSpy) count() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.records)
+}
+
+// @sk-test log-export#T4.4: the export capture runs in the proxy chain (AC-001, AC-002)
+func TestExportRunsInProxyChain(t *testing.T) {
+	repo := &selfFakeRepo{keys: []*virtualkey.VirtualKey{{
+		ID:            "k1",
+		TenantID:      "acme",
+		KeyHash:       virtualkey.KeyHash("sk-mc_secret"),
+		AllowedModels: []string{"gpt-4o-mini"},
+		Enabled:       true,
+	}}}
+	slug, err := value.NewTenantSlug("acme")
+	if err != nil {
+		t.Fatalf("slug: %v", err)
+	}
+	tenant := entity.NewTenant(slug, "Acme", "Authorization")
+
+	srv := newTestServer()
+	srv.RegisterAuth(middleware.VirtualKeyAuth(repo, middleware.NewTenantProvider([]*entity.Tenant{tenant})))
+	rec := &exportRecorderSpy{}
+	srv.RegisterExportMiddleware(middleware.ExportMiddleware(rec, nil, slog.Default()))
+	srv.RegisterProxyRoute(func(c *gin.Context) { c.Next() }, nil)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/api/v1/chat/completions",
+		strings.NewReader(`{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer sk-mc_secret")
+	srv.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if rec.count() != 1 {
+		t.Fatalf("expected 1 exported record, got %d", rec.count())
+	}
+	if rec.records[0].Tenant != "acme" {
+		t.Errorf("exported tenant = %q, want acme", rec.records[0].Tenant)
 	}
 }
 

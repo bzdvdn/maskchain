@@ -191,3 +191,30 @@ tenants:
           type: regex
           pattern: SSN
           action: block
+
+# Log export — ship masked records + metadata to per-tenant sinks.
+# Disabled by default; a tenant exports only when listed under `tenants`.
+log_export:
+  enabled: false
+  queue_size: 1024
+  batch_size: 50
+  timeout: 5s
+  webhooks:
+    - name: compliance-wh
+      url: "https://hooks.example.com/maskchain"
+      secret: "${LOG_EXPORT_WEBHOOK_SECRET}"   # HMAC-SHA256 signing secret
+  # s3:
+  #   - name: audit-bucket
+  #     endpoint: "https://s3.example.com"     # omit for AWS; set for MinIO/GCS
+  #     region: "us-east-1"
+  #     bucket: "maskchain-audit"
+  #     prefix: "logs"
+  #     access_key: "${LOG_EXPORT_S3_ACCESS_KEY}"
+  #     secret_key: "${LOG_EXPORT_S3_SECRET_KEY}"
+  # langfuse:
+  #   - name: llm-observability
+  #     host: "https://cloud.langfuse.com"
+  #     public_key: "${LANGFUSE_PUBLIC_KEY}"
+  #     secret_key: "${LANGFUSE_SECRET_KEY}"
+  tenants:
+    default: ["compliance-wh"]

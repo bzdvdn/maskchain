@@ -45,6 +45,9 @@ const defaultHealthCheckCriticalDeps = "database"
 const defaultTenantReloadInterval = 15 * time.Second
 const defaultAdminSessionTTL = 30 * time.Minute
 const defaultAdminGatewayURL = "http://localhost:8080"
+const defaultLogExportQueueSize = 1024
+const defaultLogExportBatchSize = 50
+const defaultLogExportTimeout = 5 * time.Second
 const defaultDashboardPollInterval = 5 * time.Second
 const defaultConversationsRetentionDays = 90
 const defaultBudgetAggregationInterval = "5m"
@@ -155,6 +158,13 @@ func DefaultConfig() *Config {
 					TimeoutSec: defaultDataCacheEmbeddingTimeout,
 				},
 			},
+		},
+		LogExport: &LogExportConfig{
+			// @sk-task log-export#T1.2: export is disabled until routed (AC-001)
+			Enabled:   false,
+			QueueSize: defaultLogExportQueueSize,
+			BatchSize: defaultLogExportBatchSize,
+			Timeout:   defaultLogExportTimeout,
 		},
 		Admin: &AdminConfig{
 			SessionTTL:            defaultAdminSessionTTL,
