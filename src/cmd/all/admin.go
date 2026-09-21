@@ -166,6 +166,12 @@ func buildAdminServer(
 		vkHandler := adminhandler.NewVirtualKeyHandler(vkRepo, auditAdapter, vkCache)
 		srv.RegisterVirtualKeyHandler(vkHandler)
 
+		gatewayURL := ""
+		if cfg.Admin != nil {
+			gatewayURL = cfg.Admin.GatewayURL
+		}
+		srv.RegisterPlaygroundHandler(adminhandler.NewPlaygroundHandler(gatewayURL))
+
 		auditHandler := adminhandler.NewAuditHandler(auditAdapter)
 		srv.RegisterAuditHandler(auditHandler)
 

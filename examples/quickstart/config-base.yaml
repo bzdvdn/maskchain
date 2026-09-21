@@ -1,0 +1,51 @@
+# MaskChain quickstart — infrastructure sections.
+# Mounted as 00-config-base.yaml (loaded first). Business logic lives in
+# config-runtime.ollama.yaml or config-runtime.openai.yaml.
+
+log:
+  level: info
+
+server:
+  port: 8080
+  admin_port: 9090
+  shutdown_timeout: 10
+
+database:
+  dsn: "postgres://test:test@postgres:5432/maskchain?sslmode=disable"
+  max_conns: 10
+  min_conns: 2
+  max_conn_lifetime: 30m
+
+valkey:
+  addr: valkey:6379
+  password: ""
+  ttl_sec: 3600
+
+egress:
+  max_idle_conns: 10
+  idle_timeout: 30s
+  max_retries: 1
+  circuit_breaker:
+    max_failures: 5
+    cooldown: 30s
+
+session:
+  default_ttl: 30m
+  max_ttl: 24h
+  cleanup_interval: 5m
+  cleanup_enabled: true
+
+# Keep the quickstart to a single required secret (MASKCHAIN_KEYS_KEY):
+# conversation logging stays off by default. See docs/ACCESS_AND_BUDGETS.md.
+conversations:
+  enabled: false
+
+otel:
+  endpoint: ""
+
+debug:
+  enabled: false
+
+admin:
+  username: admin
+  password: test

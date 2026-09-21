@@ -77,14 +77,34 @@ MaskChain is the **only Go-native LLM gateway with per-tenant dictionary masking
 ## Quick Start
 
 ```bash
-# Start full stack (gateway + admin + postgres + valkey + monitoring)
-docker compose -f deployments/docker-compose/docker-compose.yml up -d --build
+# One command: gateway + admin + Postgres + Valkey + a local Ollama model.
+# No external API keys required; generates .env with encryption keys.
+cd examples/quickstart
+./quickstart.sh              # or `make quickstart` from the repo root
 
-# Or use examples/ for local dev with pre-seeded data
-docker compose -f examples/docker-compose.yml up -d --build
+# Then send a request (PII is masked before the model, restored after):
+curl -s http://localhost:8080/api/v1/chat/completions \
+  -H "Authorization: Bearer sk-test-default" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"llama3.2","messages":[{"role":"user","content":"email alice@example.com"}]}'
 ```
 
-See [examples/README.md](examples/README.md) for tenant setup and test flows.
+For an OpenAI-backed stack: `./quickstart.sh openai` (needs `OPENAI_KEY`).
+
+> **Required secret:** MaskChain fails closed without a 32-byte base64
+> `MASKCHAIN_KEYS_KEY` when DB-backed routing/tenancy is enabled. The quickstart
+> generates one for you; for manual runs use
+> `export MASKCHAIN_KEYS_KEY=$(openssl rand -base64 32)`.
+
+Alternative: the production-shaped Docker Compose stack (requires an explicit
+profile):
+
+```bash
+docker compose -f deployments/docker-compose/docker-compose.yml --profile production up -d --build
+```
+
+See [examples/README.md](examples/README.md) for the scenario index (quickstart,
+cookbook, clients, Postman).
 
 ### Docker Images
 
@@ -126,6 +146,17 @@ Images are tagged with `latest` (main branch), commit SHA, and SemVer tags on re
 - Provider health checking
 - Per-provider egress proxy (HTTP/HTTPS/SOCKS5) with `proxy_url` config
 - Supported `api_type`: `openai`, `anthropic`, `gemini`, `bedrock` (AWS Bedrock), `proxy` (OpenAI-compatible), `ollama`
+
+### Self-service API
+
+- `GET /api/v1/models` — models routed for the authenticated tenant/key (with an `allowed` flag per the key's scopes)
+- `GET /api/v1/me` — tenant, key id/label, model scopes, budget cap and spend
+- `POST /api/v1/keys/:id/rotate` — rotate a virtual key secret (new plaintext shown once; scopes/budget/expiry preserved)
+
+The operator console adds a **Playground** (send a test prompt through shield,
+routing and budgets) and a standalone **Compliance** page (apply/audit packs).
+The Playground relays through the admin process, so set `admin.gateway_url`
+(default `http://localhost:8080`) when gateway and admin run separately.
 
 ### Observability
 
@@ -254,7 +285,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed contribution guide.
 ## API
 
 OpenAPI 3.1 spec: `src/internal/api/swagger/openapi.yaml`
-Swagger UI: embedded in admin binary at `/swagger/`.
+Swagger UI: embedded in the admin binary at `/api/v1/docs`
+(raw spec at `/api/v1/openapi.yaml`) — e.g. http://localhost:9090/api/v1/docs.
 
 ## Release
 

@@ -1,4 +1,4 @@
-import { getAdminToken } from './admin'
+import { getAdminToken, setAdminToken } from './admin'
 
 export class ApiError extends Error {
   status: number
@@ -49,6 +49,10 @@ export async function apiFetch<T>(url: string, opts: RequestOptions = {}): Promi
   })
 
   if (res.status === 401) {
+    // Expired/invalid session: clear the stored token and let the app force a
+    // re-login instead of surfacing a generic "failed to load" error.
+    setAdminToken(null)
+    window.dispatchEvent(new Event('maskchain:unauthorized'))
     throw new UnauthorizedError()
   }
 

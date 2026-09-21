@@ -24,6 +24,10 @@ deployments/
 bin/
 dist/
 coverage/
+# Frontend build artifacts must be produced inside the image, not copied from
+# the host (Docker ignores patterns like "dist/" for nested paths).
+ui/node_modules/
+ui/dist/
 *.md
 Makefile
 go.work

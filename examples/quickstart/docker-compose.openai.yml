@@ -1,0 +1,59 @@
+# MaskChain quickstart — OpenAI path. No local model required.
+#
+#   cp .env.example .env   # then set OPENAI_KEY + MASKCHAIN_KEYS_KEY
+#   docker compose -f docker-compose.openai.yml up -d --build
+#
+# Requires OPENAI_KEY and MASKCHAIN_KEYS_KEY in .env.
+
+name: maskchain-quickstart
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: maskchain-quickstart-pg
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: maskchain
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d maskchain"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: maskchain-quickstart-vk
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  maskchain:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.combined
+    container_name: maskchain-quickstart
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    environment:
+      CONFIG_DIR: /etc/maskchain/conf.d
+      CONFIG_DATABASE_DSN: postgres://test:test@postgres:5432/maskchain?sslmode=disable
+      CONFIG_VALKEY_ADDR: valkey:6379
+      OPENAI_KEY: ${OPENAI_KEY:?set OPENAI_KEY in .env}
+      MASKCHAIN_KEYS_KEY: ${MASKCHAIN_KEYS_KEY:?set MASKCHAIN_KEYS_KEY in .env}
+    volumes:
+      - ./config-base.yaml:/etc/maskchain/conf.d/00-config-base.yaml:ro
+      - ./config-runtime.openai.yaml:/etc/maskchain/conf.d/99-config-runtime.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+
+volumes:
+  pgdata:

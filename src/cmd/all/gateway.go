@@ -35,6 +35,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 	"github.com/bzdvdn/maskchain/src/internal/infra/crypto"
 	"github.com/bzdvdn/maskchain/src/internal/ports"
+	"github.com/bzdvdn/maskchain/src/pkg/version"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/valkey-io/valkey-go"
@@ -241,6 +242,7 @@ func buildGatewayServer(
 	adminMw := middleware.AdminAuth(cfg.Debug)
 	srv.RegisterDebugRoutes(adminMw)
 	srv.RegisterMetricsRoute(metricsHandler)
+	srv.RegisterSelfHandler(api.NewSelfHandler(registry, version.Info()))
 	srv.RegisterMaskHandler(maskHandler)
 
 	pipelineFactory := appshield.NewScanPipelineFactory(detectorRegistry)

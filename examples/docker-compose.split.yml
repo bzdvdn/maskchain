@@ -74,6 +74,7 @@ services:
       CONFIG_VALKEY_ADDR: valkey:6379
       CONFIG_ADMIN_USERNAME: admin
       CONFIG_ADMIN_PASSWORD: test
+      CONFIG_ADMIN_GATEWAY_URL: http://gateway:8080
       CONFIG_OTEL_ENDPOINT: ""
     env_file:
       - .env

@@ -60,3 +60,8 @@ export function updateKey(id: string, req: UpdateKeyRequest): Promise<VirtualKey
 export function deleteKey(id: string): Promise<void> {
   return apiFetch(`${BASE}/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
+
+// rotateKey issues a new secret for an existing key; the plaintext is returned once.
+export function rotateKey(id: string): Promise<CreateKeyResponse> {
+  return apiFetch(`${BASE}/${encodeURIComponent(id)}/rotate`, { method: 'POST' })
+}

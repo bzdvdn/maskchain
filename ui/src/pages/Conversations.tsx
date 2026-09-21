@@ -1,14 +1,16 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ConversationDetail, ConversationFilters, ConversationListItem } from '../api/conversations'
 import {
   getConversation,
   listConversations,
 } from '../api/conversations'
+import { listTenants } from '../api/tenants'
 import { decodeBase64Utf8 } from '../utils/base64'
-import { Button, Pagination, SortHeader, TableSkeleton } from '../components/ui'
+import { Button, Pagination, SortHeader, StatusPill, TableSkeleton } from '../components/ui'
 import { CopyButton } from '../components/CopyButton'
 import { useAsyncData } from '../hooks/useAsyncData'
 import { useSort, sortRows } from '../hooks/useSort'
+import { useWorkspace } from '../hooks/useWorkspace'
 
 interface MaskGroup {
   original: string
@@ -42,9 +44,22 @@ export function groupMasking(maskingB64: string | null): MaskGroup[] {
 export function Conversations() {
   const [page, setPage] = useState(1)
   const perPage = 20
-  const [filters, setFilters] = useState<ConversationFilters>({})
+  const [workspace] = useWorkspace()
+  const [filters, setFilters] = useState<ConversationFilters>(() => (workspace ? { tenant_id: workspace } : {}))
+  const [tenantOptions, setTenantOptions] = useState<string[]>([])
   const [detail, setDetail] = useState<ConversationDetail | null>(null)
   const [detailError, setDetailError] = useState(false)
+
+  useEffect(() => {
+    listTenants()
+      .then((ts) => setTenantOptions(ts.map((t) => t.slug).sort()))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    setFilters((prev) => ({ ...prev, tenant_id: workspace || undefined }))
+    setPage(1)
+  }, [workspace])
 
   const filterKey = useMemo(() => `${filters.tenant_id ?? ''}|${filters.status ?? ''}|${filters.model ?? ''}|${filters.masked ?? ''}`, [filters])
   const { data: result, loading } = useAsyncData(
@@ -59,7 +74,10 @@ export function Conversations() {
     setPage(1)
   }
   const models = useMemo(() => Array.from(new Set(items.map((c) => c.model))).sort(), [items])
-  const tenants = useMemo(() => Array.from(new Set(items.map((c) => c.tenant_id))).sort(), [items])
+  const tenants = useMemo(
+    () => Array.from(new Set([...tenantOptions, ...items.map((c) => c.tenant_id)])).sort(),
+    [tenantOptions, items],
+  )
 
   async function openDetail(id: string) {
     if (detail?.id === id) {
@@ -162,9 +180,9 @@ export function Conversations() {
                 <td>{c.tenant_id}</td>
                 <td>{c.model}</td>
                 <td>
-                  <span className={`badge ${c.status === 'blocked' ? 'badge-down' : c.status === 'error' ? 'badge-warn' : 'badge-up'}`}>
+                  <StatusPill tone={c.status === 'blocked' ? 'red' : c.status === 'error' ? 'amber' : 'green'}>
                     {c.status}
-                  </span>
+                  </StatusPill>
                 </td>
                 <td>{c.masked ? 'yes' : 'no'}</td>
                 <td>{c.streamed ? 'yes' : 'no'}</td>

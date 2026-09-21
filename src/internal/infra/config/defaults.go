@@ -44,6 +44,7 @@ const defaultAnalyticsBatchInterval = "5s"
 const defaultHealthCheckCriticalDeps = "database"
 const defaultTenantReloadInterval = 15 * time.Second
 const defaultAdminSessionTTL = 30 * time.Minute
+const defaultAdminGatewayURL = "http://localhost:8080"
 const defaultDashboardPollInterval = 5 * time.Second
 const defaultConversationsRetentionDays = 90
 const defaultBudgetAggregationInterval = "5m"
@@ -156,6 +157,7 @@ func DefaultConfig() *Config {
 		Admin: &AdminConfig{
 			SessionTTL:            defaultAdminSessionTTL,
 			DashboardPollInterval: defaultDashboardPollInterval,
+			GatewayURL:            defaultAdminGatewayURL,
 		},
 	}
 }

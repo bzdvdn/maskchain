@@ -11,173 +11,144 @@ A practical walkthrough from zero to seeing masked sensitive data.
 
 ```bash
 git clone https://github.com/bzdvdn/maskchain.git
-cd maskchain
-docker compose -f examples/docker-compose.yml up -d --build
+cd maskchain/examples/quickstart
+./quickstart.sh
 ```
 
-This starts the gateway (port 8080), admin API (port 8082), Postgres, Valkey, Prometheus, and Grafana. Wait for the gateway to be ready:
+This builds the combined binary and starts the gateway (port 8080), admin API and
+UI (port 9090), Postgres, Valkey, and a local Ollama provider. The first build can
+take a few minutes. Wait for readiness:
 
 ```bash
-curl -s http://localhost:8080/health
+curl -s http://localhost:8080/health     # {"status":"ok"}
 ```
 
-Expected response: `{"status":"ok"}`
+The quickstart pre-configures a `default` tenant with key `sk-test-default` and
+reversible PII masking for email/phone/SSN.
 
-## Step 2: Create a tenant with PII rules
-
-Create a tenant called "demo" with PII detection for email, phone, and SSN. The `mask` action replaces sensitive values with placeholders; `block` returns a 403.
+## Step 2: Send a prompt with PII
 
 ```bash
-curl -s -X POST http://localhost:8082/api/v1/tenants \
+curl -s -X POST http://localhost:8080/api/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-test-default" \
+  -d '{
+    "model": "llama3.2",
+    "messages": [{"role": "user", "content": "My email is john@example.com and SSN is 123-45-6789"}]
+  }'
+```
+
+The shield scans the request body, replaces PII with placeholders before the
+request is forwarded, and restores the original values on the response path.
+Inspect the shield outcome in the response headers:
+
+```
+X-Shield-Status: suspicious
+```
+
+To test the shield in isolation (no LLM call), use the mask endpoint:
+
+```bash
+curl -s -D - -X POST http://localhost:8080/api/v1/shield/mask \
+  -H "Authorization: Bearer sk-test-default" \
+  -H "Content-Type: text/plain" \
+  --data "Contact me at john@example.com or 123-45-6789"
+```
+
+Expected body (default `format=clean`):
+
+```
+Contact me at [MASK.1] or [MASK.2]
+```
+
+The response header `mask-id` restores the text later:
+
+```bash
+curl -s -X POST "http://localhost:8080/api/v1/shield/unmask?mask_ids=<mask-id>" \
+  -H "Content-Type: text/plain" \
+  --data "Contact me at [MASK.1] or [MASK.2]"
+```
+
+See [cookbook/01-mask-unmask](../examples/cookbook/01-mask-unmask/) for the
+`clean`/`id`/`redact` formats.
+
+## Step 3: Send a clean prompt
+
+```bash
+curl -s -X POST http://localhost:8080/api/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-test-default" \
+  -d '{"model": "llama3.2", "messages": [{"role": "user", "content": "What is the capital of France?"}]}'
+```
+
+The response header shows `X-Shield-Status: clean` — no findings, no masking.
+
+## Step 4: Create another tenant (optional)
+
+Tenants are created without inline API keys; issue a virtual key separately.
+
+```bash
+# Admin session token
+TOKEN=$(curl -s -X POST http://localhost:9090/api/v1/admin/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"test"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+
+# Create the tenant
+curl -s -X POST http://localhost:9090/api/v1/tenants \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer sk-test-default" \
   -d '{
     "slug": "demo",
     "name": "Demo Tenant",
     "auth_header": "Authorization",
-    "api_keys": ["sk-demo"],
     "pii_config": {
       "enabled": true,
       "default_action": "mask",
       "rules": [
         {"label": "email", "type": "regex", "pattern": "EMAIL", "action": "mask"},
         {"label": "phone", "type": "regex", "pattern": "PHONE", "action": "mask"},
-        {"label": "ssn",   "type": "regex", "pattern": "SSN",   "action": "mask"}
+        {"label": "ssn",   "type": "regex", "pattern": "SSN",   "action": "block"}
       ]
     }
   }'
-```
 
-Expected response (HTTP 200):
-
-```json
-{
-  "slug": "demo",
-  "name": "Demo Tenant",
-  "api_keys": ["sk-demo"],
-  "pii_config": {
-    "enabled": true,
-    "default_action": "mask",
-    "rules": [
-      {"label": "email", "action": "mask"},
-      {"label": "phone", "action": "mask"},
-      {"label": "ssn",   "action": "mask"}
-    ]
-  }
-}
-```
-
-## Step 3: Send a prompt with PII
-
-Send a chat request containing an email address and SSN. The shield scans the request body, detects the PII patterns, and replaces them with placeholders before the request is forwarded to the LLM provider.
-
-```bash
-curl -s -X POST http://localhost:8080/api/v1/chat/completions \
+# Issue a key (raw secret shown once)
+curl -s -X POST http://localhost:9090/api/v1/keys \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sk-demo" \
-  -d '{
-    "model": "gpt-4",
-    "messages": [{"role": "user", "content": "My email is john@example.com and SSN is 123-45-6789"}]
-  }'
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"tenant_id": "demo", "label": "tutorial", "allowed_models": ["llama3.2"]}'
 ```
 
-When the shield detects PII with `action: mask`, the request body sent to the LLM looks like this:
-
-```
-My email is [[pii.email.0]] and SSN is [[pii.ssn.0]]
-```
-
-On the response path, the shield's unmask writer restores the original values, so the caller receives the LLM response with original text intact. If no LLM provider is reachable, you will still see shield activity in the response headers:
-
-```
-X-Shield-Status: suspicious
-X-Shield-Findings: 2
-```
-
-To test the shield in isolation without an LLM, use the dedicated mask endpoint:
-
-```bash
-curl -s -X POST http://localhost:8080/api/v1/shield/mask \
-  -H "Authorization: Bearer sk-demo" \
-  -d "Contact me at john@example.com or 123-45-6789"
-```
-
-Expected response:
-
-```
-Contact me at [[pii.email.0]] or [[pii.ssn.0]]
-```
-
-The response header includes a `data_mask_id` you can use to unmask later:
-
-```bash
-# Unmask the masked text (pass mask_id from response header)
-curl -s -X POST http://localhost:8080/api/v1/shield/unmask?mask_ids=<MASK_ID> \
-  -H "Authorization: Bearer sk-demo" \
-  -d "Contact me at [[pii.email.0]] or [[pii.ssn.0]]"
-```
-
-## Step 4: Send a clean prompt
-
-A request without PII passes through the shield unmodified.
-
-```bash
-curl -s -X POST http://localhost:8080/api/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sk-demo" \
-  -d '{
-    "model": "gpt-4",
-    "messages": [{"role": "user", "content": "What is the capital of France?"}]
-  }'
-```
-
-The response header will show `X-Shield-Status: clean` -- no findings, no masking, no latency overhead.
+Use the returned `key` as `Authorization: Bearer <key>` on the gateway. Note the
+`ssn` rule uses `action: block`: a request containing an SSN returns HTTP 403
+with `X-Shield-Status: blocked`.
 
 ## Step 5: Check analytics
 
-MaskChain records every request with shield outcomes, token counts, and latency. Query the analytics endpoint to see usage data:
-
 ```bash
-curl -s http://localhost:8082/api/v1/analytics/tokens?period=day \
-  -H "Authorization: Bearer sk-demo"
+curl -s "http://localhost:9090/api/v1/analytics/tokens?period=day" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
-Expected response (values will vary):
-
-```json
-{
-  "records": [
-    {
-      "tenant": "demo",
-      "period": "2026-07-19",
-      "prompt_tokens": 42,
-      "completion_tokens": 15,
-      "total_tokens": 57,
-      "shield_findings": 2
-    }
-  ]
-}
-```
+The UI shows the same data at <http://localhost:9090> (**Overview → Analytics**).
 
 ## What just happened?
-
-Each request flows through this pipeline:
 
 ```
 Client --> Auth --> Rate Limit --> Shield Scan --> Routing --> LLM Provider --> Response --> Unmask
 ```
 
-1. **Auth** -- the API key (`sk-demo`) identifies the tenant and loads its config.
-2. **Rate Limit** -- per-tenant request budget is checked (if configured).
-3. **Shield Scan** -- the request body is scanned by the PII engine (regex detectors for email, phone, SSN). Matches are replaced with `[[pii.<label>.<N>]]` placeholders. Dictionary terms (if any) are masked with `[MASK_<ID>.<N>]` placeholders.
-4. **Routing** -- the modified request is forwarded to the configured LLM provider based on the model name.
-5. **Unmask** -- on the response path, placeholders are restored to original values. Streaming SSE responses are unmasked chunk-by-chunk.
-
-If `action: block` is set instead of `mask`, the shield returns a 403 before the request reaches the LLM, and the caller receives `X-Shield-Status: blocked`.
+1. **Auth** — the key resolves the tenant and loads its PII config/dictionaries.
+2. **Rate Limit** — the per-tenant request budget is checked.
+3. **Shield Scan** — the body is scanned by the PII regex detectors and the
+   tenant's dictionaries; matches become reversible placeholders.
+4. **Routing** — the masked request is forwarded to the provider for the model.
+5. **Unmask** — on the response path, placeholders are restored. Streaming SSE
+   responses are unmasked chunk-by-chunk. `block` rules short-circuit with 403.
 
 ## Next steps
 
-- Browse [examples/](../examples/README.md) for more test flows (dictionary masking, streaming, seed scripts)
-- Read [docs/DEPLOYMENT.md](DEPLOYMENT.md) for production setup (HA, env vars, Kubernetes)
-- See [CONTRIBUTING.md](../CONTRIBUTING.md) for development setup and how to add custom detectors
-- Dive into [docs/SHIELD.md](SHIELD.md) for the architecture deep-dive on the content shield pipeline
+- [examples/README.md](../examples/README.md) — quickstart, cookbook, clients, Postman
+- [docs/DEPLOYMENT.md](DEPLOYMENT.md) — production setup (Helm, bare binary)
+- [docs/SHIELD.md](SHIELD.md) — content shield architecture deep-dive
+- [CONTRIBUTING.md](../CONTRIBUTING.md) — development setup and custom detectors

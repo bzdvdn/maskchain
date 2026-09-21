@@ -1,0 +1,87 @@
+# MaskChain quickstart — zero external API keys.
+# Everything runs locally: gateway + admin + Postgres + Valkey + Ollama.
+#
+#   ./quickstart.sh ollama        # or: make quickstart
+#   docker compose -f docker-compose.ollama.yml up -d --build
+#
+# Requires MASKCHAIN_KEYS_KEY in .env (quickstart.sh generates it).
+
+name: maskchain-quickstart
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: maskchain-quickstart-pg
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: maskchain
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d maskchain"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: maskchain-quickstart-vk
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: maskchain-quickstart-ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    volumes:
+      - ollama-data:/root/.ollama
+
+  # One-shot init container: pulls the model, then exits.
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: maskchain-quickstart-ollama-pull
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: "http://ollama:11434"
+    entrypoint: ["/bin/sh", "-c", "ollama pull ${OLLAMA_MODEL:-llama3.2}"]
+    restart: "no"
+
+  maskchain:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.combined
+    container_name: maskchain-quickstart
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    environment:
+      CONFIG_DIR: /etc/maskchain/conf.d
+      CONFIG_DATABASE_DSN: postgres://test:test@postgres:5432/maskchain?sslmode=disable
+      CONFIG_VALKEY_ADDR: valkey:6379
+      # Required: encrypts provider secrets + bootstraps tenant keys at rest.
+      MASKCHAIN_KEYS_KEY: ${MASKCHAIN_KEYS_KEY:?run ./quickstart.sh or set MASKCHAIN_KEYS_KEY in .env}
+    volumes:
+      - ./config-base.yaml:/etc/maskchain/conf.d/00-config-base.yaml:ro
+      - ./config-runtime.ollama.yaml:/etc/maskchain/conf.d/99-config-runtime.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      ollama-pull:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
+  ollama-data:

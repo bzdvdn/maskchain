@@ -21,10 +21,12 @@ import {
   Plus,
   Download,
   ChevronDown,
+  FlaskConical,
 } from 'lucide-react'
 import { logout } from '../api/admin'
 import { listTenants } from '../api/tenants'
 import { useTheme } from '../hooks/useTheme'
+import { useWorkspace } from '../hooks/useWorkspace'
 import { CommandPalette } from './CommandPalette'
 
 interface Props {
@@ -68,6 +70,7 @@ const navSections: Section[] = [
     label: 'Operations',
     items: [
       { to: '/routing', label: 'Routing', icon: Route },
+      { to: '/playground', label: 'Playground', icon: FlaskConical },
       { to: '/audit', label: 'Audit Log', icon: ScrollText },
     ],
   },
@@ -79,8 +82,6 @@ const navSections: Section[] = [
     ],
   },
 ]
-
-const WORKSPACE_KEY = 'maskchain.workspace'
 
 function Logo() {
   return (
@@ -96,7 +97,7 @@ export function Layout({ children, onLogout }: Props) {
   const navigate = useNavigate()
   const { theme, toggleTheme } = useTheme()
   const [workspaces, setWorkspaces] = useState<{ slug: string; name: string }[]>([])
-  const [workspace, setWorkspace] = useState<string>(() => localStorage.getItem(WORKSPACE_KEY) ?? '')
+  const [workspace, applyWorkspace] = useWorkspace()
 
   useEffect(() => {
     const label = navSections.flatMap((s) => s.items).find((i) => i.to === location.pathname)?.label
@@ -108,22 +109,6 @@ export function Layout({ children, onLogout }: Props) {
       .then((ts) => setWorkspaces(Array.isArray(ts) ? ts.map((t) => ({ slug: t.slug, name: t.name })) : []))
       .catch(() => {})
   }, [])
-
-  useEffect(() => {
-    const onWorkspace = (e: Event) => {
-      const slug = (e as CustomEvent<string>).detail
-      setWorkspace(slug)
-      localStorage.setItem(WORKSPACE_KEY, slug)
-    }
-    window.addEventListener('maskchain:workspace', onWorkspace)
-    return () => window.removeEventListener('maskchain:workspace', onWorkspace)
-  }, [])
-
-  function applyWorkspace(slug: string) {
-    localStorage.setItem(WORKSPACE_KEY, slug)
-    setWorkspace(slug)
-    window.dispatchEvent(new CustomEvent<string>('maskchain:workspace', { detail: slug }))
-  }
 
   function openCreateKey() {
     navigate('/keys?create=1')

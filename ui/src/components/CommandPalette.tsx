@@ -14,9 +14,12 @@ import {
   CornerDownLeft,
   KeyRound,
   Wallet,
+  Shield,
+  FlaskConical,
 } from 'lucide-react'
 import { listTenants } from '../api/tenants'
 import { listConversations } from '../api/conversations'
+import { listSessions } from '../api/sessions'
 
 interface NavEntry {
   to: string
@@ -34,6 +37,8 @@ const NAV: NavEntry[] = [
   { to: '/routing', label: 'Routing', keywords: 'routing providers rules models', icon: Route },
   { to: '/keys', label: 'Keys', keywords: 'keys api virtual scoped models access', icon: KeyRound },
   { to: '/budgets', label: 'Budgets', keywords: 'budgets spend limits cap cost enforce', icon: Wallet },
+  { to: '/compliance', label: 'Compliance', keywords: 'compliance hipaa pci gdpr legal soc2 packs', icon: Shield },
+  { to: '/playground', label: 'Playground', keywords: 'playground test console chat try request', icon: FlaskConical },
   { to: '/audit', label: 'Audit Log', keywords: 'audit log events admin', icon: ScrollText },
   { to: '/settings', label: 'Settings', keywords: 'settings config', icon: Settings },
   { to: '/swagger', label: 'Swagger', keywords: 'swagger api docs openapi', icon: FileJson },
@@ -93,13 +98,8 @@ export function CommandPalette() {
     listTenants()
       .then((ts) => setTenants(ts.map((t) => t.slug)))
       .catch(() => {})
-    fetch('/api/v1/sessions', { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((body) => {
-        const d = body?.data ?? body
-        const items = Array.isArray(d?.items) ? d.items : []
-        setSessions(items.map((s: { session_id: string }) => s.session_id))
-      })
+    listSessions()
+      .then((items) => setSessions(items.map((s) => s.session_id)))
       .catch(() => {})
     listConversations(1, 50)
       .then((res) => setConversations(res.items.map((c) => c.id)))

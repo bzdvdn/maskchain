@@ -88,6 +88,7 @@ export interface SystemStatus {
     watched: boolean
     sections?: string[]
   }
+  gateway_url?: string
 }
 
 export function getSystemStatus(): Promise<SystemStatus> {

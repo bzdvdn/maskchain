@@ -24,6 +24,9 @@
   - `ui/src/pages/Analytics.tsx` — persisted range, compare, day/model/tenant tabs
   - `ui/src/pages/Keys.tsx` — endpoint quickstart, create-key drawer, spend/budget, revocation
   - `ui/src/pages/Routing.tsx` — provider health cards + rules/rates tables
+  - `ui/src/pages/Playground.tsx` — test console (prompt through shield/routing/budgets)
+  - `ui/src/pages/Compliance.tsx` — compliance packs apply/audit console
+  - `ui/src/hooks/useWorkspace.ts` — global tenant-scope switcher hook
   - `ui/src/pages/Tenants/TenantDetail.tsx` — Overview/Policies/Compliance/Activity tabs + deviation banner
   - `ui/src/pages/Settings.tsx` — live system status from `/api/v1/admin/status`
   - Legacy pages: Login, Sessions, Conversations, Budgets, AuditLog, Swagger, Tenants list/form
@@ -52,7 +55,9 @@
   - `src/internal/api/provider_handler.go` — RoutingProxyHandler (proxy to LLM providers), legacy stubs
   - `src/internal/api/server.go` — gateway router setup, RegisterProxyRoute accepts RoutingProxyHandler
   - `src/internal/api/health/` — health check endpoints (liveness/readiness probes), service status aggregation
+- `src/internal/api/self_handler.go` — data-plane self-service: `GET /api/v1/models`, `GET /api/v1/me`
 - `src/internal/api/admin.go` — admin router setup (AdminServer), static files, incident/tenant handlers
+  - `src/internal/api/handler/admin/playground_handler.go` — admin relay for the UI Playground (`POST /api/v1/admin/playground`)
   - `src/internal/api/handler/incident/` — Incident read/export handlers (list, get, export CSV/JSON)
   - `src/internal/api/handler/admin/` — Tenant CRUD, VirtualKey, CostRate, Budget handlers (audit-logged admin API)
   - `src/internal/api/handler/admin/budget_handler.go` — Budget CRUD + history (`/api/v1/budgets`, under adminSessionMw)

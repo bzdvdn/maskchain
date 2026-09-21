@@ -99,71 +99,45 @@ func (s *Server) RegisterRateLimit(mw gin.HandlerFunc) {
 // @sk-task 112-proxy-streaming-wiring#T2.2: Register WrapSSE middleware on streaming route (AC-002)
 // @sk-task 118-api-consistency#T2.2: Add /api/v1/ prefix and 301 redirect from /v1/ (AC-001, AC-002)
 // @sk-task anthropic-messages-endpoint#T3.1: Register /api/v1/messages with same middleware chain (AC-001, AC-006)
+// RegisterProxyRoute mounts the LLM proxy on both the canonical /api/v1 prefix
+// and the OpenAI-compatible /v1 alias. /v1 is served directly (no redirect) so
+// clients that do not follow 3xx on POST keep working.
 func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHandler *RoutingProxyHandler) {
-	primary := s.engine.Group("/api/v1")
+	chatHandler := gin.HandlerFunc(ProxyChatCompletionHandler)
+	chain := []gin.HandlerFunc{}
 	if routingHandler != nil {
-		chain := []gin.HandlerFunc{middleware.WrapSSE()}
-		if s.modelAccessMw != nil {
-			chain = append(chain, s.modelAccessMw)
-		}
-		if s.sessionMiddleware != nil {
-			chain = append(chain, s.sessionMiddleware)
-		}
-		// conversation must run before shield to capture the original body
-		if s.conversationMw != nil {
-			chain = append(chain, s.conversationMw)
-		}
-		chain = append(chain, shieldMiddleware)
-		if s.cacheMw != nil {
-			chain = append(chain, s.cacheMw)
-		}
-		if s.usageMiddleware != nil {
-			chain = append(chain, s.usageMiddleware)
-		}
-		if s.budgetMw != nil {
-			chain = append(chain, s.budgetMw)
-		}
-		chain = append(chain, routingHandler.HandleChatCompletion)
-		primary.POST("/chat/completions", chain...)
-		primary.POST("/messages", chain...)
-	} else {
-		chain := []gin.HandlerFunc{}
-		if s.modelAccessMw != nil {
-			chain = append(chain, s.modelAccessMw)
-		}
-		if s.sessionMiddleware != nil {
-			chain = append(chain, s.sessionMiddleware)
-		}
-		if s.conversationMw != nil {
-			chain = append(chain, s.conversationMw)
-		}
-		chain = append(chain, shieldMiddleware)
-		if s.cacheMw != nil {
-			chain = append(chain, s.cacheMw)
-		}
-		if s.usageMiddleware != nil {
-			chain = append(chain, s.usageMiddleware)
-		}
-		if s.budgetMw != nil {
-			chain = append(chain, s.budgetMw)
-		}
-		chain = append(chain, ProxyChatCompletionHandler)
-		primary.POST("/chat/completions", chain...)
-		primary.POST("/messages", chain...)
+		chatHandler = routingHandler.HandleChatCompletion
+		chain = append(chain, middleware.WrapSSE())
 	}
-	primary.POST("/completions", s.withSessionMiddleware(shieldMiddleware), ProxyCompletionHandler)
+	if s.modelAccessMw != nil {
+		chain = append(chain, s.modelAccessMw)
+	}
+	if s.sessionMiddleware != nil {
+		chain = append(chain, s.sessionMiddleware)
+	}
+	// conversation must run before shield to capture the original body
+	if s.conversationMw != nil {
+		chain = append(chain, s.conversationMw)
+	}
+	chain = append(chain, shieldMiddleware)
+	if s.cacheMw != nil {
+		chain = append(chain, s.cacheMw)
+	}
+	if s.usageMiddleware != nil {
+		chain = append(chain, s.usageMiddleware)
+	}
+	if s.budgetMw != nil {
+		chain = append(chain, s.budgetMw)
+	}
+	chain = append(chain, chatHandler)
 
-	// @sk-task 118-api-consistency#T2.2: Deprecated /v1/ paths with 301 redirect (AC-002)
-	// @sk-task anthropic-messages-endpoint#T3.1: Add 301 redirect for /v1/messages (AC-001)
-	redirect := s.engine.Group("/v1")
-	redirect.Any("/chat/completions", redirectPermanent("/api/v1/chat/completions"))
-	redirect.Any("/messages", redirectPermanent("/api/v1/messages"))
-	redirect.Any("/completions", redirectPermanent("/api/v1/completions"))
-}
+	completionChain := []gin.HandlerFunc{s.withSessionMiddleware(shieldMiddleware), ProxyCompletionHandler}
 
-func redirectPermanent(target string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Redirect(http.StatusMovedPermanently, target)
+	for _, prefix := range []string{"/api/v1", "/v1"} {
+		group := s.engine.Group(prefix)
+		group.POST("/chat/completions", chain...)
+		group.POST("/messages", chain...)
+		group.POST("/completions", completionChain...)
 	}
 }
 
@@ -213,6 +187,15 @@ func (s *Server) RegisterVersionRoute(version string) {
 	s.engine.GET("/api/v1/version", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"version": version})
 	})
+}
+
+// @sk-task api-self-service: Register self-service routes behind virtual-key auth.
+//
+// RegisterSelfHandler mounts GET /api/v1/models and GET /api/v1/me. Call it
+// after RegisterAuth so the virtual-key middleware resolves the tenant/key.
+func (s *Server) RegisterSelfHandler(h *SelfHandler) {
+	s.engine.GET("/api/v1/models", h.HandleModels)
+	s.engine.GET("/api/v1/me", h.HandleMe)
 }
 
 // @sk-task 101-gateway-diet#T1.1: Remove RegisterStaticFiles from Server (AC-001, AC-005)

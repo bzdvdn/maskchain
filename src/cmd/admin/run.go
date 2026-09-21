@@ -127,6 +127,12 @@ func run() {
 		vkHandler := admin.NewVirtualKeyHandler(vkRepo, auditAdapter)
 		srv.RegisterVirtualKeyHandler(vkHandler)
 
+		gatewayURL := ""
+		if cfg.Admin != nil {
+			gatewayURL = cfg.Admin.GatewayURL
+		}
+		srv.RegisterPlaygroundHandler(admin.NewPlaygroundHandler(gatewayURL))
+
 		auditHandler := admin.NewAuditHandler(auditAdapter)
 		srv.RegisterAuditHandler(auditHandler)
 

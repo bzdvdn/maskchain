@@ -3,9 +3,11 @@ package admin
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -191,6 +193,85 @@ func TestVirtualKeyHandlerUpdateInvalidatesCache(t *testing.T) {
 	}
 	if cache.Len() != 0 {
 		t.Errorf("expected empty cache after update, got %d", cache.Len())
+	}
+}
+
+// @sk-test api-self-service: TestVirtualKeyHandlerRotate (AC-001)
+func TestVirtualKeyHandlerRotate(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	old := adminFakeKey("k1", "hash-old", "acme")
+	old.Label = "prod-app"
+	old.AllowedModels = []string{"gpt-4o-mini"}
+	repo := &fakeVirtualKeyRepo{keys: []*virtualkey.VirtualKey{old}}
+	logger := slog.New(slog.NewTextHandler(nil, nil))
+	cache := middleware.NewVirtualKeyCache(repo, logger)
+	if err := cache.Refresh(context.Background()); err != nil {
+		t.Fatalf("warmup: %v", err)
+	}
+
+	h := NewVirtualKeyHandler(repo, nil, cache)
+	router := gin.New()
+	router.POST("/api/v1/keys/:id/rotate", h.Rotate)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/keys/k1/rotate", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		ID            string   `json:"id"`
+		Label         string   `json:"label"`
+		AllowedModels []string `json:"allowed_models"`
+		Key           string   `json:"key"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Key == "" {
+		t.Fatal("expected a new plaintext key in the response")
+	}
+	if !strings.HasPrefix(resp.Key, virtualkey.KeyPrefix) {
+		t.Errorf("expected key prefix %q, got %q", virtualkey.KeyPrefix, resp.Key)
+	}
+	if resp.ID != "k1" || resp.Label != "prod-app" {
+		t.Errorf("expected id/label preserved, got %q/%q", resp.ID, resp.Label)
+	}
+	if len(resp.AllowedModels) != 1 || resp.AllowedModels[0] != "gpt-4o-mini" {
+		t.Errorf("expected scopes preserved, got %v", resp.AllowedModels)
+	}
+
+	stored, err := repo.GetById(context.Background(), "k1")
+	if err != nil {
+		t.Fatalf("get key: %v", err)
+	}
+	if stored.KeyHash == "hash-old" {
+		t.Error("expected stored hash to change after rotation")
+	}
+	if stored.KeyHash != virtualkey.KeyHash(resp.Key) {
+		t.Error("expected stored hash to match the returned secret")
+	}
+	if _, ok := cache.Get("hash-old"); ok {
+		t.Error("expected the old hash to be invalidated in cache")
+	}
+}
+
+// @sk-test api-self-service: TestVirtualKeyHandlerRotateNotFound (AC-001)
+func TestVirtualKeyHandlerRotateNotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &fakeVirtualKeyRepo{}
+	h := NewVirtualKeyHandler(repo, nil)
+	router := gin.New()
+	router.POST("/api/v1/keys/:id/rotate", h.Rotate)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/keys/missing/rotate", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

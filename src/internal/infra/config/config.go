@@ -164,6 +164,9 @@ type AdminConfig struct {
 	Password              string        `mapstructure:"password" yaml:"password"`
 	SessionTTL            time.Duration `mapstructure:"session_ttl" yaml:"session_ttl"`
 	DashboardPollInterval time.Duration `mapstructure:"dashboard_poll_interval" yaml:"dashboard_poll_interval"`
+	// GatewayURL is the data-plane base URL the admin Playground proxies test
+	// requests to. Defaults to http://localhost:8080.
+	GatewayURL string `mapstructure:"gateway_url" yaml:"gateway_url"`
 }
 
 // @sk-task 80-tenant-isolation#T1.2: Add TenantConfig struct (AC-001, AC-003, AC-004)

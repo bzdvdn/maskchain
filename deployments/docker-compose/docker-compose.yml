@@ -48,6 +48,8 @@ services:
       - "8081:8081"
     environment:
       CONFIG_DIR: /etc/maskchain/conf.d
+      # Playground relays test requests to the gateway service.
+      CONFIG_ADMIN_GATEWAY_URL: http://gateway:8080
     volumes:
       - ./config-base.yaml:/etc/maskchain/conf.d/00-config-base.yaml:ro
       - ./config-runtime.yaml:/etc/maskchain/conf.d/99-config-runtime.yaml:ro

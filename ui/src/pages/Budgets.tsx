@@ -7,6 +7,7 @@ import { useSort, sortRows } from '../hooks/useSort'
 import { budgetHistory, createBudget, deleteBudget, listBudgets, updateBudget, type BudgetDto, type CreateBudgetRequest, type SpendEntryDto } from '../api/budgets'
 import { listTenants } from '../api/tenants'
 import { listKeys } from '../api/keys'
+import { useWorkspace } from '../hooks/useWorkspace'
 
 function fmtTime(iso: string | undefined | null): string {
   if (!iso) return '—'
@@ -66,8 +67,12 @@ export function Budgets() {
     return null
   }, [])
 
+  const [workspace] = useWorkspace()
   const sort = useSort<BudgetDto>('tenant_id', 'asc')
-  const rows = useMemo(() => sortRows(budgets, sort.key, sort.dir), [budgets, sort])
+  const rows = useMemo(
+    () => sortRows(workspace ? budgets.filter((b) => b.tenant_id === workspace) : budgets, sort.key, sort.dir),
+    [budgets, sort, workspace],
+  )
 
   const [modalOpen, setModalOpen] = useState(false)
   const [deleting, setDeleting] = useState<BudgetDto | null>(null)

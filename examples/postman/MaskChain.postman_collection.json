@@ -1,0 +1,173 @@
+{
+  "info": {
+    "name": "MaskChain",
+    "description": "MaskChain examples: data-plane masking, shield, tenant/admin management.\n\nRun the quickstart stack first (examples/quickstart). Admin login sets {{adminToken}} automatically; the mask request captures {{maskId}}.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "adminUrl", "value": "http://localhost:9090" },
+    { "key": "apiKey", "value": "sk-test-default" },
+    { "key": "adminToken", "value": "" },
+    { "key": "maskId", "value": "" },
+    { "key": "model", "value": "llama3.2" }
+  ],
+  "item": [
+    {
+      "name": "Data plane",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          }
+        },
+        {
+          "name": "Chat completion (masked + unmasked)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{apiKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"{{model}}\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Summarize this note: contact Alice at alice@example.com or +1-555-0100.\"\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/chat/completions"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "console.log('X-Shield-Status:', pm.response.headers.get('X-Shield-Status'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Shield",
+      "item": [
+        {
+          "name": "Mask plain text",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{apiKey}}" },
+              { "key": "Content-Type", "value": "text/plain" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "Contact alice@example.com or +1-555-0100, SSN 123-45-6789"
+            },
+            "url": "{{baseUrl}}/api/v1/shield/mask?format=clean"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.collectionVariables.set('maskId', pm.response.headers.get('mask-id'));",
+                  "console.log('mask-id:', pm.collectionVariables.get('maskId'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unmask",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "text/plain" }],
+            "body": {
+              "mode": "raw",
+              "raw": "Contact [MASK.1] or [MASK.2], SSN [MASK.3]"
+            },
+            "url": "{{baseUrl}}/api/v1/shield/unmask?mask_ids={{maskId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Login (captures adminToken)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"test\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{adminUrl}}/api/v1/admin/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('login ok', function () { pm.response.to.have.status(200); });",
+                  "pm.collectionVariables.set('adminToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create virtual key",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_id\": \"default\",\n  \"label\": \"postman-demo\",\n  \"allowed_models\": [\"{{model}}\"],\n  \"budget_cap\": 5.0\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{adminUrl}}/api/v1/keys"
+          }
+        },
+        {
+          "name": "Create budget",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_id\": \"default\",\n  \"scope\": \"tenant\",\n  \"type\": \"monthly\",\n  \"soft_limit\": 8.0,\n  \"hard_limit\": 10.0,\n  \"currency\": \"USD\",\n  \"notify_at\": [50, 90]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{adminUrl}}/api/v1/budgets"
+          }
+        },
+        {
+          "name": "List providers + health",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{adminUrl}}/api/v1/routing/providers"
+          }
+        }
+      ]
+    }
+  ]
+}

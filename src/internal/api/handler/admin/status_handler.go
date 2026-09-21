@@ -29,6 +29,9 @@ type SystemStatus struct {
 	KeyAtRest  KeyAtRestStatus          `json:"key_at_rest"`
 	Health     *health.AggregatedResult `json:"health"`
 	ConfigDiff ConfigDiffStatus         `json:"config_diff"`
+	// GatewayURL is the data-plane base URL used by the UI for endpoint snippets
+	// and the Playground.
+	GatewayURL string `json:"gateway_url,omitempty"`
 }
 
 // StatusHandler serves the read-only admin status endpoint powering the
@@ -87,12 +90,17 @@ func (h *StatusHandler) HandleStatus(c *gin.Context) {
 	if h.healthSvc != nil {
 		healthRes = h.healthSvc.CheckAll(c.Request.Context())
 	}
+	gatewayURL := ""
+	if h.cfg != nil && h.cfg.Admin != nil {
+		gatewayURL = h.cfg.Admin.GatewayURL
+	}
 	resp := &SystemStatus{
 		Version:    h.version,
 		UptimeSec:  int64(time.Since(h.startedAt).Seconds()),
 		KeyAtRest:  h.keyAtRest(),
 		Health:     healthRes,
 		ConfigDiff: h.configDiff(c.Request.Context()),
+		GatewayURL: gatewayURL,
 	}
 	c.JSON(http.StatusOK, gin.H{"data": resp})
 }

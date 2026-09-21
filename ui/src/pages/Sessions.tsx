@@ -1,28 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAsyncData } from '../hooks/useAsyncData'
-import { Badge, Button, EmptyState, SortHeader, TableSkeleton } from '../components/ui'
+import { Badge, Button, Card, EmptyState, SortHeader, TableSkeleton } from '../components/ui'
 import { useToast } from '../components/Toast'
 import { useSort, sortRows } from '../hooks/useSort'
+import { useWorkspace } from '../hooks/useWorkspace'
 import { TimeRangePicker, type RangeValue } from '../components/TimeRangePicker'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { CopyButton } from '../components/CopyButton'
-
-interface Session {
-  session_id: string
-  tenant_id: string
-  model: string
-  status: string
-  created_at: string
-  expires_at: string
-  token_count: number
-}
+import { listSessions, closeSession, extendSession, type Session } from '../api/sessions'
 
 async function fetchSessions(): Promise<Session[]> {
-  const res = await fetch('/api/v1/sessions', { credentials: 'include' })
-  if (!res.ok) throw new Error('fetch failed')
-  const body = await res.json()
-  const d = body.data ?? body
-  return Array.isArray(d.items) ? d.items : Array.isArray(d) ? d : []
+  return listSessions()
 }
 
 type SortKey = keyof Pick<Session, 'session_id' | 'tenant_id' | 'model' | 'status' | 'created_at' | 'token_count'>
@@ -36,6 +24,7 @@ export function Sessions() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [confirmTarget, setConfirmTarget] = useState<string | null>(null)
   const [closing, setClosing] = useState(false)
+  const [workspace] = useWorkspace()
   const [range, setRange] = useState<RangeValue>(() => {
     const to = new Date()
     const from = new Date(to.getTime() - 7 * 86400_000)
@@ -44,7 +33,8 @@ export function Sessions() {
   const { mode, from, to } = range
 
   const inRange = useMemo(() => {
-    const list = sessions ?? []
+    let list = sessions ?? []
+    if (workspace) list = list.filter((s) => s.tenant_id === workspace)
     if (mode === 'all') return list
     const f = from ? new Date(from).getTime() : 0
     const t = to ? new Date(to).getTime() : Infinity
@@ -52,7 +42,7 @@ export function Sessions() {
       const ts = new Date(s.created_at).getTime()
       return ts >= f && ts <= t
     })
-  }, [sessions, from, to, mode])
+  }, [sessions, from, to, mode, workspace])
 
   const rows = useMemo(() => sortRows(inRange, key, dir), [inRange, key, dir])
 
@@ -68,7 +58,7 @@ export function Sessions() {
   async function execClose(ids: string[]) {
     setClosing(true)
     try {
-      await Promise.all(ids.map((id) => fetch(`/api/v1/sessions/${id}`, { method: 'DELETE', credentials: 'include' })))
+      await Promise.all(ids.map((id) => closeSession(id)))
       toast(ids.length === 1 ? 'Session closed' : `${ids.length} sessions closed`, 'success')
       setSelected((prev) => {
         const next = new Set(prev)
@@ -115,12 +105,7 @@ export function Sessions() {
 
   async function handleExtend(sessionId: string) {
     try {
-      await fetch(`/api/v1/sessions/${sessionId}/extend`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ttl_seconds: 1800 }),
-        credentials: 'include',
-      })
+      await extendSession(sessionId, 1800)
       toast('Session extended by 30m', 'success')
       refetch()
     } catch {
@@ -140,7 +125,7 @@ export function Sessions() {
   )
 
   return (
-    <div className="card">
+    <Card>
       <div className="card-header-row">
         <h3 style={{ margin: 0 }}>Active Sessions</h3>
         <div className="header-actions" style={{ gap: 8 }}>
@@ -238,6 +223,6 @@ export function Sessions() {
         onConfirm={confirmAction}
         onCancel={() => setConfirmTarget(null)}
       />
-    </div>
+    </Card>
   )
 }

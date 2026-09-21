@@ -1,25 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useAsyncData } from '../hooks/useAsyncData'
-import { EmptyState, SortHeader, TableSkeleton } from '../components/ui'
+import { Card, EmptyState, SortHeader, TableSkeleton } from '../components/ui'
 import { useSort, sortRows } from '../hooks/useSort'
 import { CopyButton } from '../components/CopyButton'
 import { TimeRangePicker, type RangeValue } from '../components/TimeRangePicker'
-
-interface AuditEntry {
-  id: number
-  admin_username: string
-  action: string
-  target: string
-  details: string
-  created_at: string
-}
+import { listAudit, type AuditEntry } from '../api/audit'
 
 async function fetchAudit(): Promise<AuditEntry[]> {
-  const res = await fetch('/api/v1/audit', { credentials: 'include' })
-  if (!res.ok) throw new Error('fetch failed')
-  const body = await res.json()
-  const d = body.data ?? body
-  return Array.isArray(d.items) ? d.items : []
+  return listAudit(100)
 }
 
 type SortKey = keyof Pick<AuditEntry, 'created_at' | 'admin_username' | 'action' | 'target'>
@@ -54,7 +42,7 @@ export function AuditLog() {
   )
 
   return (
-    <div className="card">
+    <Card>
       <div className="card-header-row">
         <h3>Events (last 100)</h3>
         <TimeRangePicker value={range} onChange={setRange} />
@@ -90,6 +78,6 @@ export function AuditLog() {
           </tbody>
         </table>
       </div>
-    </div>
+    </Card>
   )
 }

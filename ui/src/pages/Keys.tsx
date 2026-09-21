@@ -6,12 +6,10 @@ import { ConfirmModal } from '../components/ConfirmModal'
 import { CopyButton } from '../components/CopyButton'
 import { useToast } from '../components/Toast'
 import { relativeTime, money } from '../utils/format'
-import { createKey, deleteKey, listKeys, updateKey, type CreateKeyRequest, type VirtualKeyDto } from '../api/keys'
+import { createKey, deleteKey, listKeys, rotateKey, updateKey, type CreateKeyRequest, type VirtualKeyDto } from '../api/keys'
 import { listTenants } from '../api/tenants'
-
-function endpointBase(): string {
-  return `${window.location.protocol}//${window.location.host}/v1`
-}
+import { useWorkspace } from '../hooks/useWorkspace'
+import { useGatewayBase } from '../hooks/useGatewayBase'
 
 const EXPIRY_PRESETS: { key: string; label: string; value: () => string | null }[] = [
   { key: '7d', label: '7 days', value: () => new Date(Date.now() + 7 * 86400_000).toISOString() },
@@ -27,19 +25,23 @@ function tenantName(slug: string, tenants: { slug: string; name: string }[]): st
 export function Keys() {
   const { toast } = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
+  const gatewayBase = useGatewayBase()
+  const endpointBase = gatewayBase ? `${gatewayBase}/api/v1` : ''
 
   const [keys, setKeys] = useState<VirtualKeyDto[]>([])
   const [tenants, setTenants] = useState<{ slug: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
 
   const [search, setSearch] = useState('')
-  const [tenantFilter, setTenantFilter] = useState('')
+  const [workspace] = useWorkspace()
+  const [tenantFilter, setTenantFilter] = useState(workspace)
   const [statusFilter, setStatusFilter] = useState('')
 
   const [modalOpen, setModalOpen] = useState(false)
   const drawerOpenedRef = useRef(false)
   const [createdKey, setCreatedKey] = useState<{ key: string; label: string } | null>(null)
   const [deleting, setDeleting] = useState<VirtualKeyDto | null>(null)
+  const [rotating, setRotating] = useState<VirtualKeyDto | null>(null)
   const [busy, setBusy] = useState(false)
 
   const reload = async () => {
@@ -54,6 +56,10 @@ export function Keys() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    setTenantFilter(workspace)
+  }, [workspace])
 
   useEffect(() => {
     reload()
@@ -88,6 +94,21 @@ export function Keys() {
       await reload()
     } catch (e: any) {
       toast(e?.message ?? 'Revoke failed', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const doRotate = async () => {
+    if (!rotating) return
+    setBusy(true)
+    try {
+      const resp = await rotateKey(rotating.id)
+      setCreatedKey({ key: resp.key, label: resp.label || resp.id })
+      setRotating(null)
+      await reload()
+    } catch (e: any) {
+      toast(e?.message ?? 'Rotate failed', 'error')
     } finally {
       setBusy(false)
     }
@@ -138,16 +159,19 @@ export function Keys() {
           <div className="box">
             <div className="u-label">Base URL</div>
             <div className="copy-row">
-              <code>{endpointBase()}</code>
-              <CopyButton text={endpointBase()} label="Copy" />
+              <code>{endpointBase || '…'}</code>
+              <CopyButton text={endpointBase} label="Copy" />
             </div>
             <div className="divider" />
             <div className="copy-row">
               <span className="muted">curl</span>
               <code className="u-ellipsis">
-                curl https://gw.maskchain.dev/v1/chat/completions -H "Authorization: Bearer sk-mc-…"
+                {`curl ${endpointBase || '…'}/chat/completions -H "Authorization: Bearer sk-mc-…"`}
               </code>
-              <CopyButton text={'curl https://gw.maskchain.dev/v1/chat/completions \\\n  -H "Authorization: Bearer sk-mc-…"' as string} label="Copy" />
+              <CopyButton
+                text={`curl ${endpointBase || ''}/chat/completions \\\n  -H "Authorization: Bearer sk-mc-…"`}
+                label="Copy"
+              />
             </div>
           </div>
           <div className="box">
@@ -241,6 +265,7 @@ export function Keys() {
                         <button className="icon-btn sm" title="Copy key id" onClick={() => { navigator.clipboard.writeText(k.id); toast('Key id copied', 'success') }}>
                           <ClipboardCopy size={13} />
                         </button>
+                        <Button size="small" onClick={() => setRotating(k)}>Rotate</Button>
                         <Button size="small" variant="danger" onClick={() => setDeleting(k)}>Revoke</Button>
                       </div>
                     </td>
@@ -284,6 +309,16 @@ export function Keys() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={!!rotating}
+        title="Rotate key"
+        message={`Rotate "${rotating?.label || rotating?.id}"? A new secret is issued and the old one stops working immediately.`}
+        confirmLabel="Rotate"
+        busy={busy}
+        onConfirm={doRotate}
+        onCancel={() => setRotating(null)}
+      />
 
       <ConfirmModal
         open={!!deleting}

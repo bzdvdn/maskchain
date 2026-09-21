@@ -126,6 +126,7 @@ func run() {
 	srv.RegisterDebugRoutes(middleware.AdminAuth(cfg.Debug))
 	srv.RegisterMetricsRoute(metrics.Handler(b.PromRegistry))
 	srv.RegisterVersionRoute(version.Info())
+	srv.RegisterSelfHandler(api.NewSelfHandler(provDeps.registry, version.Info()))
 	srv.RegisterMaskHandler(maskHandler)
 
 	pipelineFactory := appshield.NewScanPipelineFactory(detectorRegistry)

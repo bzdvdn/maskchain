@@ -8,7 +8,7 @@ GOFLAGS := -ldflags="$(LDFLAGS)"
 GOCMD := go
 GOPATH := $(shell $(GOCMD) env GOPATH)
 
-.PHONY: build build-gateway build-admin build-combined build-admin-ci build-combined-ci test lint clean ui-build ui-dev docker-build docker-build-gateway docker-build-admin docker-build-combined check-structure security-check load-test helm-lint ci test-integration-local
+.PHONY: build build-gateway build-admin build-combined build-admin-ci build-combined-ci test lint clean ui-build ui-dev docker-build docker-build-gateway docker-build-admin docker-build-combined check-structure security-check load-test helm-lint ci test-integration-local quickstart demo quickstart-openai quickstart-down demo-down
 
 # @sk-task 100-admin-control-plane#T1.2: Add build-gateway, build-admin, docker-build-gateway, docker-build-admin targets (AC-008)
 build: build-gateway build-admin
@@ -176,6 +176,18 @@ security-check:
 load-test:
 	@echo "--- load-test ---"
 	@python3 ./deployments/loadtest/chat_completion.py
+
+# @sk-task examples-restructure: One-command local demo on the quickstart stack.
+# Local Ollama (zero external API keys):  make quickstart
+# OpenAI (needs OPENAI_KEY in examples/quickstart/.env):  make quickstart-openai
+quickstart demo:
+	@bash examples/quickstart/quickstart.sh
+
+quickstart-openai:
+	@OPENAI_KEY=$(OPENAI_KEY) bash examples/quickstart/quickstart.sh openai
+
+quickstart-down demo-down:
+	@docker compose -f examples/quickstart/docker-compose.ollama.yml down
 
 helm-lint:
 	@if command -v helm >/dev/null 2>&1; then \

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io/fs"
@@ -143,6 +144,10 @@ func (s *AdminServer) RegisterComplianceHandler(h *admin.ComplianceHandler, mw g
 }
 
 // @sk-task 118-api-consistency#T3.4: Register Swagger UI at /api/v1/docs (AC-008, RQ-010)
+//
+// Assets are served under /api/v1/docs/ so the relative URLs inside the bundled
+// index.html resolve correctly. /api/v1/docs redirects to the trailing-slash
+// form, otherwise "./swagger-ui.css" would resolve to /api/v1/swagger-ui.css.
 func (s *AdminServer) RegisterSwaggerUI() error {
 	yamlData, err := swagger.DocsFiles.ReadFile("openapi.yaml")
 	if err != nil {
@@ -152,11 +157,26 @@ func (s *AdminServer) RegisterSwaggerUI() error {
 		c.Data(http.StatusOK, "application/x-yaml", yamlData)
 	})
 
-	swaggerFS := http.FS(swagger.DocsFiles)
-	s.engine.GET("/api/v1/docs", func(c *gin.Context) {
-		c.Request.URL.Path = "/swagger-ui/index.html"
-		http.FileServer(swaggerFS).ServeHTTP(c.Writer, c.Request)
-	})
+	uiFS, err := fs.Sub(swagger.DocsFiles, "swagger-ui")
+	if err != nil {
+		return fmt.Errorf("create swagger-ui sub-filesystem: %w", err)
+	}
+	indexHTML, err := fs.ReadFile(uiFS, "index.html")
+	if err != nil {
+		return fmt.Errorf("read swagger-ui index.html: %w", err)
+	}
+	// Inject a <base> so the bundle's relative asset URLs resolve under
+	// /api/v1/docs/ even when the page is opened without a trailing slash.
+	// This lets /api/v1/docs be served directly (no redirect).
+	indexHTML = bytes.Replace(indexHTML, []byte("<head>"), []byte(`<head>`+"\n    "+`<base href="/api/v1/docs/">`), 1)
+
+	fileServer := http.StripPrefix("/api/v1/docs", http.FileServer(http.FS(uiFS)))
+	serveIndex := func(c *gin.Context) {
+		c.Data(http.StatusOK, "text/html; charset=utf-8", indexHTML)
+	}
+	s.engine.GET("/api/v1/docs", serveIndex)
+	// Assets and "/api/v1/docs/" (filepath="/") come from the embedded bundle.
+	s.engine.GET("/api/v1/docs/*filepath", gin.WrapH(fileServer))
 	return nil
 }
 
@@ -212,7 +232,17 @@ func (s *AdminServer) RegisterVirtualKeyHandler(h *admin.VirtualKeyHandler) {
 	group.GET("/:id", h.Get)
 	group.PATCH("/:id", h.Update)
 	group.DELETE("/:id", h.Delete)
+	group.POST("/:id/rotate", h.Rotate)
 	group.GET("/tenants/:slug", h.ListByTenant)
+}
+
+// @sk-task ui-playground: Register the Playground relay route (admin session).
+func (s *AdminServer) RegisterPlaygroundHandler(h *admin.PlaygroundHandler) {
+	group := s.engine.Group("/api/v1/admin")
+	if s.adminSessionMw != nil {
+		group.Use(s.adminSessionMw)
+	}
+	group.POST("/playground", h.Handle)
 }
 
 // @sk-task 118-api-consistency#T3.5: NoRoute checks Accept:text/html for SPA fallback (AC-009)
@@ -281,6 +311,9 @@ func (s *AdminServer) RegisterStaticFiles(fsys fs.FS) error {
 	s.engine.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
 		if strings.HasPrefix(path, "/api/") {
+			// Mark the response as already enveloped so ResponseEnvelope does not
+			// re-wrap it and mislabel the code as INTERNAL_ERROR.
+			c.Set(middleware.EnvelopedKey, true)
 			c.JSON(http.StatusNotFound, dto.NewErrorResponse("NOT_FOUND", "route not found"))
 			return
 		}

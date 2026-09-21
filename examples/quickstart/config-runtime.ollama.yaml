@@ -1,0 +1,51 @@
+# MaskChain quickstart — Ollama path (zero external API keys).
+# Mounted as 99-config-runtime.yaml, loaded after config-base.yaml.
+# The `ollama` container (see docker-compose.ollama.yml) serves llama3.2.
+
+routing:
+  providers:
+    - name: ollama
+      api_type: ollama
+      base_url: "http://ollama:11434"
+      health_endpoint: "/api/tags"
+      timeout: 120s
+      priority: 1
+
+  rules:
+    - tenant: default
+      routes:
+        - model: "llama3.2"
+          providers: ["ollama"]
+
+shield:
+  # mask = reversible placeholders (demo-friendly); block = hard 403.
+  action_on_suspicious: mask
+
+tenants:
+  default:
+    name: "Default Tenant"
+    auth_header: "Authorization"
+    api_keys:
+      - "sk-test-default"
+    pii_config:
+      enabled: true
+      default_action: mask
+      rules:
+        - label: email
+          type: regex
+          pattern: EMAIL
+          action: mask
+        - label: phone
+          type: regex
+          pattern: PHONE
+          action: mask
+        - label: ssn
+          type: regex
+          pattern: SSN
+          action: mask
+
+analytics:
+  cost_rates:
+    - model: "llama3.2"
+      input_price_per_1k: 0
+      output_price_per_1k: 0

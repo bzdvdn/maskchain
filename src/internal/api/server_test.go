@@ -190,22 +190,20 @@ func TestMessagesEndpointRegistered(t *testing.T) {
 	}
 }
 
-// @sk-test anthropic-messages-endpoint#T4.1: TestMessagesRedirectFromV1 — /v1/messages redirects to /api/v1/messages (AC-001)
-func TestMessagesRedirectFromV1(t *testing.T) {
+// @sk-test anthropic-messages-endpoint#T4.1: TestMessagesAliasFromV1 — /v1/messages is served directly (AC-001)
+func TestMessagesAliasFromV1(t *testing.T) {
 	srv := newTestServer()
 
 	srv.RegisterProxyRoute(nil, nil)
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/v1/messages", nil)
+	req, _ := http.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(`{"model":"m","messages":[]}`))
+	req.Header.Set("Content-Type", "application/json")
 	srv.engine.ServeHTTP(w, req)
 
-	if w.Code != http.StatusMovedPermanently {
-		t.Errorf("expected 301 redirect, got %d", w.Code)
-	}
-	loc := w.Header().Get("Location")
-	if loc != "/api/v1/messages" {
-		t.Errorf("expected Location /api/v1/messages, got %q", loc)
+	// The /v1 alias must be registered (no redirect, no 404).
+	if w.Code == http.StatusNotFound || w.Code == http.StatusPermanentRedirect || w.Code == http.StatusMovedPermanently {
+		t.Errorf("expected /v1/messages to be served, got %d", w.Code)
 	}
 }
 

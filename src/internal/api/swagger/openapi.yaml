@@ -2,10 +2,19 @@ openapi: 3.1.0
 info:
   title: MaskChain API
   version: 1.0.0
-  description: API Gateway с Content Shield (AI DLP) и управлением профилями политик безопасности
+  description: |
+    MaskChain API — a self-hosted AI data gateway. The data plane (gateway)
+    proxies LLM traffic with reversible Content Shield masking; the control
+    plane (admin) manages tenants, virtual keys, budgets, routing, compliance
+    and analytics.
+
+    Authentication:
+    - Data plane: `Authorization: Bearer <virtual-key>` (tenant key).
+    - Control plane: `Authorization: Bearer <admin-session-token>` obtained from
+      `POST /admin/login`; tenant endpoints also accept a tenant key.
   license:
-    name: Proprietary
-    identifier: Proprietary
+    name: Apache-2.0
+    identifier: Apache-2.0
 
 servers:
   - url: /api/v1
@@ -13,95 +22,148 @@ servers:
 
 security: []
 
+tags:
+  - name: Data plane
+    description: LLM proxy and shield endpoints (virtual-key auth)
+  - name: Shield
+    description: Masking and unmasking
+  - name: Self
+    description: Identity and model discovery for key holders
+  - name: Admin
+    description: Admin session and system status
+  - name: Tenants
+  - name: Keys
+  - name: Budgets
+  - name: Routing
+  - name: Analytics
+  - name: Conversations
+  - name: Sessions
+  - name: Audit
+
 paths:
   /version:
     get:
       operationId: getVersion
-      summary: Версия бинарника
+      summary: Binary version
+      tags: [Data plane]
       responses:
         '200':
-          description: Информация о версии
+          description: Version info
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  version:
-                    type: string
-                    example: 1.0.0-abc1234
+                $ref: '#/components/schemas/ApiResponse'
 
   /chat/completions:
     post:
       operationId: createChatCompletion
-      summary: Прокси к LLM провайдеру (chat completion)
+      summary: Proxy a chat completion to the routed LLM provider
+      tags: [Data plane]
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                model:
-                  type: string
-                  example: gpt-4
-                stream:
-                  type: boolean
-                  default: false
-                messages:
-                  type: array
+              $ref: '#/components/schemas/ChatCompletionRequest'
       responses:
         '200':
-          description: Ответ от провайдера (прозрачный proxy)
+          description: Provider response, unmasked on the response path
           content:
             application/json:
               schema:
                 type: object
         '400':
           $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/ErrorResponse'
         '503':
           $ref: '#/components/responses/ErrorResponse'
 
-  /completions:
+  /messages:
     post:
-      operationId: createCompletion
-      summary: Прокси к LLM провайдеру (completion, legacy)
+      operationId: createMessage
+      summary: Proxy an Anthropic Messages request
+      tags: [Data plane]
+      security:
+        - bearerAuth: []
       responses:
         '200':
-          description: Ответ от провайдера
-        '400':
+          description: Provider response, unmasked on the response path
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /models:
+    get:
+      operationId: listModels
+      summary: List models routed for the authenticated tenant/key
+      tags: [Self]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of models with the key's access flag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelsResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /me:
+    get:
+      operationId: getMe
+      summary: Identity, scopes and budget view for the current key
+      tags: [Self]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current key/tenant context
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        '401':
           $ref: '#/components/responses/ErrorResponse'
 
   /shield/mask:
     post:
       operationId: maskText
-      summary: Маскировать PII в тексте
+      summary: Mask PII/dictionary terms in plain text
+      tags: [Shield]
+      security:
+        - bearerAuth: []
       parameters:
         - name: mask_id
           in: query
-          schema:
-            type: string
+          schema: { type: string }
+        - name: format
+          in: query
+          schema: { type: string, enum: [clean, id, redact], default: clean }
       requestBody:
         required: true
         content:
           text/plain:
-            schema:
-              type: string
+            schema: { type: string }
       responses:
         '200':
-          description: Текст с замаскированными данными
+          description: Masked text
           headers:
-            data_mask_id:
-              schema:
-                type: string
-              description: ID документа для unmask (если mask_id > 12 символов — генерируется новый)
             mask-id:
-              schema:
-                type: string
-              description: Запрошенный или сгенерированный mask_id
+              schema: { type: string }
+              description: Storage key for the mask entry (use for unmask)
+            data_mask_id:
+              schema: { type: string }
+              description: ID embedded in text when format=id
           content:
             text/plain:
-              schema:
-                type: string
+              schema: { type: string }
         '400':
           $ref: '#/components/responses/ErrorResponse'
         '409':
@@ -110,199 +172,162 @@ paths:
   /shield/unmask:
     post:
       operationId: unmaskText
-      summary: Восстановить замаскированный текст
+      summary: Restore masked text
+      tags: [Shield]
+      security:
+        - bearerAuth: []
       parameters:
         - name: mask_ids
           in: query
           required: true
-          schema:
-            type: string
+          description: Comma-separated mask ids
+          schema: { type: string }
       requestBody:
         required: true
         content:
           text/plain:
-            schema:
-              type: string
+            schema: { type: string }
       responses:
         '200':
-          description: Восстановленный текст
+          description: Restored text
           content:
             text/plain:
-              schema:
-                type: string
+              schema: { type: string }
         '400':
           $ref: '#/components/responses/ErrorResponse'
         '404':
           $ref: '#/components/responses/ErrorResponse'
 
-  /profiles:
-    get:
-      operationId: listProfiles
-      summary: Список профилей
-      parameters:
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
-        - name: per_page
-          in: query
-          schema:
-            type: integer
-            default: 20
-        - name: page_size
-          in: query
-          schema:
-            type: integer
-            deprecated: true
-      responses:
-        '200':
-          $ref: '#/components/responses/PaginatedResponse'
+  /admin/login:
     post:
-      operationId: createProfile
-      summary: Создать профиль
+      operationId: adminLogin
+      summary: Create an admin session
+      tags: [Admin]
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateProfileRequest'
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
       responses:
-        '201':
-          $ref: '#/components/responses/SuccessResponse'
-        '400':
-          $ref: '#/components/responses/ErrorResponse'
-        '409':
+        '200':
+          description: Session token (also set as the admin_token cookie)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  expires_at: { type: integer, format: int64 }
+        '401':
           $ref: '#/components/responses/ErrorResponse'
 
-  /profiles/{slug}:
+  /admin/logout:
+    post:
+      operationId: adminLogout
+      summary: Destroy the current admin session
+      tags: [Admin]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /admin/verify:
     get:
-      operationId: getProfile
-      summary: Получить профиль
-      parameters:
-        - name: slug
-          in: path
-          required: true
-          schema:
-            type: string
+      operationId: adminVerify
+      summary: Verify the current admin session
+      tags: [Admin]
+      security:
+        - bearerAuth: []
       responses:
         '200':
           $ref: '#/components/responses/SuccessResponse'
-        '404':
-          $ref: '#/components/responses/ErrorResponse'
-    put:
-      operationId: updateProfile
-      summary: Обновить профиль
-      parameters:
-        - name: slug
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          $ref: '#/components/responses/SuccessResponse'
-        '404':
-          $ref: '#/components/responses/ErrorResponse'
-    delete:
-      operationId: deleteProfile
-      summary: Удалить профиль
-      parameters:
-        - name: slug
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '204':
-          description: Успешное удаление (без тела)
-
-  /profiles/{slug}/dictionary:
-    patch:
-      operationId: patchDictionary
-      summary: Добавить/удалить записи словаря
-      parameters:
-        - name: slug
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          $ref: '#/components/responses/SuccessResponse'
-
-  /incidents:
-    get:
-      operationId: listIncidents
-      summary: Список инцидентов
-      parameters:
-        - name: page
-          in: query
-          schema: { type: integer, default: 1 }
-        - name: per_page
-          in: query
-          schema: { type: integer, default: 20 }
-        - name: severity
-          in: query
-          schema: { type: string }
-        - name: tenant
-          in: query
-          schema: { type: string }
-        - name: profile_slug
-          in: query
-          schema: { type: string }
-      responses:
-        '200':
-          $ref: '#/components/responses/PaginatedResponse'
-
-  /incidents/{id}:
-    get:
-      operationId: getIncident
-      summary: Получить инцидент
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          $ref: '#/components/responses/SuccessResponse'
-        '404':
+        '401':
           $ref: '#/components/responses/ErrorResponse'
 
-  /incidents/export:
+  /admin/status:
     get:
-      operationId: exportIncidents
-      summary: Экспорт инцидентов
-      parameters:
-        - name: format
-          in: query
-          schema:
-            type: string
-            enum: [csv, json]
+      operationId: adminStatus
+      summary: Version, uptime, dependency health and config diff
+      tags: [Admin]
+      security:
+        - bearerAuth: []
       responses:
         '200':
-          description: CSV или JSON файл
+          $ref: '#/components/responses/SuccessResponse'
+
+  /admin/playground:
+    post:
+      operationId: adminPlayground
+      summary: Relay a test chat completion to the gateway (UI Playground)
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [api_key, model, messages]
+              properties:
+                api_key: { type: string }
+                model: { type: string }
+                messages:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      role: { type: string, enum: [system, user, assistant] }
+                      content: { type: string }
+      responses:
+        '200':
+          description: Relay result with upstream status and shield headers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '502':
+          $ref: '#/components/responses/ErrorResponse'
 
   /tenants:
     get:
       operationId: listTenants
-      summary: Список тенантов
+      summary: List tenants
+      tags: [Tenants]
+      security:
+        - bearerAuth: []
       responses:
         '200':
           $ref: '#/components/responses/SuccessResponse'
     post:
       operationId: createTenant
-      summary: Создать тенант
+      summary: Create a tenant
+      tags: [Tenants]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantRequest'
       responses:
         '201':
           $ref: '#/components/responses/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
 
   /tenants/{slug}:
     get:
       operationId: getTenant
-      summary: Получить тенант
+      summary: Get a tenant
+      tags: [Tenants]
+      security:
+        - bearerAuth: []
       parameters:
         - name: slug
           in: path
@@ -311,20 +336,34 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
     put:
       operationId: updateTenant
-      summary: Обновить тенант
+      summary: Update a tenant
+      tags: [Tenants]
+      security:
+        - bearerAuth: []
       parameters:
         - name: slug
           in: path
           required: true
           schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantRequest'
       responses:
         '200':
           $ref: '#/components/responses/SuccessResponse'
     delete:
       operationId: deleteTenant
-      summary: Удалить тенант
+      summary: Delete a tenant
+      tags: [Tenants]
+      security:
+        - bearerAuth: []
       parameters:
         - name: slug
           in: path
@@ -332,12 +371,15 @@ paths:
           schema: { type: string }
       responses:
         '204':
-          description: Успешное удаление (без тела)
+          description: Deleted
 
   /tenants/{slug}/dictionaries:
     get:
       operationId: getDictionaries
-      summary: Получить словари тенанта
+      summary: Get tenant dictionaries
+      tags: [Tenants]
+      security:
+        - bearerAuth: []
       parameters:
         - name: slug
           in: path
@@ -348,7 +390,10 @@ paths:
           $ref: '#/components/responses/SuccessResponse'
     put:
       operationId: updateDictionaries
-      summary: Обновить словари тенанта
+      summary: Replace tenant dictionaries
+      tags: [Tenants]
+      security:
+        - bearerAuth: []
       parameters:
         - name: slug
           in: path
@@ -358,16 +403,445 @@ paths:
         '200':
           $ref: '#/components/responses/SuccessResponse'
 
+  /tenants/{slug}/compliance/apply:
+    post:
+      operationId: applyCompliancePack
+      summary: Apply a compliance pack to a tenant
+      tags: [Tenants]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pack_key]
+              properties:
+                pack_key: { type: string, example: HIPAA }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /tenants/{slug}/compliance/report:
+    get:
+      operationId: getComplianceReport
+      summary: Active/deviated/missing rules for a pack
+      tags: [Tenants]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+        - name: pack
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /keys:
+    get:
+      operationId: listKeys
+      summary: List virtual keys
+      tags: [Keys]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+    post:
+      operationId: createKey
+      summary: Create a virtual key (plaintext secret returned once)
+      tags: [Keys]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateKeyRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /keys/{id}:
+    get:
+      operationId: getKey
+      summary: Get a virtual key
+      tags: [Keys]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/KeyId'
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+    patch:
+      operationId: updateKey
+      summary: Update a virtual key
+      tags: [Keys]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/KeyId'
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+    delete:
+      operationId: revokeKey
+      summary: Revoke a virtual key (soft delete)
+      tags: [Keys]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/KeyId'
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /keys/{id}/rotate:
+    post:
+      operationId: rotateKey
+      summary: Rotate a virtual key secret (new plaintext shown once)
+      tags: [Keys]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/KeyId'
+      responses:
+        '200':
+          description: Key with a new secret; scopes/budget/expiry preserved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /budgets:
+    get:
+      operationId: listBudgets
+      summary: List budgets with current-period spend
+      tags: [Budgets]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+    post:
+      operationId: createBudget
+      summary: Create a budget
+      tags: [Budgets]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBudgetRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /budgets/{id}:
+    get:
+      operationId: getBudget
+      summary: Get a budget
+      tags: [Budgets]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BudgetId'
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+    patch:
+      operationId: updateBudget
+      summary: Update a budget
+      tags: [Budgets]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BudgetId'
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+    delete:
+      operationId: deleteBudget
+      summary: Delete a budget
+      tags: [Budgets]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BudgetId'
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /budgets/{id}/history:
+    get:
+      operationId: getBudgetHistory
+      summary: Spend history entries for a budget
+      tags: [Budgets]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BudgetId'
+        - name: limit
+          in: query
+          schema: { type: integer }
+        - name: offset
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /routing:
+    get:
+      operationId: getRouting
+      summary: Aggregate providers and routes
+      tags: [Routing]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /routing/providers:
+    get:
+      operationId: listProviders
+      summary: List providers with health/latency
+      tags: [Routing]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+    put:
+      operationId: upsertProvider
+      summary: Create or update a provider
+      tags: [Routing]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /routing/providers/{name}:
+    delete:
+      operationId: deleteProvider
+      summary: Delete a provider
+      tags: [Routing]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /routing/routes:
+    get:
+      operationId: listRoutes
+      summary: List model routes
+      tags: [Routing]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+    put:
+      operationId: upsertRoute
+      summary: Create or update a route
+      tags: [Routing]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RouteRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+    delete:
+      operationId: deleteRoute
+      summary: Delete a route
+      tags: [Routing]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RouteRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /analytics/tokens:
+    get:
+      operationId: getTokenAnalytics
+      summary: Token usage by tenant/model
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AnalyticsRange'
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /analytics/cost:
+    get:
+      operationId: getCostAnalytics
+      summary: Cost by tenant/model
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AnalyticsRange'
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /analytics/timeseries:
+    get:
+      operationId: getTimeseries
+      summary: Bucketed tokens/cost/requests
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AnalyticsRange'
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /analytics/cost-rates:
+    get:
+      operationId: listCostRates
+      summary: List per-model cost rates
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+    put:
+      operationId: upsertCostRate
+      summary: Create or update a cost rate
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /analytics/cost-rates/{model}:
+    delete:
+      operationId: deleteCostRate
+      summary: Delete a cost rate
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: model
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+
+  /conversations:
+    get:
+      operationId: listConversations
+      summary: List conversations (metadata only)
+      tags: [Conversations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer }
+        - name: per_page
+          in: query
+          schema: { type: integer }
+        - name: tenant_id
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: model
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/PaginatedResponse'
+
+  /conversations/{id}:
+    get:
+      operationId: getConversation
+      summary: Conversation detail with decrypted base64 payload
+      tags: [Conversations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
   /sessions:
     post:
       operationId: createSession
-      summary: Создать сессию
+      summary: Create a model-bound session
+      tags: [Sessions]
+      security:
+        - bearerAuth: []
       responses:
         '201':
           $ref: '#/components/responses/SuccessResponse'
     get:
       operationId: listSessions
-      summary: Список сессий
+      summary: List sessions
+      tags: [Sessions]
+      security:
+        - bearerAuth: []
       responses:
         '200':
           $ref: '#/components/responses/PaginatedResponse'
@@ -375,7 +849,10 @@ paths:
   /sessions/{id}:
     get:
       operationId: getSession
-      summary: Получить сессию
+      summary: Get a session
+      tags: [Sessions]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -388,7 +865,10 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
     delete:
       operationId: closeSession
-      summary: Закрыть сессию
+      summary: Close a session
+      tags: [Sessions]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -396,12 +876,15 @@ paths:
           schema: { type: string }
       responses:
         '204':
-          description: Сессия закрыта
+          description: Closed
 
   /sessions/{id}/extend:
     patch:
       operationId: extendSession
-      summary: Продлить TTL сессии
+      summary: Extend a session TTL
+      tags: [Sessions]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -411,95 +894,70 @@ paths:
         '200':
           $ref: '#/components/responses/SuccessResponse'
 
-  /analytics/tokens:
+  /audit:
     get:
-      operationId: getTokenAnalytics
-      summary: Статистика токенов по тенанту/модели
-      responses:
-        '200':
-          $ref: '#/components/responses/SuccessResponse'
-
-  /analytics/cost:
-    get:
-      operationId: getCostAnalytics
-      summary: Стоимость по тенанту/модели
-      responses:
-        '200':
-          $ref: '#/components/responses/SuccessResponse'
-
-  /analytics/traffic:
-    get:
-      operationId: getTrafficAnalytics
-      summary: Количество запросов и латентность
-      responses:
-        '200':
-          $ref: '#/components/responses/SuccessResponse'
-
-  /conversations:
-    get:
-      operationId: listConversations
-      summary: Список диалогов (метаданные, без содержимого)
+      operationId: listAudit
+      summary: Admin audit trail
+      tags: [Audit]
+      security:
+        - bearerAuth: []
       parameters:
-        - in: query
-          name: page
-          schema:
-            type: integer
-        - in: query
-          name: per_page
-          schema:
-            type: integer
-        - in: query
-          name: tenant_id
-          schema:
-            type: string
-      responses:
-        '200':
-          $ref: '#/components/responses/PaginatedResponse'
-
-  /conversations/{id}:
-    get:
-      operationId: getConversation
-      summary: Детали диалога с base64-содержимым
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
+        - name: limit
+          in: query
+          schema: { type: integer }
+        - name: offset
+          in: query
+          schema: { type: integer }
       responses:
         '200':
           $ref: '#/components/responses/SuccessResponse'
-        '404':
-          $ref: '#/components/responses/ErrorResponse'
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Data plane: a virtual key (`sk-mc_...`). Control plane: an admin session
+        token from `POST /admin/login`. Tenant endpoints also accept a tenant key.
+
+  parameters:
+    KeyId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    BudgetId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    AnalyticsRange:
+      name: period
+      in: query
+      description: Shorthand window; `from`/`to` (RFC3339) take precedence
+      schema: { type: string, enum: [day, week, month], default: week }
+
   schemas:
     ErrorInfo:
       type: object
       properties:
-        code:
-          type: string
-        message:
-          type: string
+        code: { type: string }
+        message: { type: string }
         details:
           type: array
           items:
             type: object
             properties:
-              field:
-                type: string
-              message:
-                type: string
+              field: { type: string }
+              message: { type: string }
 
     Pagination:
       type: object
       properties:
-        page:
-          type: integer
-        per_page:
-          type: integer
-        total:
-          type: integer
+        page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
 
     ApiResponse:
       type: object
@@ -521,41 +979,184 @@ components:
       properties:
         data:
           type: array
-        error:
-          type: 'null'
+        error: { type: 'null' }
         pagination:
           $ref: '#/components/schemas/Pagination'
+
+    ChatCompletionRequest:
+      type: object
+      required: [model, messages]
+      properties:
+        model:
+          type: string
+          example: gpt-4o-mini
+        stream:
+          type: boolean
+          default: false
+        messages:
+          type: array
+          items:
+            type: object
+            properties:
+              role: { type: string, enum: [system, user, assistant, tool] }
+              content: { type: string }
+
+    ModelInfo:
+      type: object
+      properties:
+        id: { type: string }
+        allowed: { type: boolean }
+
+    ModelsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModelInfo'
+
+    MeResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            tenant_id: { type: string }
+            version: { type: string }
+            key_id: { type: string }
+            label: { type: string }
+            allowed_models:
+              type: array
+              items: { type: string }
+            blocked_models:
+              type: array
+              items: { type: string }
+            budget_cap: { type: number, nullable: true }
+            spent: { type: number }
+            expires_at: { type: string, format: date-time, nullable: true }
+            metadata:
+              type: object
+              additionalProperties: { type: string }
+
+    TenantRequest:
+      type: object
+      required: [slug, name]
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        auth_header: { type: string, default: Authorization }
+        dictionaries:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              entries:
+                type: array
+                items: { type: string }
+              match_mode: { type: string, enum: [exact, contains, regex, fuzzy] }
+        pii_config:
+          $ref: '#/components/schemas/PiiConfig'
+
+    PiiConfig:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        default_action: { type: string, enum: [mask, block, allow, redact] }
+        rules:
+          type: array
+          items:
+            type: object
+            properties:
+              label: { type: string }
+              type: { type: string, enum: [regex, pii, dictionary, prompt_injection] }
+              pattern: { type: string }
+              action: { type: string, enum: [mask, block, allow, redact] }
+
+    CreateKeyRequest:
+      type: object
+      required: [tenant_id]
+      properties:
+        tenant_id: { type: string }
+        label: { type: string }
+        allowed_models:
+          type: array
+          items: { type: string }
+        blocked_models:
+          type: array
+          items: { type: string }
+        budget_cap: { type: number }
+        expires_at: { type: string, format: date-time }
+        metadata:
+          type: object
+          additionalProperties: { type: string }
+
+    CreateBudgetRequest:
+      type: object
+      required: [tenant_id, scope, type]
+      properties:
+        tenant_id: { type: string }
+        virtual_key_id: { type: string }
+        model: { type: string }
+        scope: { type: string, enum: [tenant, key, model] }
+        type: { type: string, enum: [monthly, daily, custom] }
+        custom_days: { type: integer }
+        soft_limit: { type: number }
+        hard_limit: { type: number }
+        currency: { type: string, default: USD }
+        notify_at:
+          type: array
+          items: { type: number }
+
+    ProviderRequest:
+      type: object
+      required: [name, base_url]
+      properties:
+        name: { type: string }
+        api_type: { type: string, enum: [openai, anthropic, gemini, bedrock, proxy, ollama] }
+        base_url: { type: string }
+        health_endpoint: { type: string }
+        timeout: { type: string }
+        priority: { type: integer }
+        api_keys:
+          type: array
+          items: { type: string }
+        auth_scheme: { type: string, enum: [bearer, api-key, basic] }
+        auth_header: { type: string }
+        auth_prefix: { type: string }
+        proxy_url: { type: string }
+        aws_region: { type: string }
+        aws_access_key_id: { type: string }
+        aws_secret_access_key: { type: string }
+
+    RouteRequest:
+      type: object
+      required: [model, providers]
+      properties:
+        tenant: { type: string, default: default }
+        model: { type: string }
+        providers:
+          type: array
+          items: { type: string }
 
     ConversationListItem:
       type: object
       properties:
-        id:
-          type: string
-        tenant_id:
-          type: string
-        model:
-          type: string
-        status:
-          type: string
-        masked:
-          type: boolean
-        streamed:
-          type: boolean
-        mask_id:
-          type: string
-        created_at:
-          type: string
-          format: date-time
+        id: { type: string }
+        tenant_id: { type: string }
+        model: { type: string }
+        status: { type: string }
+        masked: { type: boolean }
+        streamed: { type: boolean }
+        mask_id: { type: string }
+        created_at: { type: string, format: date-time }
 
     ConversationPayload:
       type: object
       properties:
-        request:
-          type: string
-        response:
-          type: string
-        masking:
-          type: string
+        request: { type: string }
+        response: { type: string }
+        masking: { type: string }
 
     ConversationDetail:
       allOf:
@@ -565,31 +1166,21 @@ components:
             payload:
               $ref: '#/components/schemas/ConversationPayload'
 
-    CreateProfileRequest:
-      type: object
-      properties:
-        slug:
-          type: string
-        name:
-          type: string
-        description:
-          type: string
-
   responses:
     SuccessResponse:
-      description: Успешный ответ в едином envelope
+      description: Success response in the unified envelope
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiResponse'
     PaginatedResponse:
-      description: Пагинированный ответ
+      description: Paginated response
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/PaginatedApiResponse'
     ErrorResponse:
-      description: Ошибка в едином envelope
+      description: Error in the unified envelope
       content:
         application/json:
           schema:

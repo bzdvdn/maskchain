@@ -1,0 +1,9 @@
+key: GDPR
+name: General Data Protection Regulation
+rules:
+  - detector_type: dictionary
+    reaction: block
+    masking: true
+  - detector_type: prompt_injection
+    reaction: review
+    masking: true

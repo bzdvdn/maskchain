@@ -20,6 +20,8 @@ const Budgets = lazy(() => import('./pages/Budgets').then((m) => ({ default: m.B
 const AuditLog = lazy(() => import('./pages/AuditLog').then((m) => ({ default: m.AuditLog })))
 const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })))
 const Swagger = lazy(() => import('./pages/Swagger').then((m) => ({ default: m.Swagger })))
+const Compliance = lazy(() => import('./pages/Compliance').then((m) => ({ default: m.Compliance })))
+const Playground = lazy(() => import('./pages/Playground').then((m) => ({ default: m.Playground })))
 
 function PageBoundary({ children }: { children: React.ReactNode }) {
   const location = useLocation()
@@ -54,6 +56,15 @@ function App() {
     }).finally(() => setChecking(false))
   }, [])
 
+  useEffect(() => {
+    const onUnauthorized = () => {
+      setAdminToken(null)
+      setIsLoggedIn(false)
+    }
+    window.addEventListener('maskchain:unauthorized', onUnauthorized)
+    return () => window.removeEventListener('maskchain:unauthorized', onUnauthorized)
+  }, [])
+
   const handleLogin = useCallback(() => {
     setIsLoggedIn(true)
   }, [])
@@ -81,6 +92,8 @@ function App() {
         <Route path="/routing" element={<PageBoundary><Routing /></PageBoundary>} />
         <Route path="/keys" element={<PageBoundary><Keys /></PageBoundary>} />
         <Route path="/budgets" element={<PageBoundary><Budgets /></PageBoundary>} />
+        <Route path="/compliance" element={<PageBoundary><Compliance /></PageBoundary>} />
+        <Route path="/playground" element={<PageBoundary><Playground /></PageBoundary>} />
         <Route path="/audit" element={<PageBoundary><AuditLog /></PageBoundary>} />
         <Route path="/settings" element={<PageBoundary><Settings /></PageBoundary>} />
         <Route path="/swagger" element={<PageBoundary><Swagger /></PageBoundary>} />

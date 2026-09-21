@@ -177,6 +177,50 @@ func (h *VirtualKeyHandler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.VirtualKeyToResponse(key))
 }
 
+// @sk-task api-self-service: Rotate replaces the key secret, returning it once (AC-001)
+//
+// Rotate generates a fresh secret for an existing key, replaces only the stored
+// hash, and returns the plaintext exactly once. The key id, scopes, budget and
+// expiry are preserved.
+func (h *VirtualKeyHandler) Rotate(c *gin.Context) {
+	key, err := h.repo.GetById(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		if errors.Is(err, virtualkey.ErrNotFound) {
+			middleware.AbortWithError(c, http.StatusNotFound, middleware.ErrorCodeNotFound, "key not found")
+			return
+		}
+		middleware.AbortWithError(c, http.StatusInternalServerError, middleware.ErrorCodeInternal, "failed to get key")
+		return
+	}
+
+	raw, err := virtualkey.NewSecret()
+	if err != nil {
+		middleware.AbortWithError(c, http.StatusInternalServerError, middleware.ErrorCodeInternal, "failed to generate secret")
+		return
+	}
+
+	key.KeyHash = virtualkey.KeyHash(raw)
+	key.UpdatedAt = time.Now().UTC()
+
+	if err := h.repo.Update(c.Request.Context(), key); err != nil {
+		if errors.Is(err, virtualkey.ErrNotFound) {
+			middleware.AbortWithError(c, http.StatusNotFound, middleware.ErrorCodeNotFound, "key not found")
+			return
+		}
+		middleware.AbortWithError(c, http.StatusInternalServerError, middleware.ErrorCodeInternal, "failed to rotate key")
+		return
+	}
+	h.invalidateKey(key.ID)
+
+	h.writeKeyAudit(c, "rotate_key", key.ID, map[string]any{"tenant_id": key.TenantID, "label": key.Label})
+
+	resp := dto.CreateVirtualKeyResponse{
+		VirtualKeyResponse: dto.VirtualKeyToResponse(key),
+		Key:                raw,
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
 // @sk-task 300-virtual-keys#T3.1: Delete revokes a key (soft delete) (AC-001)
 func (h *VirtualKeyHandler) Delete(c *gin.Context) {
 	if err := h.repo.Delete(c.Request.Context(), c.Param("id")); err != nil {

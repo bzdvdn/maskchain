@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { BarChart3, KeyRound, Shield, Users, Wallet, Zap, AlertTriangle, Plus } from 'lucide-react'
 import { TimeRangePicker, useRange, defaultRange, type RangeValue } from '../components/TimeRangePicker'
 import { Segmented, StatusPill, Button, type StatusTone } from '../components/ui'
@@ -14,6 +14,7 @@ import { listBudgets, listBudgetsByTenant } from '../api/budgets'
 import { listProviders } from '../api/routing'
 import { listKeys } from '../api/keys'
 import { listConversations } from '../api/conversations'
+import { useGatewayBase } from '../hooks/useGatewayBase'
 
 type Metric = 'tokens' | 'cost' | 'requests'
 
@@ -95,6 +96,7 @@ function Sparkline({ points, metric }: { points: SeriesPoint[]; metric: Metric }
 
 export function Dashboard() {
   const navigate = useNavigate()
+  const gatewayBase = useGatewayBase()
   const [range, setRange] = useState<RangeValue>(defaultRange)
   const { from, to } = useRange(range)
   const [metric, setMetric] = useState<Metric>('tokens')
@@ -250,7 +252,7 @@ export function Dashboard() {
           <div className="onboard-title">Welcome to MaskChain</div>
           <p className="muted-sm">Your privacy-safe LLM gateway is up. Issue a virtual key and route your first request.</p>
           <div className="codebox u-block">
-            curl https://gw.maskchain.dev/v1/chat/completions \<br />
+            curl {gatewayBase || '…'}/api/v1/chat/completions \<br />
             &nbsp;&nbsp;-H "Authorization: Bearer sk-mc-…" \<br />
             &nbsp;&nbsp;-d {'{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}]}'}
           </div>
@@ -308,7 +310,7 @@ export function Dashboard() {
                     <div className="attn-title">{a.title}</div>
                     <div className="attn-detail u-muted">{a.detail}</div>
                   </div>
-                  {a.to && <a className="btn-link attn-open" href={a.to}>Open →</a>}
+                  {a.to && <Link className="btn-link attn-open" to={a.to}>Open →</Link>}
                 </li>
               ))}
             </ul>
@@ -329,7 +331,7 @@ export function Dashboard() {
       <div className="card">
         <div className="card-header-row">
           <h3>Latest activity</h3>
-          <a className="btn-link link-sm" href="/conversations">View all</a>
+          <Link className="btn-link link-sm" to="/conversations">View all</Link>
         </div>
         {activity.length === 0 ? (
           <div className="empty-state u-center">No traffic yet.</div>

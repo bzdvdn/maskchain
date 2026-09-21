@@ -134,7 +134,7 @@ export interface ComplianceReport {
   rules: ComplianceReportRule[]
 }
 
-export const COMPLIANCE_PACKS = ['HIPAA', 'PCI DSS', 'GDPR', 'Legal'] as const
+export const COMPLIANCE_PACKS = ['HIPAA', 'PCI DSS', 'GDPR', 'Legal', 'SOC 2'] as const
 
 export async function applyCompliancePack(slug: string, packKey: string): Promise<ComplianceApplyResult> {
   return apiFetch<ComplianceApplyResult>(`${BASE}/${encodeURIComponent(slug)}/compliance/apply`, {
