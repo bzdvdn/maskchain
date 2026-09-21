@@ -4,7 +4,7 @@ import { BarChart3, KeyRound, Shield, Users, Wallet, Zap, AlertTriangle, Plus } 
 import { TimeRangePicker, useRange, defaultRange, type RangeValue } from '../components/TimeRangePicker'
 import { Segmented, StatusPill, Button, type StatusTone } from '../components/ui'
 import { TimeSeriesChart, type ChartMetric } from '../components/TimeSeriesChart'
-import { relativeTime, money, fmtTokens, groupNum, rangeLabel } from '../utils/format'
+import { relativeTime, money, fmtTokens, groupNum, rangeLabel, rangeSpanMs } from '../utils/format'
 import {
   getAnalyticsTokens,
   getAnalyticsCost,
@@ -274,7 +274,7 @@ export function Dashboard() {
         {seriesError ? (
           <p className="text-muted">Could not load the trend for this range. Try again.</p>
         ) : (
-          <TimeSeriesChart data={series} metric={metric} />
+          <TimeSeriesChart data={series} metric={metric} spanMs={rangeSpanMs(range.mode, from, to)} />
         )}
         <div className="muted-sm u-mt8">
           Tokens = input + output · Cost in the configured currency · Requests from usage records

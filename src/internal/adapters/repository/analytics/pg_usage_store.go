@@ -199,8 +199,13 @@ func (s *PgUsageStore) QueryTimeSeriesByTenant(ctx context.Context, tenantID val
 	return pts, rows.Err()
 }
 
+// hourlyBucketMaxSpan is the largest range served with hourly buckets. Beyond
+// it the series is bucketed by day.
+const hourlyBucketMaxSpan = 7 * 24 * time.Hour
+
+// @sk-task chart-time-formatting#T1.1: hourly buckets up to seven days (AC-001)
 func resolveBucket(from, to time.Time) string {
-	if to.Sub(from) < 48*time.Hour {
+	if to.Sub(from) <= hourlyBucketMaxSpan {
 		return "hour"
 	}
 	return "day"

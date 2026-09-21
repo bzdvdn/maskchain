@@ -57,6 +57,55 @@ function shortDay(d: Date): string {
   return `${MONTHS[d.getMonth()]} ${d.getDate()}`
 }
 
+const HOUR_MS = 3600_000
+const DAY_MS = 86_400_000
+
+function clock(d: Date): string {
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function dayMonth(d: Date): string {
+  return `${d.getDate()}.${pad(d.getMonth() + 1)}`
+}
+
+// chartTickLabel formats a chart axis tick from the requested range span:
+// clock time for short ranges, date plus time up to a week, and date only
+// beyond that (so daily buckets never show a fake 00:00).
+export function chartTickLabel(iso: string, spanMs: number): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  if (spanMs <= 48 * HOUR_MS) return clock(d)
+  if (spanMs <= 7 * DAY_MS) return `${dayMonth(d)} ${clock(d)}`
+  return dayMonth(d)
+}
+
+// chartTooltipLabel always shows the full date and time of a bucket.
+export function chartTooltipLabel(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return `${dayMonth(d)}.${d.getFullYear()} ${clock(d)}`
+}
+
+const RANGE_SPAN_MS: Record<string, number> = {
+  today: DAY_MS,
+  yesterday: 2 * DAY_MS,
+  '7d': 7 * DAY_MS,
+  '30d': 30 * DAY_MS,
+}
+
+// rangeSpanMs returns the span of a range selection in milliseconds so charts
+// can pick the right label format. Presets map to their window, "all" is
+// unbounded, and a custom range uses its bounds.
+export function rangeSpanMs(mode: string, from?: string, to?: string): number {
+  if (mode === 'all') return Number.POSITIVE_INFINITY
+  const preset = RANGE_SPAN_MS[mode]
+  if (preset) return preset
+  const f = from ? new Date(from).getTime() : NaN
+  const t = to ? new Date(to).getTime() : NaN
+  if (Number.isFinite(f) && Number.isFinite(t) && t >= f) return t - f
+  return 0
+}
+
 // rangeLabel returns a short human label for a time-range selection. Presets map
 // to their name; anything else (custom) renders as a date span, falling back to
 // "Custom" when the bounds are missing or invalid.

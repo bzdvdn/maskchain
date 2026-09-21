@@ -3,7 +3,7 @@ import { Download } from 'lucide-react'
 import { TimeRangePicker, useRange, usePersistedRange } from '../components/TimeRangePicker'
 import { TimeSeriesChart } from '../components/TimeSeriesChart'
 import { StatusPill, type StatusTone } from '../components/ui'
-import { fmtTokens, groupNum, money } from '../utils/format'
+import { fmtTokens, groupNum, money, rangeSpanMs } from '../utils/format'
 import {
   getAnalyticsCost,
   getAnalyticsSeries,
@@ -170,7 +170,7 @@ export function Analytics() {
             <h3>Usage over time</h3>
             {compare && <StatusPill tone="blue">compare on</StatusPill>}
           </div>
-          {loading && series.length === 0 ? <div className="loading">Loading…</div> : <TimeSeriesChart data={series} height={240} compare={compare ? prevSeries : undefined} />}
+          {loading && series.length === 0 ? <div className="loading">Loading…</div> : <TimeSeriesChart data={series} height={240} compare={compare ? prevSeries : undefined} spanMs={rangeSpanMs(range.mode, from, to)} />}
         </div>
       )}
 

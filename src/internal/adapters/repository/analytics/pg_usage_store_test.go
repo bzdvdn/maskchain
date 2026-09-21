@@ -175,3 +175,26 @@ func TestPgUsageStoreNilPool(t *testing.T) {
 		t.Errorf("expected no error with nil pool, got %v", err)
 	}
 }
+
+// @sk-test chart-time-formatting#T3.1: bucket unit boundaries (AC-001)
+func TestResolveBucket(t *testing.T) {
+	base := time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name string
+		span time.Duration
+		want string
+	}{
+		{"1h", time.Hour, "hour"},
+		{"48h", 48 * time.Hour, "hour"},
+		{"7d", 7 * 24 * time.Hour, "hour"},
+		{"7d+1m", 7*24*time.Hour + time.Minute, "day"},
+		{"30d", 30 * 24 * time.Hour, "day"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := resolveBucket(base, base.Add(tc.span)); got != tc.want {
+				t.Errorf("resolveBucket(%s) = %q, want %q", tc.name, got, tc.want)
+			}
+		})
+	}
+}

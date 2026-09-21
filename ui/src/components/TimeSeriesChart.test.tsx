@@ -51,3 +51,22 @@ describe('TimeSeriesChart empty states', () => {
     expect(screen.getByText(/Single data point/)).toBeTruthy()
   })
 })
+
+// @sk-test chart-time-formatting#T3.3: dense hourly data and explicit span render (AC-005)
+describe('TimeSeriesChart span and density', () => {
+  it('renders 168 hourly points with a week span without error', () => {
+    const start = new Date(2026, 8, 15, 0, 0).getTime()
+    const dense = Array.from({ length: 168 }, (_, i) => ({
+      bucket: new Date(start + i * 3600_000).toISOString(),
+      input_tokens: 100 + i,
+      output_tokens: 50,
+      cost: 0.1,
+      requests: 1,
+    }))
+
+    render(<TimeSeriesChart data={dense} spanMs={7 * 86_400_000} />)
+
+    expect(screen.getByText('Input')).toBeTruthy()
+    expect(screen.getByRole('img', { name: /Tokens trend over 168 buckets/ })).toBeTruthy()
+  })
+})

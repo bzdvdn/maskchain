@@ -8,7 +8,7 @@ import {
   YAxis,
 } from 'recharts'
 
-import { money } from '../utils/format'
+import { money, chartTickLabel, chartTooltipLabel } from '../utils/format'
 
 export type ChartMetric = 'tokens' | 'cost' | 'requests'
 
@@ -25,6 +25,9 @@ interface Props {
   height?: number
   compare?: Point[]
   metric?: ChartMetric
+  // spanMs is the requested range span; it drives label formatting. When
+  // omitted the span of the rendered data is used.
+  spanMs?: number
 }
 
 const INPUT = 'var(--accent)'
@@ -38,25 +41,14 @@ function fmtShort(n: number): string {
   return String(n)
 }
 
-function fmtTick(iso: string): string {
-  const d = new Date(iso)
-  const now = new Date()
-  const diffH = (now.getTime() - d.getTime()) / 3600_000
-  if (diffH < 24) return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-  if (diffH < 168) return `${d.getDate()}.${d.getMonth() + 1} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-  return `${d.getDate()}.${d.getMonth() + 1}`
-}
-
-function pad2(n: number): string {
-  return String(n).padStart(2, '0')
-}
-
-function fmtLabel(iso: string): string {
-  const d = new Date(iso)
-  const now = new Date()
-  const diffH = (now.getTime() - d.getTime()) / 3600_000
-  if (diffH < 24) return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`
-  return `${d.getDate()}.${pad2(d.getMonth() + 1)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+// dataSpanMs is the span of the rendered data, used when the caller does not
+// provide the requested range span.
+function dataSpanMs(data: Point[]): number {
+  if (data.length < 2) return 0
+  const first = new Date(data[0].bucket).getTime()
+  const last = new Date(data[data.length - 1].bucket).getTime()
+  if (Number.isNaN(first) || Number.isNaN(last)) return 0
+  return Math.max(0, last - first)
 }
 
 // metricValue formats a value for the tooltip; the unit follows the metric.
@@ -90,7 +82,7 @@ function ChartTooltip({ active, payload, label, metric }: {
         boxShadow: 'var(--shadow)',
       }}
     >
-      <div style={{ color: TICK, marginBottom: 6 }}>{label ? fmtLabel(label) : ''}</div>
+      <div style={{ color: TICK, marginBottom: 6 }}>{label ? chartTooltipLabel(label) : ''}</div>
       {payload.map((p) => (
         <div key={p.dataKey} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ width: 8, height: 8, borderRadius: 2, background: p.color, display: 'inline-block', flexShrink: 0 }} />
@@ -108,7 +100,7 @@ const METRIC_LABEL: Record<ChartMetric, string> = {
   requests: 'Requests',
 }
 
-export function TimeSeriesChart({ data, height = 220, compare, metric = 'tokens' }: Props) {
+export function TimeSeriesChart({ data, height = 220, compare, metric = 'tokens', spanMs }: Props) {
   if (!data.length) {
     return (
       <div role="img" aria-label={`${METRIC_LABEL[metric]} trend: no data for this period`} className="text-muted" style={{ padding: 24, textAlign: 'center' }}>
@@ -133,9 +125,11 @@ export function TimeSeriesChart({ data, height = 220, compare, metric = 'tokens'
 
   const single = data.length === 1
 
+  const span = spanMs && spanMs > 0 ? spanMs : dataSpanMs(data)
+
   const chartData = data.map((d, i) => {
     const cmp = compare?.[i]
-    const base = { bucket: d.bucket, label: fmtLabel(d.bucket) }
+    const base = { bucket: d.bucket }
     if (metric === 'tokens') {
       return {
         ...base,
@@ -167,7 +161,7 @@ export function TimeSeriesChart({ data, height = 220, compare, metric = 'tokens'
           <CartesianGrid stroke={GRID} strokeDasharray="3 3" vertical={false} />
           <XAxis
             dataKey="bucket"
-            tickFormatter={fmtTick}
+            tickFormatter={(iso: string) => chartTickLabel(iso, span)}
             tick={{ fill: TICK, fontSize: 10 }}
             tickLine={false}
             axisLine={{ stroke: GRID }}
