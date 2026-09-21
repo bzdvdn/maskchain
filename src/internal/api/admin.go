@@ -224,7 +224,9 @@ func (s *AdminServer) RegisterRoutingHandler(h *admin.RoutingHandler) {
 	}
 	group.GET("", h.HandleRouting)
 	group.GET("/", h.HandleRouting)
+	group.GET("/models", h.ListModels)
 	group.GET("/providers", h.ListProviders)
+	group.GET("/providers/:name/models", h.ListProviderModels)
 	group.PUT("/providers", h.UpsertProvider)
 	group.DELETE("/providers/:name", h.DeleteProvider)
 	group.GET("/routes", h.ListRoutes)

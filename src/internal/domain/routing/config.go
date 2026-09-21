@@ -5,6 +5,17 @@ import "errors"
 // ErrNotFound is returned when a routing entity does not exist.
 var ErrNotFound = errors.New("routing entity not found")
 
+// ErrModelsUnsupported is returned when a provider type has no models API to
+// discover models from.
+var ErrModelsUnsupported = errors.New("provider does not expose a models API")
+
+// @sk-task routing-ia#T1.1: reserved global tenant marker (AC-001, AC-002)
+//
+// GlobalTenant is a reserved tenant value. A route stored under it is the
+// default for every tenant that has no explicit route for that model. It is not
+// a real tenant slug and must never be offered as one.
+const GlobalTenant = "*"
+
 // @sk-task 70-routing-engine#T1.1: Domain-level provider config (DDD boundary)
 //
 // ProviderConfig represents a domain entity or configuration.

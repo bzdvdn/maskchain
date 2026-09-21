@@ -6,26 +6,45 @@ import (
 	"errors"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/bzdvdn/maskchain/src/internal/api/dto"
+	"github.com/bzdvdn/maskchain/src/internal/domain/analytics"
 	"github.com/bzdvdn/maskchain/src/internal/domain/routing"
 )
 
 // @sk-task admin-ui-design#T3.1: RoutingHandler exposes providers and routing rules (AC-006)
 // @sk-task 150-admin-routing-crud#T2.2: RoutingHandler reads from registry repo + CRUD (AC-001, AC-002)
 //
+// TxRunner runs a function inside a database transaction. Repositories are
+// transaction-aware through the context, so the same ctx passed to the function
+// must be forwarded to repository calls.
+type TxRunner interface {
+	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
+// ModelDiscoverer lists the models a provider exposes via its own API.
+type ModelDiscoverer interface {
+	Discover(ctx context.Context, p routing.ProviderConfig) ([]string, error)
+}
+
 // RoutingHandler serves routing registry data and CRUD operations.
 type RoutingHandler struct {
 	repo          routing.RegistryRepository
+	costRates     analytics.CostRateRepository
+	tx            TxRunner
+	models        ModelDiscoverer
 	healthChecker *ProviderHealthChecker
 	auditLog      AuditLogger
 }
 
-func NewRoutingHandler(repo routing.RegistryRepository, healthChecker *ProviderHealthChecker, auditLog AuditLogger) *RoutingHandler {
-	return &RoutingHandler{repo: repo, healthChecker: healthChecker, auditLog: auditLog}
+// @sk-task routing-ia#T2.2: handler takes cost rates and a tx runner (AC-003, AC-004)
+// @sk-task routing-ia#T5.1: handler takes a model discoverer (AC-011)
+func NewRoutingHandler(repo routing.RegistryRepository, costRates analytics.CostRateRepository, tx TxRunner, models ModelDiscoverer, healthChecker *ProviderHealthChecker, auditLog AuditLogger) *RoutingHandler {
+	return &RoutingHandler{repo: repo, costRates: costRates, tx: tx, models: models, healthChecker: healthChecker, auditLog: auditLog}
 }
 
 type modelRouteResponse struct {
@@ -137,6 +156,7 @@ func (h *RoutingHandler) ListProviders(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": providers})
 }
 
+// @sk-task routing-ia#T2.2: atomic provider+models upsert with api_type-aware keys (AC-004, AC-005)
 func (h *RoutingHandler) UpsertProvider(c *gin.Context) {
 	var req dto.ProviderRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -146,7 +166,8 @@ func (h *RoutingHandler) UpsertProvider(c *gin.Context) {
 	if req.APIType == "" {
 		req.APIType = "openai"
 	}
-	if len(req.APIKeys) == 0 {
+	// ollama needs no key; bedrock authenticates with AWS credentials.
+	if len(req.APIKeys) == 0 && req.APIType != "ollama" && req.APIType != "bedrock" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "api_keys must not be empty"})
 		return
 	}
@@ -167,12 +188,197 @@ func (h *RoutingHandler) UpsertProvider(c *gin.Context) {
 		AWSAccessKeyID:     req.AWSAccessKeyID,
 		AWSSecretAccessKey: req.AWSSecretAccessKey,
 	}
-	if err := h.repo.UpsertProvider(c.Request.Context(), p); err != nil {
+
+	save := func(ctx context.Context) error {
+		if err := h.repo.UpsertProvider(ctx, p); err != nil {
+			return err
+		}
+		if len(req.Models) == 0 {
+			return nil
+		}
+
+		// Existing global routes and cost rates decide append-vs-create.
+		globalProviders := map[string][]string{}
+		rules, err := h.repo.ListRules(ctx)
+		if err != nil {
+			return err
+		}
+		for _, rule := range rules {
+			if rule.Tenant != routing.GlobalTenant {
+				continue
+			}
+			for _, rt := range rule.Routes {
+				globalProviders[rt.Model] = rt.Providers
+			}
+		}
+		existingRates := map[string]bool{}
+		if h.costRates != nil {
+			rates, err := h.costRates.List(ctx)
+			if err != nil {
+				return err
+			}
+			for _, cr := range rates {
+				existingRates[cr.Model] = true
+			}
+		}
+
+		for _, model := range req.Models {
+			model = strings.TrimSpace(model)
+			if model == "" {
+				continue
+			}
+			providers := appendUnique(globalProviders[model], p.Name)
+			if err := h.repo.UpsertRoute(ctx, routing.GlobalTenant, model, providers); err != nil {
+				return err
+			}
+			if h.costRates != nil && !existingRates[model] {
+				rate, err := analytics.NewCostRate(model, 0, 0)
+				if err != nil {
+					return err
+				}
+				if err := h.costRates.Upsert(ctx, rate); err != nil {
+					return err
+				}
+				existingRates[model] = true
+			}
+		}
+		return nil
+	}
+
+	var err error
+	if h.tx != nil {
+		err = h.tx.RunInTx(c.Request.Context(), save)
+	} else {
+		err = save(c.Request.Context())
+	}
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	h.writeAudit(c, "upsert_provider", req.Name, map[string]any{"api_type": req.APIType, "base_url": req.BaseURL})
+	h.writeAudit(c, "upsert_provider", req.Name, map[string]any{"api_type": req.APIType, "base_url": req.BaseURL, "models": req.Models})
 	c.JSON(http.StatusOK, gin.H{"data": dto.ProviderToResponse(p, "unknown", 0, 0)})
+}
+
+// appendUnique returns items with value appended when it is not already present.
+func appendUnique(items []string, value string) []string {
+	out := make([]string, len(items), len(items)+1)
+	copy(out, items)
+	for _, item := range items {
+		if item == value {
+			return out
+		}
+	}
+	return append(out, value)
+}
+
+// @sk-task routing-ia#T5.1: list a provider's models from its own API (AC-011)
+func (h *RoutingHandler) ListProviderModels(c *gin.Context) {
+	if h.models == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "model discovery is not configured"})
+		return
+	}
+	providers, err := h.repo.ListProviders(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load providers"})
+		return
+	}
+	name := c.Param("name")
+	var found *routing.ProviderConfig
+	for i := range providers {
+		if providers[i].Name == name {
+			found = &providers[i]
+			break
+		}
+	}
+	if found == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "provider not found"})
+		return
+	}
+
+	ids, err := h.models.Discover(c.Request.Context(), *found)
+	if err != nil {
+		if errors.Is(err, routing.ErrModelsUnsupported) {
+			c.JSON(http.StatusNotImplemented, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": ids})
+}
+
+// @sk-task routing-ia#T2.1: model aggregate for the Models page (AC-003)
+func (h *RoutingHandler) ListModels(c *gin.Context) {
+	rules, err := h.repo.ListRules(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list models"})
+		return
+	}
+
+	type aggregate struct {
+		input, output float64
+		currency      string
+		defaults      []string
+		overrides     int
+		source        string
+	}
+	models := map[string]*aggregate{}
+	ensure := func(model string) *aggregate {
+		a, ok := models[model]
+		if !ok {
+			a = &aggregate{currency: analytics.DefaultCurrency}
+			models[model] = a
+		}
+		return a
+	}
+
+	for _, rule := range rules {
+		for _, rt := range rule.Routes {
+			a := ensure(rt.Model)
+			if rule.Tenant == routing.GlobalTenant {
+				a.defaults = rt.Providers
+			} else {
+				a.overrides++
+			}
+			if a.source == "" {
+				a.source = rule.Source
+			}
+		}
+	}
+
+	if h.costRates != nil {
+		rates, err := h.costRates.List(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list cost rates"})
+			return
+		}
+		for _, cr := range rates {
+			a := ensure(cr.Model)
+			a.input = cr.InputPricePer1K
+			a.output = cr.OutputPricePer1K
+			if cr.Currency != "" {
+				a.currency = cr.Currency
+			}
+			if a.source == "" {
+				a.source = cr.Source
+			}
+		}
+	}
+
+	out := make([]dto.ModelAggregate, 0, len(models))
+	for model, a := range models {
+		out = append(out, dto.ModelAggregate{
+			Model:            model,
+			InputPricePer1K:  a.input,
+			OutputPricePer1K: a.output,
+			Currency:         a.currency,
+			DefaultProviders: a.defaults,
+			OverrideCount:    a.overrides,
+			Source:           a.source,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Model < out[j].Model })
+	c.JSON(http.StatusOK, gin.H{"data": out})
 }
 
 func (h *RoutingHandler) DeleteProvider(c *gin.Context) {

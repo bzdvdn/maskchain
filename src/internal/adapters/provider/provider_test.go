@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bzdvdn/maskchain/src/internal/adapters/egress"
+	routingDomain "github.com/bzdvdn/maskchain/src/internal/domain/routing"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 	"github.com/bzdvdn/maskchain/src/internal/ports"
 )
@@ -462,4 +464,62 @@ func TestProviderClient_CustomAuthPrefix(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
+}
+
+// @sk-test routing-ia#T5.3: provider model discovery parses each API shape (AC-011)
+func TestModelDiscoverer(t *testing.T) {
+	d := NewModelDiscoverer(nil)
+	ctx := context.Background()
+
+	t.Run("openai", func(t *testing.T) {
+		srv := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/models" {
+				t.Errorf("unexpected path %s", r.URL.Path)
+			}
+			assertHeader(t, r, "Authorization", "Bearer sk-test-key")
+			_, _ = w.Write([]byte(`{"data":[{"id":"gpt-4o"},{"id":"gpt-4o-mini"}]}`))
+		})
+		defer srv.Close()
+
+		ids, err := d.Discover(ctx, routingDomain.ProviderConfig{Name: "openai", APIType: "openai", BaseURL: srv.URL, APIKeys: []string{"sk-test-key"}})
+		if err != nil {
+			t.Fatalf("discover: %v", err)
+		}
+		if len(ids) != 2 || ids[0] != "gpt-4o" || ids[1] != "gpt-4o-mini" {
+			t.Errorf("ids = %v, want [gpt-4o gpt-4o-mini]", ids)
+		}
+	})
+
+	t.Run("ollama", func(t *testing.T) {
+		srv := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/api/tags" {
+				t.Errorf("unexpected path %s", r.URL.Path)
+			}
+			_, _ = w.Write([]byte(`{"models":[{"name":"llama3.2"}]}`))
+		})
+		defer srv.Close()
+
+		ids, err := d.Discover(ctx, routingDomain.ProviderConfig{Name: "ollama", APIType: "ollama", BaseURL: srv.URL})
+		if err != nil || len(ids) != 1 || ids[0] != "llama3.2" {
+			t.Errorf("ids = %v (err=%v), want [llama3.2]", ids, err)
+		}
+	})
+
+	t.Run("unsupported", func(t *testing.T) {
+		_, err := d.Discover(ctx, routingDomain.ProviderConfig{Name: "bedrock", APIType: "bedrock", BaseURL: "https://bedrock"})
+		if !errors.Is(err, routingDomain.ErrModelsUnsupported) {
+			t.Errorf("expected ErrModelsUnsupported, got %v", err)
+		}
+	})
+
+	t.Run("http error", func(t *testing.T) {
+		srv := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+		})
+		defer srv.Close()
+
+		if _, err := d.Discover(ctx, routingDomain.ProviderConfig{Name: "openai", APIType: "openai", BaseURL: srv.URL}); err == nil {
+			t.Error("expected an error for a non-2xx models response")
+		}
+	})
 }

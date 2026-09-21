@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/bzdvdn/maskchain/src/cmd/internal/bootstrap"
+	"github.com/bzdvdn/maskchain/src/internal/adapters/provider"
 	analyticsrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/analytics"
 	conversationrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/conversation"
 	dictionaryrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/dictionary"
@@ -194,10 +195,12 @@ func buildAdminServer(
 		if len(targets) > 0 {
 			healthChecker.StartBackgroundRefresh(context.Background(), 30*time.Second, targets)
 		}
-		routingHandler := adminhandler.NewRoutingHandler(postgres.NewPostgresRegistryRepository(pgPool), healthChecker, auditAdapter)
+		// @sk-task routing-ia#T2.3: pass cost rates and tx runner for atomic provider+models (AC-004)
+		costRateStore := analyticsrepo.NewPostgresCostRateStore(pgPool)
+		routingHandler := adminhandler.NewRoutingHandler(postgres.NewPostgresRegistryRepository(pgPool), costRateStore, txMgr, provider.NewModelDiscoverer(cfg.Egress), healthChecker, auditAdapter)
 		srv.RegisterRoutingHandler(routingHandler)
 
-		costRateHandler := adminhandler.NewCostRateHandler(analyticsrepo.NewPostgresCostRateStore(pgPool), auditAdapter)
+		costRateHandler := adminhandler.NewCostRateHandler(costRateStore, auditAdapter)
 		srv.RegisterCostRateHandler(costRateHandler)
 
 		// @sk-task 301-budget-enforcement#T3.3: Register budget CRUD handler (AC-006)

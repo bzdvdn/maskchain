@@ -22,46 +22,60 @@ func NewRouteSelector(registry *ProviderRegistry) *RouteSelector {
 	return &RouteSelector{registry: registry}
 }
 
+// @sk-task routing-ia#T1.1: tenant route with global fallback (AC-001, AC-002)
 func (s *RouteSelector) Select(model string, tenantID string) (*routing.Provider, []string, error) {
-	if tenantID == "" {
-		tenantID = "default"
+	providers, ok := s.providersFor(model, tenantID)
+	if !ok {
+		return nil, nil, ErrNoRoute
 	}
-	for _, rule := range s.registry.Rules() {
-		if rule.TenantID != tenantID {
+	for _, name := range providers {
+		p := s.registry.Get(name)
+		if p == nil {
 			continue
 		}
-		for _, route := range rule.Routes {
-			if route.Model != model {
-				continue
-			}
-			for _, name := range route.Providers {
-				p := s.registry.Get(name)
-				if p == nil {
-					continue
-				}
-				if p.HealthStatus() == routing.HealthHealthy {
-					return p, route.Providers, nil
-				}
-			}
-			return nil, route.Providers, ErrNoHealthyProvider
+		if p.HealthStatus() == routing.HealthHealthy {
+			return p, providers, nil
 		}
 	}
-	return nil, nil, ErrNoRoute
+	return nil, providers, ErrNoHealthyProvider
 }
 
 func (s *RouteSelector) GetProviderList(model string, tenantID string) ([]string, error) {
+	providers, ok := s.providersFor(model, tenantID)
+	if !ok {
+		return nil, ErrNoRoute
+	}
+	return providers, nil
+}
+
+// providersFor resolves the provider chain for a model: the tenant-specific
+// route wins, otherwise the global default (GlobalTenant) is used. An empty
+// tenant is normalized to "default" so existing deployments are unchanged.
+func (s *RouteSelector) providersFor(model, tenantID string) ([]string, bool) {
 	if tenantID == "" {
 		tenantID = "default"
 	}
+	if providers, ok := s.lookup(tenantID, model); ok {
+		return providers, true
+	}
+	if tenantID != routing.GlobalTenant {
+		if providers, ok := s.lookup(routing.GlobalTenant, model); ok {
+			return providers, true
+		}
+	}
+	return nil, false
+}
+
+func (s *RouteSelector) lookup(tenantID, model string) ([]string, bool) {
 	for _, rule := range s.registry.Rules() {
 		if rule.TenantID != tenantID {
 			continue
 		}
 		for _, route := range rule.Routes {
 			if route.Model == model {
-				return route.Providers, nil
+				return route.Providers, true
 			}
 		}
 	}
-	return nil, ErrNoRoute
+	return nil, false
 }

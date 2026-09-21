@@ -20,6 +20,18 @@ export interface ProviderDto {
   status?: string
   latency_ms?: number
   last_check?: number
+  // models attached on save (global default routes)
+  models?: string[]
+}
+
+export interface ModelAggregate {
+  model: string
+  input_price_per_1k: number
+  output_price_per_1k: number
+  currency: string
+  default_providers: string[]
+  override_count: number
+  source?: string
 }
 
 export interface RouteDto {
@@ -39,6 +51,10 @@ export interface CostRateDto {
 
 const ROUTING = '/api/v1/routing'
 const COST = '/api/v1/analytics/cost-rates'
+
+// GLOBAL_TENANT is the reserved tenant value for a model's default provider
+// chain (applies to every tenant without an explicit override).
+export const GLOBAL_TENANT = '*'
 
 /**
  * isMaskedKey reports whether a provider secret value is the masked display
@@ -82,6 +98,16 @@ export function deleteRoute(r: RouteDto): Promise<void> {
     method: 'DELETE',
     body: { tenant: r.tenant, model: r.model, providers: r.providers },
   })
+}
+
+// listProviderModels asks the provider's own models API for its model ids.
+export function listProviderModels(name: string): Promise<string[]> {
+  return apiFetch(`${ROUTING}/providers/${encodeURIComponent(name)}/models`).then((d) => unwrap<string[]>(d))
+}
+
+// listModels returns the model aggregate (cost + default providers + override count).
+export function listModels(): Promise<ModelAggregate[]> {
+  return apiFetch(`${ROUTING}/models`).then((d) => unwrap<ModelAggregate[]>(d))
 }
 
 export function listCostRates(): Promise<CostRateDto[]> {

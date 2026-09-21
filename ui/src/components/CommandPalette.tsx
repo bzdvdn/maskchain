@@ -16,6 +16,8 @@ import {
   Wallet,
   Shield,
   FlaskConical,
+  Server,
+  Boxes,
 } from 'lucide-react'
 import { listTenants } from '../api/tenants'
 import { listConversations } from '../api/conversations'
@@ -34,7 +36,9 @@ const NAV: NavEntry[] = [
   { to: '/tenants', label: 'Tenants', keywords: 'tenants create list', icon: Users },
   { to: '/sessions', label: 'Sessions', keywords: 'sessions active live', icon: Radio },
   { to: '/conversations', label: 'Conversations', keywords: 'conversations messages chat', icon: MessageSquare },
-  { to: '/routing', label: 'Routing', keywords: 'routing providers rules models', icon: Route },
+  { to: '/providers', label: 'Providers', keywords: 'providers api keys base url proxy credentials', icon: Server },
+  { to: '/models', label: 'Models', keywords: 'models cost rates default providers fallback', icon: Boxes },
+  { to: '/routing', label: 'Routing', keywords: 'routing rules tenant override providers models', icon: Route },
   { to: '/keys', label: 'Keys', keywords: 'keys api virtual scoped models access', icon: KeyRound },
   { to: '/budgets', label: 'Budgets', keywords: 'budgets spend limits cap cost enforce', icon: Wallet },
   { to: '/compliance', label: 'Compliance', keywords: 'compliance hipaa pci gdpr legal soc2 packs', icon: Shield },

@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/bzdvdn/maskchain/src/cmd/internal/bootstrap"
+	"github.com/bzdvdn/maskchain/src/internal/adapters/provider"
 	analyticsrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/analytics"
 	conversationrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/conversation"
 	dictionaryrepo "github.com/bzdvdn/maskchain/src/internal/adapters/repository/dictionary"
@@ -155,10 +156,12 @@ func run() {
 		if len(targets) > 0 {
 			healthChecker.StartBackgroundRefresh(context.Background(), 30*time.Second, targets)
 		}
-		routingHandler := admin.NewRoutingHandler(postgres.NewPostgresRegistryRepository(b.PGPool), healthChecker, auditAdapter)
+		// @sk-task routing-ia#T2.3: pass cost rates and tx runner for atomic provider+models (AC-004)
+		costRateStore := analyticsrepo.NewPostgresCostRateStore(b.PGPool)
+		routingHandler := admin.NewRoutingHandler(postgres.NewPostgresRegistryRepository(b.PGPool), costRateStore, txMgr, provider.NewModelDiscoverer(cfg.Egress), healthChecker, auditAdapter)
 		srv.RegisterRoutingHandler(routingHandler)
 
-		costRateHandler := admin.NewCostRateHandler(analyticsrepo.NewPostgresCostRateStore(b.PGPool), auditAdapter)
+		costRateHandler := admin.NewCostRateHandler(costRateStore, auditAdapter)
 		srv.RegisterCostRateHandler(costRateHandler)
 
 		// @sk-task 301-budget-enforcement#T3.3: Register budget CRUD handler (AC-006)

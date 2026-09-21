@@ -538,3 +538,81 @@ func TestHealthCheckerNoEndpoint(t *testing.T) {
 		t.Errorf("expected healthy (no endpoint), got %v", status)
 	}
 }
+
+// @sk-test routing-ia#T4.1: global default fallback and tenant precedence (AC-001, AC-002, AC-009)
+func TestRouteSelectorGlobalFallback(t *testing.T) {
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
+			{Name: "openai", BaseURL: "https://api.openai.com"},
+			{Name: "azure", BaseURL: "https://azure.openai.com"},
+		},
+		Rules: []routing.RuleConfig{
+			{Tenant: routing.GlobalTenant, Routes: []routing.RouteConfig{
+				{Model: "gpt-4", Providers: []string{"openai"}},
+			}},
+			{Tenant: "alpha", Routes: []routing.RouteConfig{
+				{Model: "gpt-4", Providers: []string{"azure"}},
+			}},
+		},
+	}
+	reg, _ := NewProviderRegistry(cfg)
+	sel := NewRouteSelector(reg)
+
+	// Tenant without an override uses the global default.
+	p, _, err := sel.Select("gpt-4", "beta")
+	if err != nil || p == nil || p.Name != "openai" {
+		t.Fatalf("expected global openai for beta, got %v (err=%v)", p, err)
+	}
+
+	// Tenant override wins.
+	if p, _, _ = sel.Select("gpt-4", "alpha"); p.Name != "azure" {
+		t.Errorf("expected tenant azure for alpha, got %s", p.Name)
+	}
+
+	// Existing default behavior: an empty tenant normalizes to "default" and falls back to global.
+	if p, _, _ = sel.Select("gpt-4", ""); p.Name != "openai" {
+		t.Errorf("expected global openai for empty tenant, got %s", p.Name)
+	}
+
+	// Provider list also falls back.
+	providers, err := sel.GetProviderList("gpt-4", "beta")
+	if err != nil || len(providers) != 1 || providers[0] != "openai" {
+		t.Errorf("GetProviderList beta = %v (err=%v), want [openai]", providers, err)
+	}
+
+	// No route anywhere keeps the no-route error.
+	if _, _, err := sel.Select("unknown-model", "beta"); !errors.Is(err, ErrNoRoute) {
+		t.Errorf("expected ErrNoRoute, got %v", err)
+	}
+}
+
+// @sk-test routing-ia#T4.1: editing the global default does not change a tenant override (AC-010)
+func TestRouteSelectorOverrideIsolation(t *testing.T) {
+	build := func(globalProvider string) *RouteSelector {
+		cfg := &routing.RoutingConfig{
+			Providers: []routing.ProviderConfig{
+				{Name: "openai", BaseURL: "https://api.openai.com"},
+				{Name: "azure", BaseURL: "https://azure.openai.com"},
+				{Name: "anthropic", BaseURL: "https://api.anthropic.com"},
+			},
+			Rules: []routing.RuleConfig{
+				{Tenant: routing.GlobalTenant, Routes: []routing.RouteConfig{
+					{Model: "gpt-4", Providers: []string{globalProvider}},
+				}},
+				{Tenant: "alpha", Routes: []routing.RouteConfig{
+					{Model: "gpt-4", Providers: []string{"azure"}},
+				}},
+			},
+		}
+		reg, _ := NewProviderRegistry(cfg)
+		return NewRouteSelector(reg)
+	}
+
+	// Changing the global default (openai -> anthropic) leaves the alpha override intact.
+	if p, _, _ := build("openai").Select("gpt-4", "alpha"); p.Name != "azure" {
+		t.Errorf("alpha override changed with global=openai: %s", p.Name)
+	}
+	if p, _, _ := build("anthropic").Select("gpt-4", "alpha"); p.Name != "azure" {
+		t.Errorf("alpha override changed with global=anthropic: %s", p.Name)
+	}
+}

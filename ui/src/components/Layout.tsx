@@ -22,6 +22,8 @@ import {
   Download,
   ChevronDown,
   FlaskConical,
+  Server,
+  Boxes,
 } from 'lucide-react'
 import { logout } from '../api/admin'
 import { listTenants } from '../api/tenants'
@@ -67,9 +69,16 @@ const navSections: Section[] = [
     ],
   },
   {
+    label: 'Routing',
+    items: [
+      { to: '/providers', label: 'Providers', icon: Server },
+      { to: '/models', label: 'Models', icon: Boxes },
+      { to: '/routing', label: 'Routing', icon: Route },
+    ],
+  },
+  {
     label: 'Operations',
     items: [
-      { to: '/routing', label: 'Routing', icon: Route },
       { to: '/playground', label: 'Playground', icon: FlaskConical },
       { to: '/audit', label: 'Audit Log', icon: ScrollText },
     ],

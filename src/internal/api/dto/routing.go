@@ -45,6 +45,22 @@ type ProviderRequest struct {
 	AWSRegion          string            `json:"aws_region"`
 	AWSAccessKeyID     string            `json:"aws_access_key_id"`
 	AWSSecretAccessKey string            `json:"aws_secret_access_key"`
+	// @sk-task routing-ia#T1.2: optional model ids attached on save (AC-004)
+	Models []string `json:"models,omitempty"`
+}
+
+// @sk-task routing-ia#T1.2: model aggregate for the Models page (AC-003)
+//
+// ModelAggregate is one row of GET /api/v1/routing/models: the model's cost, its
+// global default providers, and how many tenants override it.
+type ModelAggregate struct {
+	Model            string   `json:"model"`
+	InputPricePer1K  float64  `json:"input_price_per_1k"`
+	OutputPricePer1K float64  `json:"output_price_per_1k"`
+	Currency         string   `json:"currency"`
+	DefaultProviders []string `json:"default_providers"`
+	OverrideCount    int      `json:"override_count"`
+	Source           string   `json:"source"`
 }
 
 type ProviderResponse struct {

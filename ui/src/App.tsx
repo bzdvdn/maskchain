@@ -15,6 +15,8 @@ const Analytics = lazy(() => import('./pages/Analytics').then((m) => ({ default:
 const Sessions = lazy(() => import('./pages/Sessions').then((m) => ({ default: m.Sessions })))
 const Conversations = lazy(() => import('./pages/Conversations').then((m) => ({ default: m.Conversations })))
 const Routing = lazy(() => import('./pages/Routing').then((m) => ({ default: m.Routing })))
+const Providers = lazy(() => import('./pages/Providers').then((m) => ({ default: m.Providers })))
+const Models = lazy(() => import('./pages/Models').then((m) => ({ default: m.Models })))
 const Keys = lazy(() => import('./pages/Keys').then((m) => ({ default: m.Keys })))
 const Budgets = lazy(() => import('./pages/Budgets').then((m) => ({ default: m.Budgets })))
 const AuditLog = lazy(() => import('./pages/AuditLog').then((m) => ({ default: m.AuditLog })))
@@ -89,6 +91,8 @@ function App() {
         <Route path="/analytics" element={<PageBoundary><Analytics /></PageBoundary>} />
         <Route path="/sessions" element={<PageBoundary><Sessions /></PageBoundary>} />
         <Route path="/conversations" element={<PageBoundary><Conversations /></PageBoundary>} />
+        <Route path="/providers" element={<PageBoundary><Providers /></PageBoundary>} />
+        <Route path="/models" element={<PageBoundary><Models /></PageBoundary>} />
         <Route path="/routing" element={<PageBoundary><Routing /></PageBoundary>} />
         <Route path="/keys" element={<PageBoundary><Keys /></PageBoundary>} />
         <Route path="/budgets" element={<PageBoundary><Budgets /></PageBoundary>} />
