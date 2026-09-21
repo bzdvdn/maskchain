@@ -14,6 +14,8 @@ type BudgetRepository interface {
 	Delete(ctx context.Context, id string) error
 	GetByID(ctx context.Context, id string) (*Budget, error)
 	List(ctx context.Context) ([]*Budget, error)
+	// @sk-task ui-production-readiness#T7.1: DB-level pagination/search (AC-008)
+	ListPaged(ctx context.Context, limit, offset int, search string) ([]*Budget, int, error)
 	ListByTenant(ctx context.Context, tenantID string) ([]*Budget, error)
 	// ListActiveForRequest returns enabled budgets that match the request context
 	// (tenant and/or key and/or model scope).

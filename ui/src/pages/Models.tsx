@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useAsyncData } from '../hooks/useAsyncData'
-import { Button, EmptyState, StatusPill } from '../components/ui'
+import { AsyncSection, Button, Modal, StatusPill } from '../components/ui'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { useToast } from '../components/Toast'
 import {
@@ -21,17 +21,20 @@ export function Models() {
   const [models, setModels] = useState<ModelAggregate[]>([])
   const [providers, setProviders] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<unknown>(null)
   const [editing, setEditing] = useState<ModelAggregate | null>(null)
   const [deleting, setDeleting] = useState<ModelAggregate | null>(null)
   const [busy, setBusy] = useState(false)
 
   const reload = async () => {
     setLoading(true)
+    setError(null)
     try {
       const [m, p] = await Promise.all([listModels(), listProviders()])
       setModels(m ?? [])
       setProviders((p ?? []).map((x: ProviderDto) => x.name).sort())
-    } catch {
+    } catch (err) {
+      setError(err)
       toast('Failed to load models', 'error')
     } finally {
       setLoading(false)
@@ -100,7 +103,16 @@ export function Models() {
                 <th className="num">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <AsyncSection
+              as="tbody"
+              colSpan={7}
+              loading={loading}
+              error={error}
+              onRetry={reload}
+              empty={rows.length === 0}
+              emptyMessage="No models yet"
+              emptyAction={<Button size="small" onClick={() => setEditing({ model: '', input_price_per_1k: 0, output_price_per_1k: 0, currency: 'USD', default_providers: [], override_count: 0 })}>Add Model</Button>}
+            >
               {rows.map((m) => (
                 <tr key={m.model}>
                   <td className="mono">{m.model}</td>
@@ -130,16 +142,7 @@ export function Models() {
                   </td>
                 </tr>
               ))}
-              {!loading && rows.length === 0 && (
-                <tr><td colSpan={7}>
-                  <EmptyState
-                    message="No models yet"
-                    action={<Button size="small" onClick={() => setEditing({ model: '', input_price_per_1k: 0, output_price_per_1k: 0, currency: 'USD', default_providers: [], override_count: 0 })}>Add Model</Button>}
-                  />
-                </td></tr>
-              )}
-              {loading && <tr><td colSpan={7} className="tbl-progress">Loading models…</td></tr>}
-            </tbody>
+            </AsyncSection>
           </table>
         </div>
         <div className="muted meta-sm" style={{ padding: '8px 12px' }}>
@@ -197,11 +200,18 @@ function ModelModal({
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal generic-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <h3>{isNew ? 'Add Model' : 'Edit Model'}</h3>
-        {err && <div className="confirm-dialog u-mt8"><p>{err}</p></div>}
-        <div className="modal-body">
+    <Modal
+      open
+      onClose={onClose}
+      title={isNew ? 'Add Model' : 'Edit Model'}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={submit}>Save</Button>
+        </>
+      }
+    >
+      {err && <div className="confirm-dialog u-mt8"><p>{err}</p></div>}
           <div className="form-field">
             <label>Model id</label>
             <input value={m.model} onChange={(e) => set({ model: e.target.value })} placeholder="openai/gpt-4o-mini" disabled={!isNew} />
@@ -222,12 +232,6 @@ function ModelModal({
             {selected.length === 0 && <div className="muted meta-sm">No default providers: this model routes nowhere until configured.</div>}
           </div>
           {!isNew && <div className="muted meta-sm">{m.override_count} tenant override{m.override_count === 1 ? '' : 's'} — edit on the Routing page.</div>}
-        </div>
-        <div className="form-actions">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" onClick={submit}>Save</Button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

@@ -101,6 +101,55 @@ func TestHandleLogout(t *testing.T) {
 	}
 }
 
+// @sk-test ui-production-readiness#T5.2: Cookie hardening over HTTPS/HTTP (AC-004)
+func TestHandleLoginCookieHardening(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := newTestAuthHandler("admin", "test123")
+
+	t.Run("https sets Secure, HttpOnly and SameSite", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(w)
+		ctx.Request = httptest.NewRequest(http.MethodPost, "/api/v1/admin/login",
+			bytes.NewBufferString(`{"username":"admin","password":"test123"}`))
+		ctx.Request.Header.Set("Content-Type", "application/json")
+		ctx.Request.Header.Set("X-Forwarded-Proto", "https")
+		h.HandleLogin(ctx)
+
+		c := findCookie(t, w, "admin_token")
+		if !c.Secure {
+			t.Error("expected Secure cookie over HTTPS")
+		}
+		if !c.HttpOnly {
+			t.Error("expected HttpOnly cookie")
+		}
+		if c.SameSite != http.SameSiteLaxMode {
+			t.Errorf("SameSite = %v, want Lax", c.SameSite)
+		}
+	})
+
+	t.Run("http is not Secure", func(t *testing.T) {
+		w := doLoginRequest(t, h, `{"username":"admin","password":"test123"}`)
+		c := findCookie(t, w, "admin_token")
+		if c.Secure {
+			t.Error("expected non-secure cookie over plain HTTP")
+		}
+		if c.SameSite != http.SameSiteLaxMode {
+			t.Errorf("SameSite = %v, want Lax", c.SameSite)
+		}
+	})
+}
+
+func findCookie(t *testing.T, w *httptest.ResponseRecorder, name string) *http.Cookie {
+	t.Helper()
+	for _, c := range w.Result().Cookies() {
+		if c.Name == name {
+			return c
+		}
+	}
+	t.Fatalf("cookie %q not found", name)
+	return nil
+}
+
 // -- helpers --
 
 func newTestAuthHandler(username, password string) *AdminAuthHandler {

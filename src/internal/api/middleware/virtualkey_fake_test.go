@@ -44,6 +44,20 @@ func (f *fakeVirtualKeyRepo) List(_ context.Context) ([]*virtualkey.VirtualKey, 
 	return f.keys, nil
 }
 
+// @sk-task ui-production-readiness#T7.1: DB-level pagination/search (AC-008)
+func (f *fakeVirtualKeyRepo) ListPaged(_ context.Context, limit, offset int, _ string) ([]*virtualkey.VirtualKey, int, error) {
+	total := len(f.keys)
+	start := offset
+	if start > total {
+		start = total
+	}
+	end := start + limit
+	if end > total {
+		end = total
+	}
+	return f.keys[start:end], total, nil
+}
+
 func (f *fakeVirtualKeyRepo) Create(_ context.Context, k *virtualkey.VirtualKey) error {
 	f.keys = append(f.keys, k)
 	return nil

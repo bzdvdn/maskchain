@@ -1,25 +1,26 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { listTenants, type TenantListItem } from '../../api/tenants'
-import { Badge, EmptyState, Spinner } from '../../components/ui'
+import { listTenantsPage, type TenantListItem } from '../../api/tenants'
+import { AsyncSection, Pagination, Spinner, StatusPill, statusTone } from '../../components/ui'
 import { useAsyncData } from '../../hooks/useAsyncData'
 
+const PER_PAGE = 20
+
 export function TenantList() {
-  const [error, setError] = useState<string | null>(null)
-  const { data: tenants, loading } = useAsyncData<TenantListItem[]>(
-    listTenants,
-    [],
-    { onError: () => setError('Failed to load tenants. Please try again.') },
+  const [page, setPage] = useState(1)
+  const [search, setSearch] = useState('')
+
+  const { data, loading, error, refetch } = useAsyncData(
+    () => listTenantsPage({ page, perPage: PER_PAGE, search }),
+    [page, search],
   )
+  const tenants = data?.items ?? []
+  const total = data?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / PER_PAGE))
 
-  useEffect(() => {
-    if (!error) return
-    const t = setTimeout(() => setError(null), 4000)
-    return () => clearTimeout(t)
-  }, [error])
-
-  if (loading) {
-    return <Spinner label="Loading tenants..." />
+  function onSearch(value: string) {
+    setSearch(value)
+    setPage(1)
   }
 
   return (
@@ -31,14 +32,26 @@ export function TenantList() {
         </Link>
       </div>
 
-      {error && <div className="error-banner">{error}</div>}
+      <div className="toolbar">
+        <div className="search">
+          <input
+            placeholder="Search by slug or name…"
+            value={search}
+            onChange={(e) => onSearch(e.target.value)}
+            aria-label="Search tenants"
+          />
+        </div>
+      </div>
 
-      {!tenants || tenants.length === 0 ? (
-        <EmptyState
-          message="No tenants yet."
-          action={<Link to="/tenants/new" className="btn btn-primary" style={{ width: 'auto' }}>Create your first tenant</Link>}
-        />
-      ) : (
+      <AsyncSection
+        loading={loading}
+        error={error}
+        onRetry={refetch}
+        empty={tenants.length === 0}
+        emptyMessage={search ? 'No tenants match your search.' : 'No tenants yet.'}
+        emptyAction={<Link to="/tenants/new" className="btn btn-primary" style={{ width: 'auto' }}>Create your first tenant</Link>}
+        skeleton={<Spinner label="Loading tenants..." />}
+      >
         <div className="card">
           <div className="table-wrap">
             <table>
@@ -52,12 +65,14 @@ export function TenantList() {
                 </tr>
               </thead>
               <tbody>
-                {tenants.map((t) => (
+                {tenants.map((t: TenantListItem) => (
                   <tr key={t.slug}>
                     <td><code>{t.slug}</code></td>
                     <td>{t.name}</td>
                     <td>
-                      <Badge value={t.pii_config?.enabled ? 'On' : 'No rules'} />
+                      <StatusPill tone={statusTone(t.pii_config?.enabled ? 'On' : 'No rules')} withDot={false}>
+                        {t.pii_config?.enabled ? 'On' : 'No rules'}
+                      </StatusPill>
                     </td>
                     <td>{t.created_at ? new Date(t.created_at).toLocaleDateString() : '—'}</td>
                     <td>
@@ -71,6 +86,10 @@ export function TenantList() {
             </table>
           </div>
         </div>
+      </AsyncSection>
+
+      {total > PER_PAGE && (
+        <Pagination page={page} totalPages={totalPages} total={total} onPage={setPage} />
       )}
     </div>
   )

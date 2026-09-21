@@ -17,6 +17,24 @@ type mockTenantRepo struct {
 func (m *mockTenantRepo) List(ctx context.Context) ([]*entity.Tenant, error) {
 	return m.listFn()
 }
+
+// @sk-task ui-production-readiness#T7.1: DB-level pagination/search (AC-008)
+func (m *mockTenantRepo) ListPaged(ctx context.Context, limit, offset int, _ string) ([]*entity.Tenant, int, error) {
+	all, err := m.listFn()
+	if err != nil {
+		return nil, 0, err
+	}
+	total := len(all)
+	start := offset
+	if start > total {
+		start = total
+	}
+	end := start + limit
+	if end > total {
+		end = total
+	}
+	return all[start:end], total, nil
+}
 func (m *mockTenantRepo) Get(ctx context.Context, slug value.TenantSlug) (*entity.Tenant, error) {
 	return m.getFn(ctx, slug)
 }

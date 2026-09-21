@@ -13,6 +13,8 @@ import (
 // TenantRepository defines the interface for domain operations.
 type TenantRepository interface {
 	List(ctx context.Context) ([]*entity.Tenant, error)
+	// @sk-task ui-production-readiness#T7.1: DB-level pagination/search (AC-008)
+	ListPaged(ctx context.Context, limit, offset int, search string) ([]*entity.Tenant, int, error)
 	Get(ctx context.Context, slug value.TenantSlug) (*entity.Tenant, error)
 	Create(ctx context.Context, tenant *entity.Tenant) error
 	Update(ctx context.Context, tenant *entity.Tenant) error

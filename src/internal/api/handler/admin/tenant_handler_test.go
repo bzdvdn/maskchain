@@ -3,12 +3,15 @@ package admin
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/bzdvdn/maskchain/src/internal/api/dto"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 )
@@ -96,4 +99,70 @@ func TestTenantHandler_UpdateInvalidRetentionMode(t *testing.T) {
 	if tenant.RetentionMode() != value.RetentionModeFull {
 		t.Errorf("RetentionMode = %q, want unchanged %q", tenant.RetentionMode(), value.RetentionModeFull)
 	}
+}
+
+// @sk-test ui-production-readiness#T5.2: Tenant list pagination/search (AC-008)
+func TestListTenantsPagination(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := newFakeTenantRepo()
+	for _, slug := range []string{"acme", "beta", "gamma"} {
+		s, err := value.NewTenantSlug(slug)
+		if err != nil {
+			t.Fatalf("slug: %v", err)
+		}
+		if err := repo.Create(context.Background(), entity.NewTenant(s, strings.ToUpper(slug), "X-Auth")); err != nil {
+			t.Fatalf("create: %v", err)
+		}
+	}
+	h := NewTenantHandler(repo, nil, nil)
+
+	router := gin.New()
+	router.GET("/api/v1/tenants", h.ListTenants)
+
+	t.Run("search narrows and reports total", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/tenants?limit=2&offset=0&search=acme", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+		var body struct {
+			Data       []dto.TenantResponse `json:"data"`
+			Pagination struct {
+				Total int `json:"total"`
+			} `json:"pagination"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if body.Pagination.Total != 1 {
+			t.Errorf("total = %d, want 1", body.Pagination.Total)
+		}
+		if len(body.Data) != 1 || body.Data[0].Slug != "acme" {
+			t.Errorf("data = %+v, want only acme", body.Data)
+		}
+	})
+
+	t.Run("limit pages the result and keeps the full total", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/tenants?limit=2&offset=0", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		var body struct {
+			Data       []dto.TenantResponse `json:"data"`
+			Pagination struct {
+				Total int `json:"total"`
+			} `json:"pagination"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if body.Pagination.Total != 3 {
+			t.Errorf("total = %d, want 3", body.Pagination.Total)
+		}
+		if len(body.Data) != 2 {
+			t.Errorf("len(data) = %d, want 2", len(body.Data))
+		}
+	})
 }

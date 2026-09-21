@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useAsyncData } from '../hooks/useAsyncData'
-import { Button, EmptyState, StatusPill } from '../components/ui'
+import { useWorkspace } from '../hooks/useWorkspace'
+import { useAutoRefresh } from '../hooks/useAutoRefresh'
+import { AsyncSection, Button, Modal, StatusPill } from '../components/ui'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { useToast } from '../components/Toast'
 import { Link } from 'react-router-dom'
@@ -22,18 +24,21 @@ export function Routing() {
   const [models, setModels] = useState<ModelAggregate[]>([])
   const [providers, setProviders] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<unknown>(null)
   const [editing, setEditing] = useState<RouteDto | null>(null)
   const [deleting, setDeleting] = useState<RouteDto | null>(null)
   const [busy, setBusy] = useState(false)
 
   const reload = async () => {
     setLoading(true)
+    setError(null)
     try {
       const [r, m, p] = await Promise.all([listRoutes(), listModels(), listProviders()])
       setRoutes(r ?? [])
       setModels(m ?? [])
       setProviders((p ?? []).map((x) => x.name).sort())
-    } catch {
+    } catch (err) {
+      setError(err)
       toast('Failed to load routing', 'error')
     } finally {
       setLoading(false)
@@ -45,7 +50,13 @@ export function Routing() {
     return null
   }, [])
 
-  const overrides = useMemo(() => routes.filter((r) => r.tenant !== GLOBAL_TENANT), [routes])
+  useAutoRefresh(reload, 30)
+
+  const [workspace] = useWorkspace()
+  const overrides = useMemo(
+    () => routes.filter((r) => r.tenant !== GLOBAL_TENANT && (workspace === '' || r.tenant === workspace)),
+    [routes, workspace],
+  )
   const inheriting = useMemo(
     () => models.filter((m) => m.override_count === 0 && (m.default_providers ?? []).length > 0),
     [models],
@@ -93,7 +104,16 @@ export function Routing() {
             <thead>
               <tr><th>Tenant</th><th>Model</th><th>Providers (fallback order)</th><th className="num">Actions</th></tr>
             </thead>
-            <tbody>
+            <AsyncSection
+              as="tbody"
+              colSpan={4}
+              loading={loading}
+              error={error}
+              onRetry={reload}
+              empty={overrides.length === 0}
+              emptyMessage="No tenant overrides — every tenant uses the default providers from Models"
+              emptyAction={<Button size="small" onClick={() => setEditing({ tenant: 'default', model: '', providers: [] })}>Add Override</Button>}
+            >
               {overrides.map((r) => (
                 <tr key={`${r.tenant}/${r.model}`}>
                   <td><code>{tenantLabel(r.tenant)}</code></td>
@@ -114,16 +134,7 @@ export function Routing() {
                   </td>
                 </tr>
               ))}
-              {!loading && overrides.length === 0 && (
-                <tr><td colSpan={4}>
-                  <EmptyState
-                    message="No tenant overrides — every tenant uses the default providers from Models"
-                    action={<Button size="small" onClick={() => setEditing({ tenant: 'default', model: '', providers: [] })}>Add Override</Button>}
-                  />
-                </td></tr>
-              )}
-              {loading && <tr><td colSpan={4} className="tbl-progress">Loading overrides…</td></tr>}
-            </tbody>
+            </AsyncSection>
           </table>
         </div>
         <div className="muted meta-sm" style={{ padding: '8px 12px' }}>
@@ -138,7 +149,13 @@ export function Routing() {
             <thead>
               <tr><th>Model</th><th>Default providers (fallback order)</th><th className="num">Overrides</th></tr>
             </thead>
-            <tbody>
+            <AsyncSection
+              as="tbody"
+              colSpan={3}
+              loading={loading}
+              empty={inheriting.length === 0}
+              emptyMessage="No models with a global default"
+            >
               {inheriting.map((m) => (
                 <tr key={m.model}>
                   <td className="mono">{m.model}</td>
@@ -153,10 +170,7 @@ export function Routing() {
                   <td className="num"><StatusPill tone="gray" withDot={false}>inherited</StatusPill></td>
                 </tr>
               ))}
-              {!loading && inheriting.length === 0 && (
-                <tr><td colSpan={3}><EmptyState message="No models with a global default" /></td></tr>
-              )}
-            </tbody>
+            </AsyncSection>
           </table>
         </div>
       </div>
@@ -216,11 +230,18 @@ function OverrideModal({
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal generic-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <h3>{isNew ? 'Add Override' : 'Edit Override'}</h3>
-        {err && <div className="confirm-dialog u-mt8"><p>{err}</p></div>}
-        <div className="modal-body">
+    <Modal
+      open
+      onClose={onClose}
+      title={isNew ? 'Add Override' : 'Edit Override'}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={submit}>Save</Button>
+        </>
+      }
+    >
+      {err && <div className="confirm-dialog u-mt8"><p>{err}</p></div>}
           <div className="form-field">
             <label>Tenant</label>
             <input value={r.tenant === '' ? 'default' : r.tenant} onChange={(e) => set({ tenant: e.target.value })} placeholder="default" disabled={!isNew} />
@@ -243,12 +264,6 @@ function OverrideModal({
               ))}
             </div>
           </div>
-        </div>
-        <div className="form-actions">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" onClick={submit}>Save</Button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

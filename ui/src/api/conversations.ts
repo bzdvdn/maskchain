@@ -1,3 +1,5 @@
+import { apiFetch } from './client'
+
 const BASE = '/api/v1/conversations'
 
 // @sk-task conversation-logging#T3.2: Conversation list item type (AC-006)
@@ -30,6 +32,11 @@ interface ConversationListResult {
   pagination: { page: number; per_page: number; total: number }
 }
 
+interface ConversationListEnvelope {
+  data: { items: ConversationListItem[] }
+  pagination?: { page: number; per_page: number; total: number }
+}
+
 export interface ConversationFilters {
   tenant_id?: string
   status?: string
@@ -51,19 +58,16 @@ export async function listConversations(
   if (filters.status) params.set('status', filters.status)
   if (filters.model) params.set('model', filters.model)
   if (filters.masked) params.set('masked', filters.masked)
-  const res = await fetch(`${BASE}?${params.toString()}`, { credentials: 'include' })
-  if (!res.ok) throw new Error('failed to load conversations')
-  const body = await res.json()
+  const body = await apiFetch<ConversationListEnvelope>(`${BASE}?${params.toString()}`, {
+    raw: true,
+  })
   return {
-    items: (body.data?.items ?? []) as ConversationListItem[],
+    items: body.data?.items ?? [],
     pagination: body.pagination ?? { page, per_page: perPage, total: 0 },
   }
 }
 
 // @sk-task conversation-logging#T3.2: getConversation fetches a single record with payload (AC-005)
 export async function getConversation(id: string): Promise<ConversationDetail> {
-  const res = await fetch(`${BASE}/${encodeURIComponent(id)}`, { credentials: 'include' })
-  if (!res.ok) throw new Error('failed to load conversation')
-  const body = await res.json()
-  return body.data ?? body
+  return apiFetch<ConversationDetail>(`${BASE}/${encodeURIComponent(id)}`)
 }

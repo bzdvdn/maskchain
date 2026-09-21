@@ -67,6 +67,11 @@ func (c *countingKeyRepo) List(ctx context.Context) ([]*virtualkey.VirtualKey, e
 	return c.repo.List(ctx)
 }
 
+// @sk-task ui-production-readiness#T7.1: DB-level pagination/search (AC-008)
+func (c *countingKeyRepo) ListPaged(ctx context.Context, limit, offset int, search string) ([]*virtualkey.VirtualKey, int, error) {
+	return c.repo.ListPaged(ctx, limit, offset, search)
+}
+
 func (c *countingKeyRepo) Create(ctx context.Context, k *virtualkey.VirtualKey) error {
 	return c.repo.Create(ctx, k)
 }

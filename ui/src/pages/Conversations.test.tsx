@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { Conversations } from './Conversations'
+
+function renderConversations() {
+  return render(<MemoryRouter><Conversations /></MemoryRouter>)
+}
 import type {
   ConversationDetail,
   ConversationListItem,
@@ -47,7 +52,7 @@ describe('Conversations list', () => {
       pagination: { page: 1, per_page: 20, total: 2 },
     })
 
-    render(<Conversations />)
+    renderConversations()
 
     expect(await screen.findByText(/id-1/)).toBeTruthy()
     expect(screen.getAllByText('tenant-a').length).toBe(3)
@@ -62,7 +67,7 @@ describe('Conversations list', () => {
       pagination: { page: 1, per_page: 20, total: 1 },
     })
 
-    render(<Conversations />)
+    renderConversations()
 
     await screen.findByText(/id-1/)
 
@@ -78,7 +83,7 @@ describe('Conversations list', () => {
   it('shows empty state when no records', async () => {
     mockList.mockResolvedValueOnce({ items: [], pagination: { page: 1, per_page: 20, total: 0 } })
 
-    render(<Conversations />)
+    renderConversations()
 
     expect(await screen.findByText('No conversations')).toBeTruthy()
   })
@@ -112,7 +117,7 @@ describe('Conversations detail', () => {
     }
     mockGet.mockResolvedValueOnce(detail)
 
-    render(<Conversations />)
+    renderConversations()
 
     fireEvent.click(await screen.findByText(/id-1/))
 
@@ -131,7 +136,7 @@ describe('Conversations detail', () => {
     })
     mockGet.mockRejectedValueOnce(new Error('boom'))
 
-    render(<Conversations />)
+    renderConversations()
 
     fireEvent.click(await screen.findByText(/id-1/))
 
@@ -155,7 +160,7 @@ describe('Conversations detail', () => {
     }
     mockGet.mockResolvedValueOnce(detail)
 
-    render(<Conversations />)
+    renderConversations()
 
     const row = (await screen.findByText(/id-1/)).closest('tr')!
     fireEvent.click(row)

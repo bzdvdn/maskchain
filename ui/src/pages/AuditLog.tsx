@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useAsyncData } from '../hooks/useAsyncData'
-import { Card, EmptyState, SortHeader, TableSkeleton } from '../components/ui'
+import { useUrlFilters } from '../hooks/useUrlFilters'
+import { AsyncSection, Card, SortHeader, TableSkeleton } from '../components/ui'
 import { useSort, sortRows } from '../hooks/useSort'
 import { CopyButton } from '../components/CopyButton'
 import { TimeRangePicker, type RangeValue } from '../components/TimeRangePicker'
@@ -13,13 +14,19 @@ async function fetchAudit(): Promise<AuditEntry[]> {
 type SortKey = keyof Pick<AuditEntry, 'created_at' | 'admin_username' | 'action' | 'target'>
 
 export function AuditLog() {
-  const { data: entries, loading } = useAsyncData<AuditEntry[]>(fetchAudit, [])
+  const { data: entries, loading, error, refetch } = useAsyncData<AuditEntry[]>(fetchAudit, [])
   const { key, dir, toggle } = useSort<AuditEntry>('created_at', 'desc')
+  const url = useUrlFilters()
   const [range, setRange] = useState<RangeValue>(() => {
     const to = new Date()
     const from = new Date(to.getTime() - 7 * 86400_000)
-    return { mode: '7d', from: from.toISOString(), to: to.toISOString() }
+    return { mode: (url.get('range') as RangeValue['mode']) || '7d', from: from.toISOString(), to: to.toISOString() }
   })
+
+  function changeRange(next: RangeValue) {
+    setRange(next)
+    url.set({ range: next.mode === '7d' ? undefined : next.mode })
+  }
   const { mode, from, to } = range
 
   const inRange = useMemo(() => {
@@ -45,7 +52,7 @@ export function AuditLog() {
     <Card>
       <div className="card-header-row">
         <h3>Events (last 100)</h3>
-        <TimeRangePicker value={range} onChange={setRange} />
+        <TimeRangePicker value={range} onChange={changeRange} />
       </div>
       <div className="table-wrap">
         <table>
@@ -58,7 +65,16 @@ export function AuditLog() {
               <th>Details</th>
             </tr>
           </thead>
-          <tbody>
+          <AsyncSection
+            as="tbody"
+            colSpan={5}
+            loading={loading}
+            error={error}
+            onRetry={refetch}
+            empty={rows.length === 0}
+            emptyMessage="No events"
+            skeleton={<TableSkeleton rows={4} cols={5} />}
+          >
             {rows.map((e) => (
               <tr key={e.id}>
                 <td>{new Date(e.created_at).toLocaleString()}</td>
@@ -73,9 +89,7 @@ export function AuditLog() {
                 </td>
               </tr>
             ))}
-            {!loading && rows.length === 0 && <tr><td colSpan={5}><EmptyState message="No events" /></td></tr>}
-            {loading && <tr><td colSpan={5}><TableSkeleton rows={4} cols={5} /></td></tr>}
-          </tbody>
+          </AsyncSection>
         </table>
       </div>
     </Card>

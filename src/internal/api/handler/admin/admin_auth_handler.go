@@ -2,6 +2,7 @@ package admin
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -10,6 +11,27 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/admin_session"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 )
+
+// @sk-task ui-production-readiness#T1.3: Harden the admin session cookie (AC-004)
+//
+// setSessionCookie writes the admin session cookie with an explicit SameSite
+// policy and Secure when the request arrived over HTTPS (directly or through a
+// TLS-terminating proxy), so local HTTP development keeps working.
+func setSessionCookie(c *gin.Context, value string, maxAge int) {
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie("admin_token", value, maxAge, "/", "", isSecureRequest(c), true)
+}
+
+func isSecureRequest(c *gin.Context) bool {
+	if c.Request.TLS != nil {
+		return true
+	}
+	if proto := c.GetHeader("X-Forwarded-Proto"); proto != "" {
+		first := strings.TrimSpace(strings.Split(proto, ",")[0])
+		return strings.EqualFold(first, "https")
+	}
+	return false
+}
 
 // @sk-task admin-ui-design#T2.2: AdminAuthHandler with login/logout (AC-001)
 //
@@ -62,7 +84,7 @@ func (h *AdminAuthHandler) HandleLogin(c *gin.Context) {
 	}
 
 	expiresAt := time.Now().Add(ttl)
-	c.SetCookie("admin_token", rawToken, int(ttl.Seconds()), "/", "", false, true)
+	setSessionCookie(c, rawToken, int(ttl.Seconds()))
 	c.JSON(http.StatusOK, loginResponse{
 		Token:     rawToken,
 		ExpiresAt: expiresAt.Unix(),
@@ -76,7 +98,7 @@ func (h *AdminAuthHandler) HandleLogout(c *gin.Context) {
 		if ok {
 			h.useCase.Delete(c.Request.Context(), sess.ID)
 		}
-		c.SetCookie("admin_token", "", -1, "/", "", false, true)
+		setSessionCookie(c, "", -1)
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "logged out"})
 }

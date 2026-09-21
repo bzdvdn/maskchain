@@ -1,5 +1,13 @@
 export type StatusTone = 'green' | 'amber' | 'red' | 'blue' | 'gray'
 
+// @sk-task ui-production-readiness#T2.3: Single status tone mapping (AC-007)
+export function statusTone(value: string): StatusTone {
+  const val = value.toLowerCase()
+  if (['ok', 'active', 'healthy', 'up', 'yes', 'enabled', 'on'].includes(val)) return 'green'
+  if (['error', 'blocked', 'expired', 'down', 'no', 'disabled', 'revoked'].includes(val)) return 'red'
+  return 'amber'
+}
+
 interface DotProps {
   tone?: StatusTone
   pulse?: boolean

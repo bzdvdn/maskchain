@@ -62,6 +62,33 @@ func (r *PostgresVirtualKeyRepository) List(ctx context.Context) ([]*virtualkey.
 	return collectVirtualKeys(rows)
 }
 
+// @sk-task ui-production-readiness#T7.1: DB-level pagination/search (AC-008)
+func (r *PostgresVirtualKeyRepository) ListPaged(ctx context.Context, limit, offset int, search string) ([]*virtualkey.VirtualKey, int, error) {
+	pattern := "%" + search + "%"
+
+	var total int
+	if err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM virtual_keys
+		WHERE $1 = '' OR id ILIKE $2 OR tenant_id ILIKE $2 OR label ILIKE $2`, search, pattern).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count virtual keys: %w", err)
+	}
+
+	rows, err := r.pool.Query(ctx, virtualKeySelect+`
+		WHERE $1 = '' OR id ILIKE $2 OR tenant_id ILIKE $2 OR label ILIKE $2
+		ORDER BY created_at DESC
+		LIMIT $3 OFFSET $4`, search, pattern, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list virtual keys: %w", err)
+	}
+	defer rows.Close()
+
+	keys, err := collectVirtualKeys(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	return keys, total, nil
+}
+
 // @sk-task 300-virtual-keys#T1.3: Create persists a new virtual key (AC-001)
 func (r *PostgresVirtualKeyRepository) Create(ctx context.Context, key *virtualkey.VirtualKey) error {
 	allowed, err := marshalStringSlice(key.AllowedModels)

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Download } from 'lucide-react'
 import { TimeRangePicker, useRange, usePersistedRange } from '../components/TimeRangePicker'
 import { TimeSeriesChart } from '../components/TimeSeriesChart'
-import { StatusPill, type StatusTone } from '../components/ui'
+import { AsyncSection, Spinner, StatusPill, type StatusTone } from '../components/ui'
 import { fmtTokens, groupNum, money, rangeSpanMs } from '../utils/format'
 import {
   getAnalyticsCost,
@@ -45,6 +45,7 @@ export function Analytics() {
   const [prev, setPrev] = useState({ total_cost: 0, request_count: 0, total_tokens: 0 })
   const [prevSeries, setPrevSeries] = useState<{ bucket: string; input_tokens: number; output_tokens: number }[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<unknown>(null)
 
   useEffect(() => {
     const onWorkspace = (e: Event) => setWorkspace((e as CustomEvent<string>).detail)
@@ -52,10 +53,11 @@ export function Analytics() {
     return () => window.removeEventListener('maskchain:workspace', onWorkspace)
   }, [])
 
-  useEffect(() => {
+  const load = useCallback(() => {
     setLoading(true)
+    setError(null)
     const prevWin = shiftWindow(from, to)
-    Promise.all([
+    return Promise.all([
       getAnalyticsTokens(from, to, workspace),
       getAnalyticsCost(from, to, workspace),
       getAnalyticsSeries(from, to, workspace),
@@ -72,9 +74,13 @@ export function Analytics() {
         setPrev({ total_cost: prevCost, request_count: prevReq, total_tokens: prevToks })
         setPrevSeries(Array.isArray(ps.series) ? ps.series : [])
       })
-      .catch(() => {})
+      .catch((err) => setError(err))
       .finally(() => setLoading(false))
   }, [from, to, workspace])
+
+  useEffect(() => {
+    load()
+  }, [load])
 
   const totalTokens = (tokens.totals?.total_input_tokens ?? 0) + (tokens.totals?.total_output_tokens ?? 0)
   const totalCost = cost.totals?.total_cost ?? 0
@@ -170,7 +176,16 @@ export function Analytics() {
             <h3>Usage over time</h3>
             {compare && <StatusPill tone="blue">compare on</StatusPill>}
           </div>
-          {loading && series.length === 0 ? <div className="loading">Loading…</div> : <TimeSeriesChart data={series} height={240} compare={compare ? prevSeries : undefined} spanMs={rangeSpanMs(range.mode, from, to)} />}
+          <AsyncSection
+            loading={loading && series.length === 0}
+            error={series.length === 0 ? error : null}
+            onRetry={load}
+            empty={!loading && series.length === 0}
+            emptyMessage="No data for this range."
+            skeleton={<Spinner label="Loading…" />}
+          >
+            <TimeSeriesChart data={series} height={240} compare={compare ? prevSeries : undefined} spanMs={rangeSpanMs(range.mode, from, to)} />
+          </AsyncSection>
         </div>
       )}
 
@@ -181,7 +196,15 @@ export function Analytics() {
               <thead>
                 <tr><th>Model</th><th className="num">Tenants</th><th className="num">Input</th><th className="num">Output</th><th className="num">Total</th><th className="num">Requests</th><th className="num">Cost</th></tr>
               </thead>
-              <tbody>
+              <AsyncSection
+                as="tbody"
+                colSpan={7}
+                loading={loading}
+                error={error}
+                onRetry={load}
+                empty={modelRows.length === 0}
+                emptyMessage="No data"
+              >
                 {modelRows.map((m) => (
                   <tr key={m.model}>
                     <td className="mono">{m.model}</td>
@@ -193,8 +216,7 @@ export function Analytics() {
                     <td className="num">{money(m.cost)}</td>
                   </tr>
                 ))}
-                {!loading && modelRows.length === 0 && <tr><td colSpan={7}><div className="empty-state">No data</div></td></tr>}
-              </tbody>
+              </AsyncSection>
             </table>
           </div>
         </div>
@@ -207,7 +229,15 @@ export function Analytics() {
               <thead>
                 <tr><th>Tenant</th><th className="num">Requests</th><th className="num">Cost</th></tr>
               </thead>
-              <tbody>
+              <AsyncSection
+                as="tbody"
+                colSpan={3}
+                loading={loading}
+                error={error}
+                onRetry={load}
+                empty={tenantRows.length === 0}
+                emptyMessage="No data"
+              >
                 {tenantRows.map((t) => (
                   <tr key={t.tenant}>
                     <td className="mono">{t.tenant}</td>
@@ -215,8 +245,7 @@ export function Analytics() {
                     <td className="num">{money(t.cost)}</td>
                   </tr>
                 ))}
-                {!loading && tenantRows.length === 0 && <tr><td colSpan={3}><div className="empty-state">No data</div></td></tr>}
-              </tbody>
+              </AsyncSection>
             </table>
           </div>
         </div>

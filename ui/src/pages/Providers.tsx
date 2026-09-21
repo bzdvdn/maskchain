@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useAsyncData } from '../hooks/useAsyncData'
-import { Button, ChipInput, EmptyState, StatusPill, type StatusTone } from '../components/ui'
+import { AsyncSection, Button, ChipInput, Modal, StatusPill, TableSkeleton, type StatusTone } from '../components/ui'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { useToast } from '../components/Toast'
 import { relativeTime } from '../utils/format'
@@ -30,17 +30,20 @@ export function Providers() {
   const [providers, setProviders] = useState<ProviderDto[]>([])
   const [models, setModels] = useState<ModelAggregate[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<unknown>(null)
   const [editing, setEditing] = useState<ProviderDto | null>(null)
   const [deleting, setDeleting] = useState<ProviderDto | null>(null)
   const [busy, setBusy] = useState(false)
 
   const reload = async () => {
     setLoading(true)
+    setError(null)
     try {
       const [p, m] = await Promise.all([listProviders(), listModels()])
       setProviders(p ?? [])
       setModels(m ?? [])
-    } catch {
+    } catch (err) {
+      setError(err)
       toast('Failed to load providers', 'error')
     } finally {
       setLoading(false)
@@ -90,12 +93,15 @@ export function Providers() {
             <Button size="small" onClick={() => setEditing({ name: '', base_url: '', api_type: 'openai', api_keys: [], models: [] })}>Add Provider</Button>
           </div>
         </div>
-        {!loading && cards.length === 0 ? (
-          <EmptyState
-            message="No providers configured"
-            action={<Button size="small" onClick={() => setEditing({ name: '', base_url: '', api_type: 'openai', api_keys: [], models: [] })}>Add Provider</Button>}
-          />
-        ) : (
+        <AsyncSection
+          loading={loading}
+          error={error}
+          onRetry={reload}
+          empty={cards.length === 0}
+          emptyMessage="No providers configured"
+          emptyAction={<Button size="small" onClick={() => setEditing({ name: '', base_url: '', api_type: 'openai', api_keys: [], models: [] })}>Add Provider</Button>}
+          skeleton={<TableSkeleton rows={3} cols={3} />}
+        >
           <div className="providers">
             {cards.map((p) => {
               const attached = modelsOf(p.name)
@@ -136,7 +142,7 @@ export function Providers() {
               )
             })}
           </div>
-        )}
+        </AsyncSection>
       </div>
 
       {editing && (
@@ -222,11 +228,18 @@ function ProviderModal({
   const maskedNote = (initial.api_keys ?? []).some(isMaskedKey)
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal generic-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <h3>{isNew ? 'Add Provider' : 'Edit Provider'}</h3>
-        {err && <div className="confirm-dialog u-mt8"><p>{err}</p></div>}
-        <div className="modal-body">
+    <Modal
+      open
+      onClose={onClose}
+      title={isNew ? 'Add Provider' : 'Edit Provider'}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={submit}>Save</Button>
+        </>
+      }
+    >
+      {err && <div className="confirm-dialog u-mt8"><p>{err}</p></div>}
           <div className="form-field"><label>Name</label><input value={p.name ?? ''} onChange={(e) => set({ name: e.target.value })} placeholder="openrouter" /></div>
           <div className="form-field">
             <label>API Type</label>
@@ -302,12 +315,6 @@ function ProviderModal({
             </div>
             <div className="muted meta-sm u-mt4">Attached models get this provider in their default provider chain; tenant overrides on the Routing page still win.</div>
           </div>
-        </div>
-        <div className="form-actions">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" onClick={submit}>Save</Button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

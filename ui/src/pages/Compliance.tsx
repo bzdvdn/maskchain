@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ShieldCheck, RefreshCw } from 'lucide-react'
-import { Button, Card, EmptyState, PageHeader, Spinner, StatusPill, type StatusTone } from '../components/ui'
+import { AsyncSection, Button, Card, PageHeader, Spinner, StatusPill, type StatusTone } from '../components/ui'
 import { useToast } from '../components/Toast'
 import { useWorkspace } from '../hooks/useWorkspace'
 import { useShieldCatalog } from '../hooks/useShieldCatalog'
@@ -130,13 +130,14 @@ export function Compliance() {
             </StatusPill>
           )}
         </div>
-        {loadingTenants ? (
-          <Spinner label="Loading..." />
-        ) : reportError ? (
-          <EmptyState message={`No report available for "${pack}". Apply the pack first, or check that the preset is loaded.`} />
-        ) : !report || report.rules.length === 0 ? (
-          <EmptyState message="No rules to report yet." />
-        ) : (
+        <AsyncSection
+          loading={loadingTenants}
+          error={reportError ? new Error(`No report available for "${pack}". Apply the pack first, or check that the preset is loaded.`) : null}
+          onRetry={() => loadReport(tenant, pack)}
+          empty={!report || report.rules.length === 0}
+          emptyMessage="No rules to report yet."
+          skeleton={<Spinner label="Loading..." />}
+        >
           <div className="table-wrap">
             <table>
               <thead>
@@ -149,7 +150,7 @@ export function Compliance() {
                 </tr>
               </thead>
               <tbody>
-                {report.rules.map((r) => (
+                {(report?.rules ?? []).map((r) => (
                   <tr key={r.detector_type}>
                     <td><code>{r.detector_type}</code></td>
                     <td>{r.expected_reaction}</td>
@@ -163,7 +164,7 @@ export function Compliance() {
               </tbody>
             </table>
           </div>
-        )}
+        </AsyncSection>
       </Card>
     </div>
   )

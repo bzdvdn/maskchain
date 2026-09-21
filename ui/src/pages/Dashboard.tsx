@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BarChart3, KeyRound, Shield, Users, Wallet, Zap, AlertTriangle, Plus } from 'lucide-react'
 import { TimeRangePicker, useRange, defaultRange, type RangeValue } from '../components/TimeRangePicker'
-import { Segmented, StatusPill, Button, type StatusTone } from '../components/ui'
+import { AsyncSection, Segmented, StatusPill, Button, type StatusTone } from '../components/ui'
 import { TimeSeriesChart, type ChartMetric } from '../components/TimeSeriesChart'
 import { relativeTime, money, fmtTokens, groupNum, rangeLabel, rangeSpanMs } from '../utils/format'
 import {
@@ -16,6 +16,7 @@ import { listProviders } from '../api/routing'
 import { listKeys } from '../api/keys'
 import { listConversations } from '../api/conversations'
 import { useGatewayBase } from '../hooks/useGatewayBase'
+import { useAutoRefresh } from '../hooks/useAutoRefresh'
 
 type Metric = ChartMetric
 
@@ -98,6 +99,7 @@ export function Dashboard() {
   const [attention, setAttention] = useState<AttentionItem[]>([])
   const [activity, setActivity] = useState<{ id: string; tenant_id: string; model: string; status: string; created_at: string }[]>([])
   const [error, setError] = useState('')
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     const onWorkspace = (e: Event) => setWorkspace((e as CustomEvent<string>).detail)
@@ -126,6 +128,8 @@ export function Dashboard() {
       setError('')
     } catch {
       setError('No data yet')
+    } finally {
+      setLoaded(true)
     }
   }, [from, to, workspace])
 
@@ -207,6 +211,13 @@ export function Dashboard() {
     loadSeries()
   }, [loadSeries, metric])
 
+  useAutoRefresh(() => {
+    loadKpis()
+    loadSeries()
+    loadAttention()
+    loadActivity()
+  }, 30)
+
   useEffect(() => {
     let active = true
     listConversations(1, 100, workspace ? { tenant_id: workspace } : {})
@@ -243,7 +254,11 @@ export function Dashboard() {
 
   return (
     <div>
-      {firstRun ? (
+      {!loaded ? (
+        <AsyncSection loading error={null}>
+          <div />
+        </AsyncSection>
+      ) : firstRun ? (
         <div className="onboard">
           <div className="onboard-title">Welcome to MaskChain</div>
           <p className="muted-sm">Your privacy-safe LLM gateway is up. Issue a virtual key and route your first request.</p>

@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useAsyncData } from '../hooks/useAsyncData'
-import { Badge, Button, EmptyState, SortHeader, TableSkeleton } from '../components/ui'
+import { AsyncSection, Button, EmptyState, Modal, Pagination, ProgressBar, SortHeader, StatusPill, statusTone, TableSkeleton } from '../components/ui'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { useToast } from '../components/Toast'
 import { useSort, sortRows } from '../hooks/useSort'
-import { budgetHistory, createBudget, deleteBudget, listBudgets, updateBudget, type BudgetDto, type CreateBudgetRequest, type SpendEntryDto } from '../api/budgets'
+import { budgetHistory, createBudget, deleteBudget, listBudgetsPage, updateBudget, type BudgetDto, type CreateBudgetRequest, type SpendEntryDto } from '../api/budgets'
 import { listTenants } from '../api/tenants'
 import { listKeys } from '../api/keys'
 import { useWorkspace } from '../hooks/useWorkspace'
+import { useUrlFilters } from '../hooks/useUrlFilters'
 
 function fmtTime(iso: string | undefined | null): string {
   if (!iso) return '—'
@@ -41,21 +42,31 @@ function periodLabel(b: BudgetDto): string {
   }
 }
 
+const PER_PAGE = 20
+
 export function Budgets() {
   const { toast } = useToast()
   const [budgets, setBudgets] = useState<BudgetDto[]>([])
   const [tenants, setTenants] = useState<{ slug: string; name: string }[]>([])
   const [keys, setKeys] = useState<{ id: string; label: string; tenant_id: string }[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<unknown>(null)
+  const url = useUrlFilters()
+  const [search, setSearch] = useState(() => url.get('search'))
+  const [page, setPage] = useState(() => url.getInt('page', 1))
+  const [total, setTotal] = useState(0)
 
   const reload = async () => {
     setLoading(true)
+    setError(null)
     try {
-      const [bRes, tRes, kRes] = await Promise.all([listBudgets(), listTenants(), listKeys()])
-      setBudgets(bRes?.data ?? [])
+      const [bRes, tRes, kRes] = await Promise.all([listBudgetsPage({ page, perPage: PER_PAGE, search }), listTenants(), listKeys()])
+      setBudgets(bRes.items)
+      setTotal(bRes.total)
       setTenants((tRes ?? []).map((t) => ({ slug: t.slug, name: t.name })))
       setKeys((kRes?.data ?? []).map((k) => ({ id: k.id, label: k.label || k.id, tenant_id: k.tenant_id })))
-    } catch {
+    } catch (err) {
+      setError(err)
       toast('Failed to load budgets', 'error')
     } finally {
       setLoading(false)
@@ -65,7 +76,7 @@ export function Budgets() {
   useAsyncData(async () => {
     await reload()
     return null
-  }, [])
+  }, [page, search])
 
   const [workspace] = useWorkspace()
   const sort = useSort<BudgetDto>('tenant_id', 'asc')
@@ -73,6 +84,19 @@ export function Budgets() {
     () => sortRows(workspace ? budgets.filter((b) => b.tenant_id === workspace) : budgets, sort.key, sort.dir),
     [budgets, sort, workspace],
   )
+
+  const totalPages = Math.max(1, Math.ceil(total / PER_PAGE))
+
+  function onSearch(value: string) {
+    setSearch(value)
+    setPage(1)
+    url.set({ search: value || undefined, page: undefined })
+  }
+
+  function changePage(p: number) {
+    setPage(p)
+    url.set({ page: p > 1 ? p : undefined })
+  }
 
   const [modalOpen, setModalOpen] = useState(false)
   const [deleting, setDeleting] = useState<BudgetDto | null>(null)
@@ -149,6 +173,13 @@ export function Budgets() {
         <div className="card-header-row">
           <h3>Budgets</h3>
           <div className="header-actions">
+            <input
+              className="input"
+              placeholder="Search by tenant, model or key…"
+              value={search}
+              onChange={(e) => onSearch(e.target.value)}
+              aria-label="Search budgets"
+            />
             <Button size="small" onClick={() => setModalOpen(true)}>Create Budget</Button>
           </div>
         </div>
@@ -167,13 +198,22 @@ export function Budgets() {
                 <th>Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <AsyncSection
+              as="tbody"
+              colSpan={9}
+              loading={loading}
+              error={error}
+              onRetry={reload}
+              empty={rows.length === 0}
+              emptyMessage="No budgets configured"
+              skeleton={<TableSkeleton rows={4} cols={9} />}
+            >
               {rows.map((b) => {
                 const pct = spendPercent(b)
                 return (
                   <tr key={b.id}>
                     <td>{tenantName(b.tenant_id)}</td>
-                    <td><Badge value={scopeLabel(b.scope)} /></td>
+                    <td><StatusPill tone={statusTone(scopeLabel(b.scope))} withDot={false}>{scopeLabel(b.scope)}</StatusPill></td>
                     <td>{periodLabel(b)}</td>
                     <td>
                       {b.scope === 'key'
@@ -183,17 +223,12 @@ export function Budgets() {
                     <td>{fmtMoney(b.hard_limit, b.currency)}</td>
                     <td>
                       <div className="spend-cell">
-                        <div className="progress">
-                          <div
-                            className={pct !== null && pct >= 90 ? 'progress-fill warn' : 'progress-fill'}
-                            style={{ width: `${pct ?? 0}%` }}
-                          />
-                        </div>
+                        <ProgressBar percentage={pct ?? 0} ariaLabel={`${b.tenant_id} spend`} />
                         <span className="muted">{fmtMoney(b.spent ?? 0, b.currency)}</span>
                       </div>
                     </td>
                     <td>{b.notify_at?.length ? b.notify_at.map((p) => `${p}%`).join(', ') : '—'}</td>
-                    <td><Badge value={b.enabled ? 'enabled' : 'disabled'} /></td>
+                    <td><StatusPill tone={statusTone(b.enabled ? 'enabled' : 'disabled')} withDot={false}>{b.enabled ? 'enabled' : 'disabled'}</StatusPill></td>
                     <td>
                       <div className="header-actions">
                         <Button size="small" onClick={() => showHistory(b)}>History</Button>
@@ -204,12 +239,14 @@ export function Budgets() {
                   </tr>
                 )
               })}
-              {!loading && rows.length === 0 && <tr><td colSpan={9}><EmptyState message="No budgets configured" /></td></tr>}
-              {loading && <tr><td colSpan={9}><TableSkeleton rows={4} cols={9} /></td></tr>}
-            </tbody>
+            </AsyncSection>
           </table>
         </div>
       </div>
+
+      {total > PER_PAGE && (
+        <Pagination page={page} totalPages={totalPages} total={total} onPage={changePage} />
+      )}
 
       {modalOpen && (
         <CreateBudgetModal
@@ -230,39 +267,36 @@ export function Budgets() {
       />
 
       {historyOf && (
-        <div className="modal-backdrop" onClick={() => setHistoryOf(null)}>
-          <div className="modal generic-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <h3>Spend history — {historyOf.id}</h3>
-            <div className="modal-body">
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Time</th>
-                      <th>Model</th>
-                      <th>Tokens</th>
-                      <th>Cost</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {history.map((e) => (
-                      <tr key={e.id}>
-                        <td>{fmtTime(e.created_at)}</td>
-                        <td><code>{e.model}</code></td>
-                        <td>{e.tokens}</td>
-                        <td>{fmtMoney(e.cost, historyOf.currency)}</td>
-                      </tr>
-                    ))}
-                    {history.length === 0 && <tr><td colSpan={4}><EmptyState message="No spend recorded yet" /></td></tr>}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div className="form-actions">
-              <Button variant="primary" onClick={() => setHistoryOf(null)}>Close</Button>
-            </div>
+        <Modal
+          open
+          onClose={() => setHistoryOf(null)}
+          title={`Spend history — ${historyOf.id}`}
+          footer={<Button variant="primary" onClick={() => setHistoryOf(null)}>Close</Button>}
+        >
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Model</th>
+                  <th>Tokens</th>
+                  <th>Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((e) => (
+                  <tr key={e.id}>
+                    <td>{fmtTime(e.created_at)}</td>
+                    <td><code>{e.model}</code></td>
+                    <td>{e.tokens}</td>
+                    <td>{fmtMoney(e.cost, historyOf.currency)}</td>
+                  </tr>
+                ))}
+                {history.length === 0 && <tr><td colSpan={4}><EmptyState message="No spend recorded yet" /></td></tr>}
+              </tbody>
+            </table>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )
@@ -309,11 +343,18 @@ function CreateBudgetModal({
   const tenantKeys = keys.filter((k) => k.tenant_id === req.tenant_id)
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal generic-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <h3>Create Budget</h3>
-        {err && <div className="confirm-dialog" style={{ marginTop: 8 }}><p>{err}</p></div>}
-        <div className="modal-body">
+    <Modal
+      open
+      onClose={onClose}
+      title="Create Budget"
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={submit}>Create</Button>
+        </>
+      }
+    >
+      {err && <div className="confirm-dialog" style={{ marginTop: 8 }}><p>{err}</p></div>}
           <div className="form-field">
             <label>Tenant</label>
             <select value={req.tenant_id} onChange={(e) => setReq({ ...req, tenant_id: e.target.value, virtual_key_id: undefined })}>
@@ -374,12 +415,6 @@ function CreateBudgetModal({
             <label>Currency</label>
             <input value={req.currency ?? 'USD'} onChange={(e) => setReq({ ...req, currency: e.target.value })} />
           </div>
-        </div>
-        <div className="form-actions">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" onClick={submit}>Create</Button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

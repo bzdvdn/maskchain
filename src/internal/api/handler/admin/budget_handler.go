@@ -83,7 +83,19 @@ func (h *BudgetHandler) Create(c *gin.Context) {
 
 // @sk-task 301-budget-enforcement#T3.1: List returns all budgets (AC-006)
 func (h *BudgetHandler) List(c *gin.Context) {
-	budgets, err := h.repo.List(c.Request.Context())
+	q := parseListQuery(c)
+
+	var (
+		budgets []*budget.Budget
+		total   int
+		err     error
+	)
+	if q.Active {
+		budgets, total, err = h.repo.ListPaged(c.Request.Context(), q.Limit, q.Offset, q.Search)
+	} else {
+		budgets, err = h.repo.List(c.Request.Context())
+		total = len(budgets)
+	}
 	if err != nil {
 		middleware.AbortWithError(c, http.StatusInternalServerError, middleware.ErrorCodeInternal, "failed to list budgets")
 		return
@@ -93,6 +105,10 @@ func (h *BudgetHandler) List(c *gin.Context) {
 		resp := dto.BudgetToResponse(b)
 		h.fillSpent(c, &resp, b)
 		out[i] = resp
+	}
+	if q.Active {
+		writePage(c, out, q, total)
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": out})
 }

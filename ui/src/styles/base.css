@@ -103,6 +103,14 @@
   box-shadow: 0 0 0 3px var(--green-bg);
   animation: live-pulse 2s infinite;
 }
+.live-dot.degraded {
+  background: var(--amber);
+  animation: none;
+}
+.live-dot.unknown {
+  background: var(--text-muted);
+  animation: none;
+}
 @keyframes live-pulse {
   0% { box-shadow: 0 0 0 0 var(--green-bg); }
   70% { box-shadow: 0 0 0 5px transparent; }

@@ -81,29 +81,31 @@ function App() {
   }
 
   return (
-    <Layout onLogout={handleLogout}>
-      <Routes>
-        <Route path="/" element={<PageBoundary><Dashboard /></PageBoundary>} />
-        <Route path="/tenants" element={<PageBoundary><TenantList /></PageBoundary>} />
-        <Route path="/tenants/new" element={<PageBoundary><TenantForm /></PageBoundary>} />
-        <Route path="/tenants/:slug/edit" element={<PageBoundary><TenantForm /></PageBoundary>} />
-        <Route path="/tenants/:slug" element={<PageBoundary><TenantDetail /></PageBoundary>} />
-        <Route path="/analytics" element={<PageBoundary><Analytics /></PageBoundary>} />
-        <Route path="/sessions" element={<PageBoundary><Sessions /></PageBoundary>} />
-        <Route path="/conversations" element={<PageBoundary><Conversations /></PageBoundary>} />
-        <Route path="/providers" element={<PageBoundary><Providers /></PageBoundary>} />
-        <Route path="/models" element={<PageBoundary><Models /></PageBoundary>} />
-        <Route path="/routing" element={<PageBoundary><Routing /></PageBoundary>} />
-        <Route path="/keys" element={<PageBoundary><Keys /></PageBoundary>} />
-        <Route path="/budgets" element={<PageBoundary><Budgets /></PageBoundary>} />
-        <Route path="/compliance" element={<PageBoundary><Compliance /></PageBoundary>} />
-        <Route path="/playground" element={<PageBoundary><Playground /></PageBoundary>} />
-        <Route path="/audit" element={<PageBoundary><AuditLog /></PageBoundary>} />
-        <Route path="/settings" element={<PageBoundary><Settings /></PageBoundary>} />
-        <Route path="/swagger" element={<PageBoundary><Swagger /></PageBoundary>} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Layout>
+    <ErrorBoundary>
+      <Layout onLogout={handleLogout}>
+        <Routes>
+          <Route path="/" element={<PageBoundary><Dashboard /></PageBoundary>} />
+          <Route path="/tenants" element={<PageBoundary><TenantList /></PageBoundary>} />
+          <Route path="/tenants/new" element={<PageBoundary><TenantForm /></PageBoundary>} />
+          <Route path="/tenants/:slug/edit" element={<PageBoundary><TenantForm /></PageBoundary>} />
+          <Route path="/tenants/:slug" element={<PageBoundary><TenantDetail /></PageBoundary>} />
+          <Route path="/analytics" element={<PageBoundary><Analytics /></PageBoundary>} />
+          <Route path="/sessions" element={<PageBoundary><Sessions /></PageBoundary>} />
+          <Route path="/conversations" element={<PageBoundary><Conversations /></PageBoundary>} />
+          <Route path="/providers" element={<PageBoundary><Providers /></PageBoundary>} />
+          <Route path="/models" element={<PageBoundary><Models /></PageBoundary>} />
+          <Route path="/routing" element={<PageBoundary><Routing /></PageBoundary>} />
+          <Route path="/keys" element={<PageBoundary><Keys /></PageBoundary>} />
+          <Route path="/budgets" element={<PageBoundary><Budgets /></PageBoundary>} />
+          <Route path="/compliance" element={<PageBoundary><Compliance /></PageBoundary>} />
+          <Route path="/playground" element={<PageBoundary><Playground /></PageBoundary>} />
+          <Route path="/audit" element={<PageBoundary><AuditLog /></PageBoundary>} />
+          <Route path="/settings" element={<PageBoundary><Settings /></PageBoundary>} />
+          <Route path="/swagger" element={<PageBoundary><Swagger /></PageBoundary>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Layout>
+    </ErrorBoundary>
   )
 }
 

@@ -32,6 +32,24 @@ func (r *fakeTenantRepo) List(ctx context.Context) ([]*entity.Tenant, error) {
 	return out, nil
 }
 
+// @sk-task ui-production-readiness#T7.1: DB-level pagination/search (AC-008)
+func (r *fakeTenantRepo) ListPaged(ctx context.Context, limit, offset int, _ string) ([]*entity.Tenant, int, error) {
+	all, err := r.List(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	total := len(all)
+	start := offset
+	if start > total {
+		start = total
+	}
+	end := start + limit
+	if end > total {
+		end = total
+	}
+	return all[start:end], total, nil
+}
+
 func (r *fakeTenantRepo) Get(ctx context.Context, slug value.TenantSlug) (*entity.Tenant, error) {
 	t, ok := r.bySlug[slug.String()]
 	if !ok {

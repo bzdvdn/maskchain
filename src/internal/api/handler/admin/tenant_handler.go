@@ -106,7 +106,19 @@ func (h *TenantHandler) CreateTenant(c *gin.Context) {
 }
 
 func (h *TenantHandler) ListTenants(c *gin.Context) {
-	tenants, err := h.repo.List(c.Request.Context())
+	q := parseListQuery(c)
+
+	var (
+		tenants []*entity.Tenant
+		total   int
+		err     error
+	)
+	if q.Active {
+		tenants, total, err = h.repo.ListPaged(c.Request.Context(), q.Limit, q.Offset, q.Search)
+	} else {
+		tenants, err = h.repo.List(c.Request.Context())
+		total = len(tenants)
+	}
 	if err != nil {
 		middleware.AbortWithError(c, http.StatusInternalServerError, middleware.ErrorCodeInternal, "failed to list tenants")
 		return
@@ -115,6 +127,10 @@ func (h *TenantHandler) ListTenants(c *gin.Context) {
 	resp := make([]dto.TenantResponse, len(tenants))
 	for i, t := range tenants {
 		resp[i] = dto.TenantToResponse(t)
+	}
+	if q.Active {
+		writePage(c, resp, q, total)
+		return
 	}
 	c.JSON(http.StatusOK, resp)
 }

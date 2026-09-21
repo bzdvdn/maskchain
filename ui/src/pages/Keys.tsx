@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Plus, Search, ClipboardCopy, KeyRound } from 'lucide-react'
-import { Button, ChipInput, ChipTag, ProgressBar, Segmented, StatusPill, Switch } from '../components/ui'
+import { AsyncSection, Button, ChipInput, ChipTag, Modal, Pagination, ProgressBar, Segmented, StatusPill, Switch, TableSkeleton } from '../components/ui'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { CopyButton } from '../components/CopyButton'
 import { useToast } from '../components/Toast'
 import { relativeTime, money } from '../utils/format'
-import { createKey, deleteKey, listKeys, rotateKey, updateKey, type CreateKeyRequest, type VirtualKeyDto } from '../api/keys'
+import { createKey, deleteKey, listKeysPage, rotateKey, updateKey, type CreateKeyRequest, type VirtualKeyDto } from '../api/keys'
 import { listTenants } from '../api/tenants'
 import { useWorkspace } from '../hooks/useWorkspace'
+import { useUrlFilters } from '../hooks/useUrlFilters'
 import { useGatewayBase } from '../hooks/useGatewayBase'
 
 const EXPIRY_PRESETS: { key: string; label: string; value: () => string | null }[] = [
@@ -22,6 +23,8 @@ function tenantName(slug: string, tenants: { slug: string; name: string }[]): st
   return t ? `${t.name} (${slug})` : slug
 }
 
+const PER_PAGE = 20
+
 export function Keys() {
   const { toast } = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -31,8 +34,12 @@ export function Keys() {
   const [keys, setKeys] = useState<VirtualKeyDto[]>([])
   const [tenants, setTenants] = useState<{ slug: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<unknown>(null)
 
-  const [search, setSearch] = useState('')
+  const url = useUrlFilters()
+  const [search, setSearch] = useState(() => url.get('search'))
+  const [page, setPage] = useState(() => url.getInt('page', 1))
+  const [total, setTotal] = useState(0)
   const [workspace] = useWorkspace()
   const [tenantFilter, setTenantFilter] = useState(workspace)
   const [statusFilter, setStatusFilter] = useState('')
@@ -46,11 +53,14 @@ export function Keys() {
 
   const reload = async () => {
     setLoading(true)
+    setError(null)
     try {
-      const [kRes, tRes] = await Promise.all([listKeys(), listTenants()])
-      setKeys(kRes?.data ?? [])
+      const [kRes, tRes] = await Promise.all([listKeysPage({ page, perPage: PER_PAGE, search }), listTenants()])
+      setKeys(kRes.items)
+      setTotal(kRes.total)
       setTenants(Array.isArray(tRes) ? tRes.map((t) => ({ slug: t.slug, name: t.name })) : [])
-    } catch {
+    } catch (err) {
+      setError(err)
       toast('Failed to load keys', 'error')
     } finally {
       setLoading(false)
@@ -62,7 +72,6 @@ export function Keys() {
   }, [workspace])
 
   useEffect(() => {
-    reload()
     if (searchParams.get('create') === '1' && !drawerOpenedRef.current) {
       drawerOpenedRef.current = true
       setModalOpen(true)
@@ -71,18 +80,30 @@ export function Keys() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    reload()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, search])
+
   const rows = useMemo(() => {
-    const normalized = search.trim().toLowerCase()
     return keys
       .filter((k) => tenantFilter === '' || k.tenant_id === tenantFilter)
       .filter((k) => statusFilter === '' || (statusFilter === 'enabled' ? k.enabled : !k.enabled))
-      .filter((k) => {
-        if (!normalized) return true
-        const haystack = [k.tenant_id, k.label ?? '', ...(k.allowed_models ?? [])].join(' ').toLowerCase()
-        return haystack.includes(normalized)
-      })
       .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
-  }, [keys, search, tenantFilter, statusFilter])
+  }, [keys, tenantFilter, statusFilter])
+
+  const totalPages = Math.max(1, Math.ceil(total / PER_PAGE))
+
+  function onSearch(value: string) {
+    setSearch(value)
+    setPage(1)
+    url.set({ search: value || undefined, page: undefined })
+  }
+
+  function changePage(p: number) {
+    setPage(p)
+    url.set({ page: p > 1 ? p : undefined })
+  }
 
   const doDelete = async () => {
     if (!deleting) return
@@ -202,7 +223,7 @@ export function Keys() {
       <div className="toolbar">
         <div className="search">
           <Search size={14} className="search-icon" />
-          <input placeholder="Search by label, tenant or model…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input placeholder="Search by label, tenant or id…" value={search} onChange={(e) => onSearch(e.target.value)} aria-label="Search keys" />
         </div>
         <select className="select" value={tenantFilter} onChange={(e) => setTenantFilter(e.target.value)} aria-label="Tenant filter">
           <option value="">All tenants</option>
@@ -231,7 +252,16 @@ export function Keys() {
                 <th className="num">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <AsyncSection
+              as="tbody"
+              colSpan={7}
+              loading={loading}
+              error={error}
+              onRetry={reload}
+              empty={rows.length === 0}
+              emptyMessage="No virtual keys match the current filters."
+              skeleton={<TableSkeleton rows={4} cols={7} />}
+            >
               {rows.map((k) => {
                 const pct = k.budget_cap ? Math.round((k.spent / k.budget_cap) * 100) : null
                 return (
@@ -272,14 +302,14 @@ export function Keys() {
                   </tr>
                 )
               })}
-              {!loading && rows.length === 0 && (
-                <tr><td colSpan={7}><div className="empty-state u-center">No virtual keys match the current filters.</div></td></tr>
-              )}
-              {loading && <tr><td colSpan={7} className="tbl-loading">Loading keys…</td></tr>}
-            </tbody>
+            </AsyncSection>
           </table>
         </div>
       </div>
+
+      {total > PER_PAGE && (
+        <Pagination page={page} totalPages={totalPages} total={total} onPage={changePage} />
+      )}
 
       {modalOpen && (
         <CreateKeyModal
@@ -290,24 +320,22 @@ export function Keys() {
       )}
 
       {createdKey && (
-        <div className="modal-backdrop">
-          <div className="modal generic-modal" role="dialog" aria-modal="true">
-            <h3>Key created</h3>
-            <div className="modal-body">
-              <p className="muted">Copy the key now — it will not be shown again.</p>
-              <div className="form-field">
-                <label>Key ({createdKey.label})</label>
-                <div className="copy-row">
-                  <code>{createdKey.key}</code>
-                  <CopyButton text={createdKey.key} label="Copy" />
-                </div>
-              </div>
-            </div>
-            <div className="form-actions">
-              <Button variant="primary" onClick={() => setCreatedKey(null)}>Done</Button>
+        <Modal
+          open
+          onClose={() => setCreatedKey(null)}
+          closeOnBackdrop={false}
+          title="Key created"
+          footer={<Button variant="primary" onClick={() => setCreatedKey(null)}>Done</Button>}
+        >
+          <p className="muted">Copy the key now — it will not be shown again.</p>
+          <div className="form-field">
+            <label>Key ({createdKey.label})</label>
+            <div className="copy-row">
+              <code>{createdKey.key}</code>
+              <CopyButton text={createdKey.key} label="Copy" />
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       <ConfirmModal
@@ -370,11 +398,18 @@ function CreateKeyModal({ tenants, onClose, onCreate }: CreateModalProps) {
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal generic-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <h3>Create key</h3>
-        {err && <div className="confirm-dialog u-mt8"><p>{err}</p></div>}
-        <div className="modal-body">
+    <Modal
+      open
+      onClose={onClose}
+      title="Create key"
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={submit}>Create</Button>
+        </>
+      }
+    >
+      {err && <div className="confirm-dialog u-mt8"><p>{err}</p></div>}
           <div className="form-field">
             <label>Tenant</label>
             <select value={tenant} onChange={(e) => setTenant(e.target.value)}>
@@ -407,12 +442,6 @@ function CreateKeyModal({ tenants, onClose, onCreate }: CreateModalProps) {
               ariaLabel="Expiry"
             />
           </div>
-        </div>
-        <div className="form-actions">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" onClick={submit}>Create</Button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

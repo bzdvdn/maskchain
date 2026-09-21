@@ -1,83 +1,67 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import {
-  listProfiles,
-  getProfile,
-  createProfile,
-  deleteProfile,
-  ApiError,
-  NotFoundError,
-} from '../api/profiles'
+// @vitest-environment jsdom
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { listConversations, getConversation } from '../api/conversations'
+import { setAdminToken } from '../api/admin'
+import { UnauthorizedError } from '../api/client'
 
 const mockFetch = vi.fn()
 global.fetch = mockFetch
 
 beforeEach(() => {
   mockFetch.mockReset()
+  setAdminToken('test-token')
 })
 
-// @sk-test 41-profiles-ui#T5.2: API client tests (AC-002, AC-003, AC-004, AC-010)
-describe('listProfiles', () => {
-  it('returns paginated response on success', async () => {
-    const expected = { data: [], total: 0, page: 1, page_size: 20 }
+afterEach(() => {
+  setAdminToken(null)
+})
+
+// @sk-task ui-production-readiness#T1.1: conversations use the shared client (AC-001)
+describe('listConversations', () => {
+  it('sends the admin token via the shared client', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve(expected),
+      json: () =>
+        Promise.resolve({
+          data: { items: [] },
+          pagination: { page: 1, per_page: 20, total: 0 },
+        }),
     })
 
-    const result = await listProfiles(1, 20)
-    expect(result).toEqual(expected)
-    expect(mockFetch).toHaveBeenCalledWith('/api/v1/profiles?page=1&page_size=20')
+    const result = await listConversations(1, 20)
+    expect(result.pagination.total).toBe(0)
+    const [url, init] = mockFetch.mock.calls[0]
+    expect(url).toBe('/api/v1/conversations?page=1&per_page=20')
+    expect(init.headers.Authorization).toBe('Bearer test-token')
+    expect(init.credentials).toBe('include')
   })
 
-  it('throws ApiError on failure', async () => {
+  it('dispatches the unauthorized event on 401', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
-      status: 500,
-      json: () => Promise.resolve({ error: 'server error', code: 'INTERNAL' }),
+      status: 401,
+      json: () => Promise.resolve({ error: 'unauthorized' }),
     })
+    const onUnauthorized = vi.fn()
+    window.addEventListener('maskchain:unauthorized', onUnauthorized)
 
-    await expect(listProfiles()).rejects.toThrow(ApiError)
+    await expect(listConversations()).rejects.toThrow(UnauthorizedError)
+    expect(onUnauthorized).toHaveBeenCalled()
+    window.removeEventListener('maskchain:unauthorized', onUnauthorized)
   })
 })
 
-describe('createProfile', () => {
-  it('sends POST request with body', async () => {
-    const body = { slug: 'test', name: 'Test' }
+describe('getConversation', () => {
+  it('unwraps the data envelope', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      status: 201,
-      json: () => Promise.resolve({ slug: 'test', name: 'Test' }),
+      json: () =>
+        Promise.resolve({
+          data: { id: 'c1', tenant_id: 't', model: 'm', status: 'ok', masked: false, streamed: false, created_at: '', payload: { request: '', response: null, masking: null } },
+        }),
     })
 
-    const result = await createProfile(body)
-    expect(result.name).toBe('Test')
-    expect(mockFetch).toHaveBeenCalledWith('/api/v1/profiles', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-  })
-})
-
-describe('getProfile', () => {
-  it('throws NotFoundError on 404', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 404,
-      json: () => Promise.resolve({ error: 'not found', code: 'NOT_FOUND' }),
-    })
-
-    await expect(getProfile('missing')).rejects.toThrow(NotFoundError)
-  })
-})
-
-describe('deleteProfile', () => {
-  it('sends DELETE request', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: true, status: 204 })
-
-    await deleteProfile('test')
-    expect(mockFetch).toHaveBeenCalledWith('/api/v1/profiles/test', {
-      method: 'DELETE',
-    })
+    const result = await getConversation('c1')
+    expect(result.id).toBe('c1')
   })
 })

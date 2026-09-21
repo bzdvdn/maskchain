@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { Keys } from './Keys'
 
 vi.mock('../api/keys', () => ({
-  listKeys: vi.fn(),
+  listKeysPage: vi.fn(),
   createKey: vi.fn(),
   updateKey: vi.fn(),
   deleteKey: vi.fn(),
@@ -22,10 +22,10 @@ vi.mock('../components/Toast', async (importOriginal) => {
   }
 })
 
-import { listKeys, createKey } from '../api/keys'
+import { listKeysPage, createKey } from '../api/keys'
 import { listTenants } from '../api/tenants'
 
-const mockList = vi.mocked(listKeys)
+const mockList = vi.mocked(listKeysPage)
 const mockCreate = vi.mocked(createKey)
 const mockTenants = vi.mocked(listTenants)
 
@@ -47,7 +47,7 @@ function keyDto(over: Record<string, unknown>) {
 beforeEach(() => {
   vi.clearAllMocks()
   mockTenants.mockResolvedValue([{ slug: 'acme', name: 'Acme Corp' } as never])
-  mockList.mockResolvedValue({ data: [keyDto({})] as never })
+  mockList.mockResolvedValue({ items: [keyDto({})] as never, total: 1, page: 1, perPage: 20 })
 })
 
 function renderKeys(entry = '/keys') {
@@ -86,17 +86,19 @@ describe('Keys create drawer', () => {
 // @sk-test ui-v2-console#T3.4: toolbar narrows rows by search (AC-006)
 describe('Keys search filter', () => {
   it('filters rows by search text', async () => {
-    mockList.mockResolvedValue({
-      data: [
-        keyDto({ id: 'k1', tenant_id: 'acme', label: 'web-chat' }),
-        keyDto({ id: 'k2', tenant_id: 'fintech', label: 'payments-gw' }),
-      ] as never,
+    const all = [
+      keyDto({ id: 'k1', tenant_id: 'acme', label: 'web-chat' }),
+      keyDto({ id: 'k2', tenant_id: 'fintech', label: 'payments-gw' }),
+    ]
+    mockList.mockImplementation(async ({ search } = {}) => {
+      const items = search ? all.filter((k) => (k.label ?? '').includes(search)) : all
+      return { items: items as never, total: items.length, page: 1, perPage: 20 }
     })
     renderKeys()
 
     expect(await screen.findByText('payments-gw')).toBeTruthy()
 
-    fireEvent.change(screen.getByPlaceholderText('Search by label, tenant or model…'), { target: { value: 'web-chat' } })
+    fireEvent.change(screen.getByPlaceholderText('Search by label, tenant or id…'), { target: { value: 'web-chat' } })
 
     await waitFor(() => {
       expect(screen.queryByText('payments-gw')).toBeNull()
@@ -109,7 +111,10 @@ describe('Keys search filter', () => {
 describe('Keys spend progress', () => {
   it('marks rows near the hard limit as danger', async () => {
     mockList.mockResolvedValue({
-      data: [keyDto({ id: 'k1', spent: 95, budget_cap: 100, label: 'near-limit' })] as never,
+      items: [keyDto({ id: 'k1', spent: 95, budget_cap: 100, label: 'near-limit' })] as never,
+      total: 1,
+      page: 1,
+      perPage: 20,
     })
     const { container } = renderKeys()
 

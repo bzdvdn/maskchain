@@ -25,7 +25,7 @@ import {
   Server,
   Boxes,
 } from 'lucide-react'
-import { logout } from '../api/admin'
+import { getSystemStatus, logout } from '../api/admin'
 import { listTenants } from '../api/tenants'
 import { useTheme } from '../hooks/useTheme'
 import { useWorkspace } from '../hooks/useWorkspace'
@@ -107,6 +107,29 @@ export function Layout({ children, onLogout }: Props) {
   const { theme, toggleTheme } = useTheme()
   const [workspaces, setWorkspaces] = useState<{ slug: string; name: string }[]>([])
   const [workspace, applyWorkspace] = useWorkspace()
+  const [health, setHealth] = useState<'ok' | 'degraded' | 'unknown'>('unknown')
+
+  // @sk-task ui-production-readiness#T4.2: Honest live indicator (AC-010)
+  useEffect(() => {
+    let active = true
+    async function poll() {
+      try {
+        const status = await getSystemStatus()
+        if (!active) return
+        setHealth(status.health?.status === 'healthy' ? 'ok' : 'degraded')
+      } catch {
+        if (active) setHealth('unknown')
+      }
+    }
+    poll()
+    const interval = setInterval(() => {
+      if (!document.hidden) poll()
+    }, 20_000)
+    return () => {
+      active = false
+      clearInterval(interval)
+    }
+  }, [])
 
   useEffect(() => {
     const label = navSections.flatMap((s) => s.items).find((i) => i.to === location.pathname)?.label
@@ -194,9 +217,12 @@ export function Layout({ children, onLogout }: Props) {
               </select>
               <ChevronDown size={12} className="workspace-chevron" />
             </label>
-            <span className="live-pill" title="Gateway status">
-              <span className="live-dot" />
-              Live
+            <span
+              className={`live-pill ${health}`}
+              title={health === 'ok' ? 'Gateway healthy' : health === 'degraded' ? 'Gateway degraded' : 'Gateway status unknown'}
+            >
+              <span className={`live-dot ${health}`} />
+              {health === 'ok' ? 'Healthy' : health === 'degraded' ? 'Degraded' : 'Unknown'}
             </span>
             <button
               type="button"

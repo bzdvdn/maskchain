@@ -92,7 +92,19 @@ func (h *VirtualKeyHandler) Create(c *gin.Context) {
 
 // @sk-task 300-virtual-keys#T3.1: List returns all keys (AC-001)
 func (h *VirtualKeyHandler) List(c *gin.Context) {
-	keys, err := h.repo.List(c.Request.Context())
+	q := parseListQuery(c)
+
+	var (
+		keys  []*virtualkey.VirtualKey
+		total int
+		err   error
+	)
+	if q.Active {
+		keys, total, err = h.repo.ListPaged(c.Request.Context(), q.Limit, q.Offset, q.Search)
+	} else {
+		keys, err = h.repo.List(c.Request.Context())
+		total = len(keys)
+	}
 	if err != nil {
 		middleware.AbortWithError(c, http.StatusInternalServerError, middleware.ErrorCodeInternal, "failed to list keys")
 		return
@@ -100,6 +112,10 @@ func (h *VirtualKeyHandler) List(c *gin.Context) {
 	out := make([]dto.VirtualKeyResponse, len(keys))
 	for i, k := range keys {
 		out[i] = dto.VirtualKeyToResponse(k)
+	}
+	if q.Active {
+		writePage(c, out, q, total)
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": out})
 }

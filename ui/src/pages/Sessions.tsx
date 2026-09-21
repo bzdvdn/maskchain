@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAsyncData } from '../hooks/useAsyncData'
-import { Badge, Button, Card, EmptyState, SortHeader, TableSkeleton } from '../components/ui'
+import { AsyncSection, Button, Card, SortHeader, StatusPill, statusTone, TableSkeleton } from '../components/ui'
 import { useToast } from '../components/Toast'
 import { useSort, sortRows } from '../hooks/useSort'
 import { useWorkspace } from '../hooks/useWorkspace'
@@ -16,7 +16,7 @@ async function fetchSessions(): Promise<Session[]> {
 type SortKey = keyof Pick<Session, 'session_id' | 'tenant_id' | 'model' | 'status' | 'created_at' | 'token_count'>
 
 export function Sessions() {
-  const { data: sessions, loading, refetch } = useAsyncData<Session[]>(fetchSessions, [])
+  const { data: sessions, loading, error, refetch } = useAsyncData<Session[]>(fetchSessions, [])
   const { toast } = useToast()
   const { key, dir, toggle } = useSort<Session>('created_at', 'desc')
   const [refreshSec, setRefreshSec] = useState(10)
@@ -173,7 +173,16 @@ export function Sessions() {
               <th></th>
             </tr>
           </thead>
-          <tbody>
+          <AsyncSection
+            as="tbody"
+            colSpan={9}
+            loading={loading}
+            error={error}
+            onRetry={refetch}
+            empty={rows.length === 0}
+            emptyMessage="No sessions"
+            skeleton={<TableSkeleton rows={4} cols={9} />}
+          >
             {rows.map((s) => (
               <tr key={s.session_id}>
                 <td>
@@ -192,7 +201,7 @@ export function Sessions() {
                 </td>
                 <td>{s.tenant_id}</td>
                 <td>{s.model}</td>
-                <td><Badge value={s.status} /></td>
+                <td><StatusPill tone={statusTone(s.status)} withDot={false}>{s.status}</StatusPill></td>
                 <td>{fmtTime(s.created_at)}</td>
                 <td>{fmtTime(s.expires_at)}</td>
                 <td className="num">{s.token_count?.toLocaleString() ?? '—'}</td>
@@ -206,9 +215,7 @@ export function Sessions() {
                 </td>
               </tr>
             ))}
-            {!loading && rows.length === 0 && <tr><td colSpan={9}><EmptyState message="No sessions" /></td></tr>}
-            {loading && <tr><td colSpan={9}><TableSkeleton rows={4} cols={9} /></td></tr>}
-          </tbody>
+          </AsyncSection>
         </table>
       </div>
 

@@ -29,6 +29,8 @@ interface RequestOptions {
   method?: string
   body?: unknown
   headers?: Record<string, string>
+  /** Return the full response envelope instead of unwrapping `data`. */
+  raw?: boolean
 }
 
 export async function apiFetch<T>(url: string, opts: RequestOptions = {}): Promise<T> {
@@ -65,5 +67,8 @@ export async function apiFetch<T>(url: string, opts: RequestOptions = {}): Promi
   }
 
   const body = await res.json()
-  return body.data ?? body
+  if (opts.raw) {
+    return body as T
+  }
+  return (body.data ?? body) as T
 }

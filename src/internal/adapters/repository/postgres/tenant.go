@@ -59,6 +59,43 @@ func (r *PostgresTenantRepo) List(ctx context.Context) ([]*entity.Tenant, error)
 	return tenants, nil
 }
 
+// @sk-task ui-production-readiness#T7.1: DB-level pagination/search (AC-008)
+func (r *PostgresTenantRepo) ListPaged(ctx context.Context, limit, offset int, search string) ([]*entity.Tenant, int, error) {
+	q := getQuerier(ctx, r.pool)
+	pattern := "%" + search + "%"
+
+	var total int
+	if err := q.QueryRow(ctx, `
+		SELECT COUNT(*) FROM tenants
+		WHERE $1 = '' OR slug ILIKE $2 OR name ILIKE $2`, search, pattern).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count tenants: %w", err)
+	}
+
+	rows, err := q.Query(ctx, `
+		SELECT slug, name, auth_header, dictionaries, pii_config, retention_mode, created_at, updated_at
+		FROM tenants
+		WHERE $1 = '' OR slug ILIKE $2 OR name ILIKE $2
+		ORDER BY created_at DESC
+		LIMIT $3 OFFSET $4`, search, pattern, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list tenants: %w", err)
+	}
+	defer rows.Close()
+
+	tenants := []*entity.Tenant{}
+	for rows.Next() {
+		t, err := r.scanTenant(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		tenants = append(tenants, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("rows iteration: %w", err)
+	}
+	return tenants, total, nil
+}
+
 func (r *PostgresTenantRepo) Get(ctx context.Context, slug value.TenantSlug) (*entity.Tenant, error) {
 	q := getQuerier(ctx, r.pool)
 

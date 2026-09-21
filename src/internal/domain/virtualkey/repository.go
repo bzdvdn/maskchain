@@ -12,6 +12,8 @@ type VirtualKeyRepository interface {
 	ListByTenant(ctx context.Context, tenantID string) ([]*VirtualKey, error)
 	// List returns all keys.
 	List(ctx context.Context) ([]*VirtualKey, error)
+	// @sk-task ui-production-readiness#T7.1: DB-level pagination/search (AC-008)
+	ListPaged(ctx context.Context, limit, offset int, search string) ([]*VirtualKey, int, error)
 	// Create persists a new virtual key.
 	Create(ctx context.Context, key *VirtualKey) error
 	// Update persists changes to an existing key.

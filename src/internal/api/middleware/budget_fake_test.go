@@ -51,6 +51,20 @@ func (f *fakeBudgetRepo) List(_ context.Context) ([]*budget.Budget, error) {
 	return f.budgets, nil
 }
 
+// @sk-task ui-production-readiness#T7.1: DB-level pagination/search (AC-008)
+func (f *fakeBudgetRepo) ListPaged(_ context.Context, limit, offset int, _ string) ([]*budget.Budget, int, error) {
+	total := len(f.budgets)
+	start := offset
+	if start > total {
+		start = total
+	}
+	end := start + limit
+	if end > total {
+		end = total
+	}
+	return f.budgets[start:end], total, nil
+}
+
 func (f *fakeBudgetRepo) ListByTenant(_ context.Context, tenantID string) ([]*budget.Budget, error) {
 	var out []*budget.Budget
 	for _, b := range f.budgets {

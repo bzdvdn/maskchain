@@ -6,11 +6,13 @@ import {
 } from '../api/conversations'
 import { listTenants } from '../api/tenants'
 import { decodeBase64Utf8 } from '../utils/base64'
-import { Button, Pagination, SortHeader, StatusPill, TableSkeleton } from '../components/ui'
+import { AsyncSection, Button, Pagination, SortHeader, StatusPill, TableSkeleton } from '../components/ui'
 import { CopyButton } from '../components/CopyButton'
 import { useAsyncData } from '../hooks/useAsyncData'
 import { useSort, sortRows } from '../hooks/useSort'
 import { useWorkspace } from '../hooks/useWorkspace'
+import { useUrlFilters } from '../hooks/useUrlFilters'
+import { useAutoRefresh } from '../hooks/useAutoRefresh'
 
 interface MaskGroup {
   original: string
@@ -42,10 +44,16 @@ export function groupMasking(maskingB64: string | null): MaskGroup[] {
 
 // @sk-task conversation-logging#T3.2: Conversations page lists records and shows decoded detail (AC-005, AC-006)
 export function Conversations() {
-  const [page, setPage] = useState(1)
+  const url = useUrlFilters()
+  const [page, setPage] = useState(() => url.getInt('page', 1))
   const perPage = 20
   const [workspace] = useWorkspace()
-  const [filters, setFilters] = useState<ConversationFilters>(() => (workspace ? { tenant_id: workspace } : {}))
+  const [filters, setFilters] = useState<ConversationFilters>(() => ({
+    tenant_id: url.get('tenant') || workspace || undefined,
+    status: url.get('status') || undefined,
+    model: url.get('model') || undefined,
+    masked: (url.get('masked') as ConversationFilters['masked']) || undefined,
+  }))
   const [tenantOptions, setTenantOptions] = useState<string[]>([])
   const [detail, setDetail] = useState<ConversationDetail | null>(null)
   const [detailError, setDetailError] = useState(false)
@@ -59,19 +67,30 @@ export function Conversations() {
   useEffect(() => {
     setFilters((prev) => ({ ...prev, tenant_id: workspace || undefined }))
     setPage(1)
+    url.set({ tenant: workspace || undefined, page: undefined })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace])
 
   const filterKey = useMemo(() => `${filters.tenant_id ?? ''}|${filters.status ?? ''}|${filters.model ?? ''}|${filters.masked ?? ''}`, [filters])
-  const { data: result, loading } = useAsyncData(
+  const { data: result, loading, error, refetch } = useAsyncData(
     () => listConversations(page, perPage, filters),
     [page, perPage, filterKey],
   )
   const items = result?.items ?? []
   const total = result?.pagination.total ?? 0
 
+  useAutoRefresh(refetch, 30)
+
   function setFilter<K extends keyof ConversationFilters>(key: K, value: string) {
     setFilters((prev) => ({ ...prev, [key]: (value || undefined) as ConversationFilters[K] | undefined }))
     setPage(1)
+    const urlKey = key === 'tenant_id' ? 'tenant' : key
+    url.set({ [urlKey]: value || undefined, page: undefined })
+  }
+
+  function changePage(p: number) {
+    setPage(p)
+    url.set({ page: p > 1 ? p : undefined })
   }
   const models = useMemo(() => Array.from(new Set(items.map((c) => c.model))).sort(), [items])
   const tenants = useMemo(
@@ -163,7 +182,16 @@ export function Conversations() {
               {th('created_at', 'Created')}
             </tr>
           </thead>
-          <tbody>
+          <AsyncSection
+            as="tbody"
+            colSpan={7}
+            loading={loading}
+            error={error}
+            onRetry={refetch}
+            empty={rows.length === 0}
+            emptyMessage="No conversations"
+            skeleton={<TableSkeleton rows={4} cols={7} />}
+          >
             {rows.map((c) => (
               <tr
                 key={c.id}
@@ -189,16 +217,12 @@ export function Conversations() {
                 <td>{fmtTime(c.created_at)}</td>
               </tr>
             ))}
-            {!loading && rows.length === 0 && (
-              <tr><td colSpan={7} className="text-muted" style={{ padding: 12 }}>No conversations</td></tr>
-            )}
-            {loading && <tr><td colSpan={7}><TableSkeleton rows={4} cols={7} /></td></tr>}
-          </tbody>
+          </AsyncSection>
         </table>
       </div>
 
       {total > perPage && (
-        <Pagination page={page} totalPages={totalPages} total={total} onPage={(p) => setPage(p)} />
+        <Pagination page={page} totalPages={totalPages} total={total} onPage={changePage} />
       )}
 
       {detailError && <p className="text-muted" style={{ marginTop: 12 }}>Failed to load conversation detail</p>}

@@ -99,6 +99,34 @@ func (r *PostgresBudgetRepository) List(ctx context.Context) ([]*budget.Budget, 
 	return collectBudgets(rows)
 }
 
+// @sk-task ui-production-readiness#T7.1: DB-level pagination/search (AC-008)
+func (r *PostgresBudgetRepository) ListPaged(ctx context.Context, limit, offset int, search string) ([]*budget.Budget, int, error) {
+	pattern := "%" + search + "%"
+
+	var total int
+	if err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM budgets
+		WHERE $1 = '' OR tenant_id ILIKE $2 OR model ILIKE $2 OR virtual_key_id ILIKE $2 OR scope ILIKE $2`,
+		search, pattern).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count budgets: %w", err)
+	}
+
+	rows, err := r.pool.Query(ctx, budgetSelect+`
+		WHERE $1 = '' OR tenant_id ILIKE $2 OR model ILIKE $2 OR virtual_key_id ILIKE $2 OR scope ILIKE $2
+		ORDER BY created_at DESC
+		LIMIT $3 OFFSET $4`, search, pattern, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list budgets: %w", err)
+	}
+	defer rows.Close()
+
+	budgets, err := collectBudgets(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	return budgets, total, nil
+}
+
 // @sk-task 301-budget-enforcement#T1.2: ListByTenant returns budgets of a tenant (AC-002)
 func (r *PostgresBudgetRepository) ListByTenant(ctx context.Context, tenantID string) ([]*budget.Budget, error) {
 	rows, err := r.pool.Query(ctx, budgetSelect+` WHERE tenant_id = $1 ORDER BY created_at DESC`, tenantID)

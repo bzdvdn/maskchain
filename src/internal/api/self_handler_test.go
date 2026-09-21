@@ -39,6 +39,20 @@ func (f *selfFakeRepo) ListByTenant(_ context.Context, _ string) ([]*virtualkey.
 	return nil, nil
 }
 func (f *selfFakeRepo) List(_ context.Context) ([]*virtualkey.VirtualKey, error) { return f.keys, nil }
+
+// @sk-task ui-production-readiness#T7.1: DB-level pagination/search (AC-008)
+func (f *selfFakeRepo) ListPaged(_ context.Context, limit, offset int, _ string) ([]*virtualkey.VirtualKey, int, error) {
+	total := len(f.keys)
+	start := offset
+	if start > total {
+		start = total
+	}
+	end := start + limit
+	if end > total {
+		end = total
+	}
+	return f.keys[start:end], total, nil
+}
 func (f *selfFakeRepo) Create(_ context.Context, _ *virtualkey.VirtualKey) error { return nil }
 func (f *selfFakeRepo) Update(_ context.Context, _ *virtualkey.VirtualKey) error { return nil }
 func (f *selfFakeRepo) Delete(_ context.Context, _ string) error                 { return nil }

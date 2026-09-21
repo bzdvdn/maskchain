@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -34,6 +35,31 @@ func (r *fakeTenantRepo) List(ctx context.Context) ([]*entity.Tenant, error) {
 		out = append(out, t)
 	}
 	return out, nil
+}
+
+// @sk-task ui-production-readiness#T7.1: DB-level pagination/search (AC-008)
+func (r *fakeTenantRepo) ListPaged(ctx context.Context, limit, offset int, search string) ([]*entity.Tenant, int, error) {
+	all, _ := r.List(ctx)
+	filtered := make([]*entity.Tenant, 0, len(all))
+	for _, t := range all {
+		if search == "" || containsFold(t.Slug().String(), search) || containsFold(t.Name(), search) {
+			filtered = append(filtered, t)
+		}
+	}
+	total := len(filtered)
+	start := offset
+	if start > total {
+		start = total
+	}
+	end := start + limit
+	if end > total {
+		end = total
+	}
+	return filtered[start:end], total, nil
+}
+
+func containsFold(haystack, needle string) bool {
+	return strings.Contains(strings.ToLower(haystack), strings.ToLower(needle))
 }
 
 func (r *fakeTenantRepo) Get(ctx context.Context, slug value.TenantSlug) (*entity.Tenant, error) {
