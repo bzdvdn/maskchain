@@ -158,6 +158,14 @@ routing and budgets) and a standalone **Compliance** page (apply/audit packs).
 The Playground relays through the admin process, so set `admin.gateway_url`
 (default `http://localhost:8080`) when gateway and admin run separately.
 
+### Cost & usage accounting
+
+- Spend and token usage are recorded for **streamed (SSE) and non-streamed** requests alike, after the response completes.
+- Hard budget limits are enforced before the request; a streamed request that crosses a limit is accounted and the **next** request is blocked with `429 BUDGET_EXCEEDED`.
+- Models without an explicit `analytics.cost_rates` entry are priced with the optional `analytics.default_cost_rate` fallback; otherwise cost is `0`.
+- Gaps are never silent: `maskchain_usage_missing_total`, `maskchain_cost_rate_fallback_total`, and `maskchain_cost_rate_missing_total` expose unaccounted traffic.
+- `analytics.stream_usage` (default `true`) asks OpenAI-shaped providers for usage on streams via `stream_options.include_usage`.
+
 ### Observability
 
 - OpenTelemetry tracing (gRPC exporter)

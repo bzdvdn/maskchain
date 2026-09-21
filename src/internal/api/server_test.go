@@ -16,6 +16,9 @@ import (
 
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
+	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
+	"github.com/bzdvdn/maskchain/src/internal/domain/virtualkey"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 )
 
@@ -204,6 +207,84 @@ func TestMessagesAliasFromV1(t *testing.T) {
 	// The /v1 alias must be registered (no redirect, no 404).
 	if w.Code == http.StatusNotFound || w.Code == http.StatusPermanentRedirect || w.Code == http.StatusMovedPermanently {
 		t.Errorf("expected /v1/messages to be served, got %d", w.Code)
+	}
+}
+
+// newCompletionsServer builds a gateway server whose /completions chain is fully
+// wired: virtual-key auth + model access + caller-provided usage/budget stages.
+func newCompletionsServer(t *testing.T, usageMw, budgetMw gin.HandlerFunc) (*Server, func(path, model string) *httptest.ResponseRecorder) {
+	t.Helper()
+	repo := &selfFakeRepo{keys: []*virtualkey.VirtualKey{{
+		ID:            "k1",
+		TenantID:      "acme",
+		KeyHash:       virtualkey.KeyHash("sk-mc_secret"),
+		AllowedModels: []string{"gpt-4o-mini"},
+		Enabled:       true,
+	}}}
+	slug, err := value.NewTenantSlug("acme")
+	if err != nil {
+		t.Fatalf("slug: %v", err)
+	}
+	tenant := entity.NewTenant(slug, "Acme", "Authorization")
+
+	srv := newTestServer()
+	srv.RegisterAuth(middleware.VirtualKeyAuth(repo, middleware.NewTenantProvider([]*entity.Tenant{tenant})))
+	srv.RegisterModelAccess(middleware.ModelAccess())
+	if usageMw != nil {
+		srv.RegisterUsageMiddleware(usageMw)
+	}
+	if budgetMw != nil {
+		srv.RegisterBudgetMiddleware(budgetMw)
+	}
+	srv.RegisterProxyRoute(func(c *gin.Context) { c.Next() }, nil)
+
+	post := func(path, model string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		body := fmt.Sprintf(`{"model":%q,"prompt":"hi"}`, model)
+		req, _ := http.NewRequest(http.MethodPost, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer sk-mc_secret")
+		srv.engine.ServeHTTP(w, req)
+		return w
+	}
+	return srv, post
+}
+
+// @sk-test usage-accounting-integrity#T4.2: /completions runs model-access, usage and budget (AC-005)
+func TestCompletionsUsesFullChain(t *testing.T) {
+	usageRan, budgetRan := 0, 0
+	_, post := newCompletionsServer(t,
+		func(c *gin.Context) { usageRan++; c.Next() },
+		func(c *gin.Context) { budgetRan++; c.Next() },
+	)
+
+	for _, path := range []string{"/api/v1/completions", "/v1/completions"} {
+		if w := post(path, "gpt-4o"); w.Code != http.StatusForbidden {
+			t.Errorf("%s disallowed model: expected 403, got %d: %s", path, w.Code, w.Body.String())
+		}
+		if w := post(path, "gpt-4o-mini"); w.Code != http.StatusOK {
+			t.Errorf("%s allowed model: expected 200, got %d: %s", path, w.Code, w.Body.String())
+		}
+	}
+	if usageRan == 0 || budgetRan == 0 {
+		t.Errorf("expected usage and budget middleware to run on /completions (usage=%d budget=%d)", usageRan, budgetRan)
+	}
+}
+
+// @sk-test usage-accounting-integrity#T4.2: budget stage can block /completions with 429 (AC-005)
+func TestCompletionsBudgetStageReturns429(t *testing.T) {
+	_, post := newCompletionsServer(t, nil, func(c *gin.Context) {
+		middleware.AbortWithError(c, http.StatusTooManyRequests, middleware.ErrorCodeBudgetExceeded, "budget exceeded")
+	})
+
+	for _, path := range []string{"/api/v1/completions", "/v1/completions"} {
+		w := post(path, "gpt-4o-mini")
+		if w.Code != http.StatusTooManyRequests {
+			t.Errorf("%s: expected 429, got %d: %s", path, w.Code, w.Body.String())
+		}
+		if !strings.Contains(w.Body.String(), "BUDGET_EXCEEDED") {
+			t.Errorf("%s: expected BUDGET_EXCEEDED code, got %s", path, w.Body.String())
+		}
 	}
 }
 

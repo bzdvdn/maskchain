@@ -148,24 +148,31 @@ func TestUsageMiddlewareNoUsage(t *testing.T) {
 
 	var found bool
 	for _, entry := range recorded.All() {
-		if entry.Level == slog.LevelWarn && strings.Contains(entry.Message, "no usage field") {
+		if entry.Level == slog.LevelWarn && strings.Contains(entry.Message, "no usage") {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Error("expected warning log about missing usage field")
+		t.Error("expected warning log about missing usage")
+	}
+	if got := testutil.ToFloat64(metrics.UsageMissingTotal.WithLabelValues("unknown", "gpt-4")); got != 1 {
+		t.Errorf("expected usage_missing_total=1, got %f", got)
 	}
 }
 
-// @sk-test 131-analytics-pipeline#T4.1: TestUsageMiddlewareStreamingSkip (AC-001, AC-005)
-func TestUsageMiddlewareStreamingSkip(t *testing.T) {
+// @sk-test usage-accounting-integrity#T2.2: TestUsageMiddlewareStreamingRecords (AC-003)
+func TestUsageMiddlewareStreamingRecords(t *testing.T) {
 	mw, _ := newTestUsageMiddleware(t)
+
+	sse := "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n" +
+		"data: {\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":50},\"choices\":[]}\n\n" +
+		"data: [DONE]\n\n"
 
 	engine := gin.New()
 	engine.Use(mw.Handler())
 	engine.POST("/api/v1/chat/completions", func(c *gin.Context) {
-		c.Data(http.StatusOK, "application/json", []byte(usageResponseBody(100, 50)))
+		c.Data(http.StatusOK, "text/event-stream", []byte(sse))
 	})
 
 	w := httptest.NewRecorder()
@@ -179,8 +186,12 @@ func TestUsageMiddlewareStreamingSkip(t *testing.T) {
 	}
 
 	inputVal := testutil.ToFloat64(metrics.TokensTotal.WithLabelValues("unknown", "gpt-4", "input"))
-	if inputVal != 0 {
-		t.Errorf("expected no token metrics for streaming, got %f", inputVal)
+	if inputVal != 100 {
+		t.Errorf("expected streamed input tokens 100, got %f", inputVal)
+	}
+	outputVal := testutil.ToFloat64(metrics.TokensTotal.WithLabelValues("unknown", "gpt-4", "output"))
+	if outputVal != 50 {
+		t.Errorf("expected streamed output tokens 50, got %f", outputVal)
 	}
 }
 

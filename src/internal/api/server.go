@@ -131,13 +131,17 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 	}
 	chain = append(chain, chatHandler)
 
-	completionChain := []gin.HandlerFunc{s.withSessionMiddleware(shieldMiddleware), ProxyCompletionHandler}
-
+	// @sk-task usage-accounting-integrity#T3.1+T3.2: /completions shares the chat chain
+	//
+	// The routing handler derives the upstream path from the request path, so
+	// /completions is served as a real proxy with model-access, shield, usage and
+	// budget applied. When no routing handler is wired, the stub handler runs
+	// behind the same full chain instead of the previous reduced chain.
 	for _, prefix := range []string{"/api/v1", "/v1"} {
 		group := s.engine.Group(prefix)
 		group.POST("/chat/completions", chain...)
 		group.POST("/messages", chain...)
-		group.POST("/completions", completionChain...)
+		group.POST("/completions", chain...)
 	}
 }
 

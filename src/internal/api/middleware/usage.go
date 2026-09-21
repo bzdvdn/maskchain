@@ -45,53 +45,48 @@ func (m *UsageMiddleware) Handler() gin.HandlerFunc {
 			return
 		}
 
-		if isStreaming(c) {
-			c.Next()
-			return
-		}
-
-		w := &usageBodyWriter{ResponseWriter: c.Writer, body: &bytes.Buffer{}}
-		c.Writer = w
+		// @sk-task usage-accounting-integrity#T2.2: record analytics for streamed and non-streamed responses (AC-003, AC-006, AC-007)
+		tenantStr := extractTenantSlug(c)
+		streaming := isStreaming(c)
+		capture := wrapUsageCapture(c, streaming)
 		c.Next()
 
-		if w.status != http.StatusOK {
+		if capture.status != http.StatusOK {
 			return
 		}
 
-		var resp struct {
-			Usage *struct {
-				PromptTokens     int64 `json:"prompt_tokens"`
-				CompletionTokens int64 `json:"completion_tokens"`
-			} `json:"usage"`
-		}
-		if err := json.Unmarshal(w.body.Bytes(), &resp); err != nil {
-			m.log.WarnContext(c.Request.Context(), "usage middleware: failed to parse response body", slog.String("error", err.Error()))
+		usage, ok := capture.Usage()
+		if !ok {
+			metrics.UsageMissingTotal.WithLabelValues(tenantStr, model).Inc()
+			m.log.WarnContext(c.Request.Context(), "usage middleware: provider reported no usage; request not recorded",
+				slog.String("path", c.Request.URL.Path), slog.String("model", model), slog.Bool("streaming", streaming))
 			return
 		}
 
-		if resp.Usage == nil {
-			m.log.WarnContext(c.Request.Context(), "usage middleware: no usage field in response", slog.String("path", c.Request.URL.Path))
-			return
+		rate, source := m.registry.Resolve(model)
+		switch source {
+		case analytics.CostRateSourceFallback:
+			metrics.CostRateFallbackTotal.WithLabelValues(model).Inc()
+		case analytics.CostRateSourceMissing:
+			metrics.CostRateMissingTotal.WithLabelValues(model).Inc()
 		}
 
-		tenantStr := extractTenantSlug(c)
 		tenantID, _ := value.NewTenantID(tenantStr)
-		cr := m.registry.Lookup(model)
-		cost := cr.Cost(resp.Usage.PromptTokens, resp.Usage.CompletionTokens)
+		cost := rate.Cost(usage.PromptTokens, usage.CompletionTokens)
 
-		usage := analytics.TokenUsage{
+		record := analytics.TokenUsage{
 			TenantID:     tenantID,
 			Model:        model,
-			InputTokens:  resp.Usage.PromptTokens,
-			OutputTokens: resp.Usage.CompletionTokens,
+			InputTokens:  usage.PromptTokens,
+			OutputTokens: usage.CompletionTokens,
 			Cost:         cost,
 			Timestamp:    time.Now(),
 		}
 
-		updateMetrics(tenantStr, model, resp.Usage.PromptTokens, resp.Usage.CompletionTokens, cost)
+		updateMetrics(tenantStr, model, usage.PromptTokens, usage.CompletionTokens, cost)
 
 		select {
-		case m.usageCh <- usage:
+		case m.usageCh <- record:
 		default:
 			m.log.WarnContext(c.Request.Context(), "usage middleware: usage channel full, dropping record")
 		}

@@ -1,8 +1,6 @@
 package middleware
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -13,12 +11,14 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/analytics"
 	"github.com/bzdvdn/maskchain/src/internal/domain/budget"
 	"github.com/bzdvdn/maskchain/src/internal/domain/virtualkey"
+	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
 )
 
 // @sk-task 301-budget-enforcement#T2.1: BudgetMiddleware enforces budget hard limits and records spend (AC-002, AC-004)
 //
 // BudgetMiddleware checks budgets before the request and increments spend after
-// a successful (non-streaming) response.
+// a successful response, including streamed (SSE) responses. Streaming spend is
+// recorded after the stream ends; the hard limit is enforced on the next request.
 type BudgetMiddleware struct {
 	repo     budget.BudgetRepository
 	counter  budget.SpendCounter
@@ -91,21 +91,34 @@ func (m *BudgetMiddleware) Handler() gin.HandlerFunc {
 			}
 		}
 
-		if isStreaming(c) {
-			c.Next()
-			return
-		}
-
-		w := &usageBodyWriter{ResponseWriter: c.Writer, body: &bytes.Buffer{}}
-		c.Writer = w
+		// @sk-task usage-accounting-integrity#T2.1: account after the response, streamed or not (AC-001, AC-002, AC-004, AC-007)
+		streaming := isStreaming(c)
+		capture := wrapUsageCapture(c, streaming)
 		c.Next()
 
-		if w.status != http.StatusOK {
+		if capture.status != http.StatusOK {
 			return
 		}
 
-		cost, tokens, ok := m.extractUsage(w.body.Bytes(), model)
-		if !ok || cost <= 0 {
+		usage, ok := capture.Usage()
+		if !ok {
+			metrics.UsageMissingTotal.WithLabelValues(tenantID, model).Inc()
+			m.log.WarnContext(c.Request.Context(), "budget middleware: provider reported no usage; request not accounted",
+				slog.String("tenant", tenantID), slog.String("model", model), slog.Bool("streaming", streaming))
+			return
+		}
+
+		rate, source := m.rates.Resolve(model)
+		switch source {
+		case analytics.CostRateSourceFallback:
+			metrics.CostRateFallbackTotal.WithLabelValues(model).Inc()
+		case analytics.CostRateSourceMissing:
+			metrics.CostRateMissingTotal.WithLabelValues(model).Inc()
+		}
+
+		cost := rate.Cost(usage.PromptTokens, usage.CompletionTokens)
+		tokens := usage.PromptTokens + usage.CompletionTokens
+		if cost <= 0 {
 			return
 		}
 
@@ -162,24 +175,6 @@ func (m *BudgetMiddleware) requestContext(c *gin.Context) (tenantID, keyID strin
 		keyID = vk.ID
 	}
 	return tenantID, keyID
-}
-
-func (m *BudgetMiddleware) extractUsage(body []byte, model string) (cost float64, tokens int64, ok bool) {
-	var resp struct {
-		Usage *struct {
-			PromptTokens     int64 `json:"prompt_tokens"`
-			CompletionTokens int64 `json:"completion_tokens"`
-		} `json:"usage"`
-	}
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return 0, 0, false
-	}
-	if resp.Usage == nil {
-		return 0, 0, false
-	}
-	tokens = resp.Usage.PromptTokens + resp.Usage.CompletionTokens
-	cost = m.rates.Lookup(model).Cost(resp.Usage.PromptTokens, resp.Usage.CompletionTokens)
-	return cost, tokens, true
 }
 
 func (m *BudgetMiddleware) accumulateKeySpend(c *gin.Context, keyID string, cost float64) {

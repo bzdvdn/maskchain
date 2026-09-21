@@ -84,6 +84,9 @@ func run() {
 		os.Exit(1)
 	}
 	routingHandler := api.NewRoutingProxyHandler(provDeps.selector, provDeps.fallbackHandler)
+	if cfg.Analytics != nil {
+		routingHandler.WithStreamUsage(cfg.Analytics.StreamUsage)
+	}
 	watchConfigReload(cfg, provDeps, logger)
 
 	if cfg.Routing != nil {
@@ -391,7 +394,7 @@ func runAnalytics(cfg *config.Config, pgPool *pgxpool.Pool, srv *api.Server, log
 	go asyncWorker.Run(analyticsCtx)
 
 	srv.RegisterUsageMiddleware(middleware.NewUsageMiddleware(
-		analytics.NewCostRateRegistry(costRates),
+		newCostRateRegistry(cfg, costRates),
 		asyncWorker.Buffer(),
 		logger,
 	).Handler())
@@ -471,7 +474,7 @@ func runBudgets(cfg *config.Config, pgPool *pgxpool.Pool, vkClient valkey.Client
 	notifier := budgetapp.NewWebhookNotifier(webhookURL, logger)
 
 	mw := middleware.NewBudgetMiddleware(budgetRepo, counter,
-		analytics.NewCostRateRegistry(costRates), vkRepo, notifier, logger)
+		newCostRateRegistry(cfg, costRates), vkRepo, notifier, logger)
 	srv.RegisterBudgetMiddleware(mw.Handler())
 	logger.Info("budget enforcement middleware registered")
 
@@ -482,6 +485,22 @@ func runBudgets(cfg *config.Config, pgPool *pgxpool.Pool, vkClient valkey.Client
 	aggWorker := budgetapp.NewAggregationWorker(budgetRepo, interval, logger)
 	go aggWorker.Run(budgetCtx)
 	logger.Info("budget aggregation worker started", slog.Duration("interval", interval))
+}
+
+// @sk-task usage-accounting-integrity#T2.3: build the registry with the configured fallback rate (AC-006)
+func newCostRateRegistry(cfg *config.Config, rates []*analytics.CostRate) *analytics.CostRateRegistry {
+	var fallback *analytics.CostRate
+	if cfg != nil && cfg.Analytics != nil && cfg.Analytics.DefaultCostRate != nil {
+		d := cfg.Analytics.DefaultCostRate
+		model := d.Model
+		if model == "" {
+			model = "default"
+		}
+		if fb, err := analytics.NewCostRateWithCurrency(model, d.InputPricePer1K, d.OutputPricePer1K, analytics.DefaultCurrency); err == nil {
+			fallback = fb
+		}
+	}
+	return analytics.NewCostRateRegistryWithFallback(rates, fallback)
 }
 
 func initDetectors(log *slog.Logger) *detector.DetectorRegistry {

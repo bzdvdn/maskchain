@@ -128,6 +128,8 @@ func DefaultConfig() *Config {
 		Analytics: &AnalyticsConfig{
 			RetentionDays: defaultAnalyticsRetentionDays,
 			BatchInterval: defaultAnalyticsBatchInterval,
+			// @sk-task usage-accounting-integrity#T1.3: streaming usage on by default (AC-001)
+			StreamUsage: true,
 		},
 		Conversations: &ConversationsConfig{
 			RetentionDays: defaultConversationsRetentionDays,

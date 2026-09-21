@@ -79,6 +79,11 @@ func buildGatewayServer(
 
 	detectorRegistry := initDetectors(logger)
 
+	// @sk-task usage-accounting-integrity#T2.3: request provider usage on streams (AC-001)
+	if routingHandler != nil && cfg.Analytics != nil {
+		routingHandler.WithStreamUsage(cfg.Analytics.StreamUsage)
+	}
+
 	maskTTL := time.Duration(cfg.Mask.CacheTTLSec) * time.Second
 	pgRepo := maskrepo.NewPostgresMaskRepo(pgPool)
 	vkRepo := maskrepo.NewValkeyMaskRepo(vkClient, maskTTL)
@@ -274,7 +279,7 @@ func buildGatewayServer(
 	_ = analyticsCancel
 	if cfg.Analytics != nil && pgPool != nil {
 		costRates := bootstrap.LoadCostRatesFromDB(context.Background(), cfg, pgPool, logger)
-		costRegistry := analytics.NewCostRateRegistry(costRates)
+		costRegistry := newCostRateRegistry(cfg, costRates)
 		logger.Info("cost rate registry created", slog.Int("rates", len(costRates)))
 
 		pgUsageStore := analyticsrepo.NewPgUsageStore(pgPool)
@@ -349,7 +354,7 @@ func buildGatewayServer(
 		notifier := budgetapp.NewWebhookNotifier(cfg.Budgets.AlertWebhookURL, logger)
 
 		budgetMw := middleware.NewBudgetMiddleware(budgetRepo, counter,
-			analytics.NewCostRateRegistry(costRates), vkRepo, notifier, logger)
+			newCostRateRegistry(cfg, costRates), vkRepo, notifier, logger)
 		srv.RegisterBudgetMiddleware(budgetMw.Handler())
 		logger.Info("budget enforcement middleware registered")
 
@@ -379,6 +384,22 @@ func buildGatewayServer(
 	logger.Info("gateway routes registered")
 
 	return srv
+}
+
+// @sk-task usage-accounting-integrity#T2.3: build the registry with the configured fallback rate (AC-006)
+func newCostRateRegistry(cfg *config.Config, rates []*analytics.CostRate) *analytics.CostRateRegistry {
+	var fallback *analytics.CostRate
+	if cfg != nil && cfg.Analytics != nil && cfg.Analytics.DefaultCostRate != nil {
+		d := cfg.Analytics.DefaultCostRate
+		model := d.Model
+		if model == "" {
+			model = "default"
+		}
+		if fb, err := analytics.NewCostRateWithCurrency(model, d.InputPricePer1K, d.OutputPricePer1K, analytics.DefaultCurrency); err == nil {
+			fallback = fb
+		}
+	}
+	return analytics.NewCostRateRegistryWithFallback(rates, fallback)
 }
 
 // @sk-task combined-binary: Init detectors with CompositeDetector

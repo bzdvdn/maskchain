@@ -116,6 +116,14 @@ egress:
 analytics:
   batch_interval: 5s
   retention_days: 7
+  # Ask OpenAI-shaped providers for token usage on streaming (SSE) responses so
+  # streamed traffic is accounted like non-streaming. Default: true.
+  stream_usage: true
+  # Fallback rate for models without an explicit cost_rates entry. When unset,
+  # unrated models cost 0 and are reported via maskchain_cost_rate_missing_total.
+  # default_cost_rate:
+  #   input_price_per_1k: 0.001
+  #   output_price_per_1k: 0.003
   cost_rates:
     - model: "gemma3:4b"
       input_price_per_1k: 0

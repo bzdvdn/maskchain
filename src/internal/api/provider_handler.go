@@ -33,12 +33,49 @@ type chatRequest struct {
 //
 // RoutingProxyHandler represents a domain entity or configuration.
 type RoutingProxyHandler struct {
-	selector *routingSvc.RouteSelector
-	fallback *routingSvc.FallbackHandler
+	selector    *routingSvc.RouteSelector
+	fallback    *routingSvc.FallbackHandler
+	streamUsage bool
 }
 
 func NewRoutingProxyHandler(selector *routingSvc.RouteSelector, fallback *routingSvc.FallbackHandler) *RoutingProxyHandler {
 	return &RoutingProxyHandler{selector: selector, fallback: fallback}
+}
+
+// @sk-task usage-accounting-integrity#T2.4: opt-in provider usage on streams (AC-001)
+//
+// WithStreamUsage controls whether OpenAI-shaped streaming requests are asked
+// for token usage via stream_options.include_usage.
+func (h *RoutingProxyHandler) WithStreamUsage(enabled bool) *RoutingProxyHandler {
+	h.streamUsage = enabled
+	return h
+}
+
+// withStreamUsage adds stream_options.include_usage for OpenAI-shaped streaming
+// requests so the provider reports usage on the final SSE chunk. It is a no-op
+// when disabled, when the client already set stream_options, or for non-OpenAI
+// paths such as Anthropic /messages.
+func withStreamUsage(body []byte, path string, enabled bool) []byte {
+	if !enabled || !isOpenAIShaped(path) {
+		return body
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return body
+	}
+	if _, ok := raw["stream_options"]; ok {
+		return body
+	}
+	raw["stream_options"] = json.RawMessage(`{"include_usage":true}`)
+	out, err := json.Marshal(raw)
+	if err != nil {
+		return body
+	}
+	return out
+}
+
+func isOpenAIShaped(path string) bool {
+	return strings.HasSuffix(path, "/chat/completions") || strings.HasSuffix(path, "/completions")
 }
 
 // hop-by-hop headers that must not be forwarded from upstream response
@@ -82,6 +119,11 @@ func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
 	if req.Model == "" {
 		respondWithError(c, http.StatusBadRequest, "VALIDATION_ERROR", "model is required")
 		return
+	}
+
+	// @sk-task usage-accounting-integrity#T2.4: request usage on OpenAI-shaped streams (AC-001)
+	if req.Stream {
+		body = withStreamUsage(body, c.Request.URL.Path, h.streamUsage)
 	}
 
 	// @sk-task 80-tenant-isolation#T2.4: Read tenant from auth middleware context (AC-006)

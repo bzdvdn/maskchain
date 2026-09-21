@@ -7,11 +7,11 @@ description: SpecKeep — spec-driven development. Use when the user asks to pro
 
 Workflow: constitution → spec → [inspect, optional] → plan → tasks → implement → archive. Verify is an optional on-demand audit; propose is the one-shot fast lane; converge is the fast closing loop.
 
-Phase files live under .claude/skills
+Every phase is its own independent skill, invoked directly with `/spk-<phase>`
 
 ## How to run a phase
 
-1. Open the phase file under phases/<phase>.md — it is self-contained with the full instructions inline (canonical source mirrored from .speckeep/templates/prompts).
+1. If the phase is already known, invoke it directly: /spk-<phase> (each is self-contained with full instructions inline). Reach for this sdd overview skill only when the phase isn't obvious from the request.
 2. Read .speckeep/constitution.summary.md first (fallback: CONSTITUTION.md).
 3. Branch-first: work on feature/<slug> (only spec/propose may create/switch the branch).
 4. Keep context narrow: current slug + Touches: surfaces only.
@@ -24,25 +24,25 @@ Phase files live under .claude/skills
 - speckeep converge <slug> (fast loop) or speckeep guard . (CI) before closing.
 - A task is done only with a Proof: line under its [x] in tasks.md.
 
-## Phases
+## Phases (each a separately invocable skill)
 
-- `constitution` — Create or update the project constitution
-- `spec` — Create or update one feature spec
-- `propose` — One-shot: turn an idea into spec + tasks (plan optional) and go straight to implement
-- `inspect` — Inspect one feature for consistency and quality
-- `plan` — Create or update plan artifacts for one feature
-- `tasks` — Create or update tasks for one feature
-- `implement` — Implement one feature from tasks
-- `verify` — Verify one implemented feature package
-- `converge` — Close a feature fast: re-check tasks/proofs, append follow-up tasks, repeat until converged
-- `handoff` — Generate a session handoff document for one feature
-- `challenge` — Adversarial review of a feature spec or plan
-- `scope` — Quick scope boundary check for a feature
-- `glossary` — Create or update the shared domain-language glossary
-- `recap` — Project-level overview of all active features and their current phase
-- `hotfix` — Create emergency fix outside the standard phase chain
-- `repo-map` — Update REPOSITORY_MAP.md navigation index
-- `rollback` — Roll back completed tasks for a feature, returning them to unfinished state
+- `/spk-constitution` — Create or update the project constitution
+- `/spk-spec` — Create or update one feature spec
+- `/spk-propose` — One-shot: turn an idea into spec + tasks (plan optional) and go straight to implement
+- `/spk-inspect` — Inspect one feature for consistency and quality
+- `/spk-plan` — Create or update plan artifacts for one feature
+- `/spk-tasks` — Create or update tasks for one feature
+- `/spk-implement` — Implement one feature from tasks
+- `/spk-verify` — Verify one implemented feature package
+- `/spk-converge` — Close a feature fast: re-check tasks/proofs, append follow-up tasks, repeat until converged
+- `/spk-handoff` — Generate a session handoff document for one feature
+- `/spk-challenge` — Adversarial review of a feature spec or plan
+- `/spk-scope` — Quick scope boundary check for a feature
+- `/spk-glossary` — Create or update the shared domain-language glossary
+- `/spk-recap` — Project-level overview of all active features and their current phase
+- `/spk-hotfix` — Create emergency fix outside the standard phase chain
+- `/spk-repo-map` — Update REPOSITORY_MAP.md navigation index
+- `/spk-rollback` — Roll back completed tasks for a feature, returning them to unfinished state
 
 ## Constraints
 

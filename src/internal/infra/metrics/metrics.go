@@ -35,6 +35,10 @@ func RegisterMetrics(reg *prometheus.Registry) {
 	reg.MustRegister(CacheErrorsTotal)
 	reg.MustRegister(CacheWriteBlockedTotal)
 	reg.MustRegister(CacheKeysTotal)
+	// @sk-task usage-accounting-integrity#T1.2: register accounting gap metrics (AC-004, AC-006, AC-007)
+	reg.MustRegister(UsageMissingTotal)
+	reg.MustRegister(CostRateFallbackTotal)
+	reg.MustRegister(CostRateMissingTotal)
 }
 
 // @sk-task 90-production-hardening#T3.2: Register PG pool metrics collector (<AC-003>)
@@ -249,6 +253,34 @@ var (
 		},
 		[]string{"tenant"},
 	)
+
+	// @sk-task usage-accounting-integrity#T1.2: accounting gap metrics (AC-004, AC-006, AC-007)
+	UsageMissingTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "usage_missing_total",
+			Help:      "Total number of responses where the provider reported no token usage (not accounted)",
+		},
+		[]string{"tenant", "model"},
+	)
+
+	CostRateFallbackTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "cost_rate_fallback_total",
+			Help:      "Total number of requests priced with the configured fallback cost rate",
+		},
+		[]string{"model"},
+	)
+
+	CostRateMissingTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "cost_rate_missing_total",
+			Help:      "Total number of requests for a model with no explicit and no fallback cost rate",
+		},
+		[]string{"model"},
+	)
 )
 
 // @sk-task 131-analytics-pipeline#T4.1: Reset clears analytics metrics for test isolation
@@ -258,4 +290,8 @@ func Reset() {
 	TokensTotal.Reset()
 	CostTotal.Reset()
 	RequestTotal.Reset()
+	// @sk-task usage-accounting-integrity#T1.2: reset accounting gap metrics for test isolation
+	UsageMissingTotal.Reset()
+	CostRateFallbackTotal.Reset()
+	CostRateMissingTotal.Reset()
 }

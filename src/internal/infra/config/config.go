@@ -266,6 +266,14 @@ type AnalyticsConfig struct {
 	CostRates     []CostRateConfig `mapstructure:"cost_rates" yaml:"cost_rates"`
 	RetentionDays int              `mapstructure:"retention_days" yaml:"retention_days"`
 	BatchInterval string           `mapstructure:"batch_interval" yaml:"batch_interval"`
+	// @sk-task usage-accounting-integrity#T1.3: fallback rate for unrated models (AC-006, AC-007)
+	// DefaultCostRate prices models that have no explicit cost_rates entry.
+	// When nil, unrated models cost 0 and the gap is reported via a metric.
+	DefaultCostRate *CostRateConfig `mapstructure:"default_cost_rate" yaml:"default_cost_rate"`
+	// @sk-task usage-accounting-integrity#T1.3: request provider usage on streams (AC-001)
+	// StreamUsage asks OpenAI-shaped providers for token usage on streaming
+	// responses. Defaults to true.
+	StreamUsage bool `mapstructure:"stream_usage" yaml:"stream_usage"`
 }
 
 // @sk-task conversation-logging#T1.1: Add ConversationsConfig section (AC-008)
