@@ -158,6 +158,13 @@ routing and budgets) and a standalone **Compliance** page (apply/audit packs).
 The Playground relays through the admin process, so set `admin.gateway_url`
 (default `http://localhost:8080`) when gateway and admin run separately.
 
+### Proxy endpoints
+
+- `POST /api/v1/chat/completions` (alias `/v1/chat/completions`) — OpenAI-compatible chat with streaming unmask.
+- `POST /api/v1/messages` — Anthropic Messages.
+- `POST /api/v1/completions` — legacy completions, same chain as chat.
+- `POST /api/v1/embeddings` (alias `/v1/embeddings`) — embeddings. The text `input` (a string or an array of strings) is masked per tenant policy before the provider call; vectors are returned unchanged (masking is one-way, never unmasked). Non-text input shapes (token arrays/base64) are rejected so they cannot bypass masking. Embeddings tokens count toward usage and budgets.
+
 ### Cost & usage accounting
 
 - Spend and token usage are recorded for **streamed (SSE) and non-streamed** requests alike, after the response completes.

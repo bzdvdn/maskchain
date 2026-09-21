@@ -605,3 +605,74 @@ func TestProxyCompletionHandler(t *testing.T) {
 		t.Errorf("expected response body to contain completion, got %s", w.Body.String())
 	}
 }
+
+// @sk-test embeddings-passthrough#T3.3: embeddings routing falls back and keeps the upstream path (AC-006)
+func TestRoutingHandlerEmbeddingsFallback(t *testing.T) {
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
+			{Name: "primary", BaseURL: "http://localhost:1"},
+			{Name: "fallback", BaseURL: "http://localhost:2"},
+		},
+		Rules: []routing.RuleConfig{
+			{Tenant: "default", Routes: []routing.RouteConfig{
+				{Model: "emb", Providers: []string{"primary", "fallback"}},
+			}},
+		},
+	}
+
+	reg, _ := routingSvc.NewProviderRegistry(cfg)
+	sel := routingSvc.NewRouteSelector(reg)
+	fbClient := &mockPortClient{statusCode: http.StatusOK}
+	fb := routingSvc.NewFallbackHandler(map[string]ports.ProviderClient{"fallback": fbClient})
+	handler := NewRoutingProxyHandler(sel, fb)
+
+	// Primary unhealthy → selector picks the fallback provider.
+	reg.Get("primary").SetHealthStatus(routing.HealthUnhealthy)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/embeddings",
+		strings.NewReader(`{"model":"emb","input":"hi"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler.HandleChatCompletion(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 via fallback, got %d: %s", w.Code, w.Body.String())
+	}
+	if fbClient.capturedReq == nil {
+		t.Fatal("expected the fallback provider to be called")
+	}
+	if fbClient.capturedReq.URL != "/v1/embeddings" {
+		t.Errorf("upstream path = %q, want /v1/embeddings", fbClient.capturedReq.URL)
+	}
+}
+
+// @sk-test embeddings-passthrough#T3.3: unrouted embeddings model returns NO_ROUTE (AC-006)
+func TestRoutingHandlerEmbeddingsNoRoute(t *testing.T) {
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{{Name: "openai", BaseURL: "http://localhost:1"}},
+		Rules: []routing.RuleConfig{
+			{Tenant: "default", Routes: []routing.RouteConfig{
+				{Model: "gpt-4", Providers: []string{"openai"}},
+			}},
+		},
+	}
+	_, sel, fb := newTestRouting(cfg)
+	handler := NewRoutingProxyHandler(sel, fb)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/embeddings",
+		strings.NewReader(`{"model":"unknown-emb","input":"hi"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler.HandleChatCompletion(c)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unrouted embeddings model, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "NO_ROUTE") {
+		t.Errorf("expected NO_ROUTE error, got %s", w.Body.String())
+	}
+}

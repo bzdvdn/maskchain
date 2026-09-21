@@ -35,6 +35,7 @@ type Server struct {
 	modelAccessMw     gin.HandlerFunc
 	budgetMw          gin.HandlerFunc
 	cacheMw           gin.HandlerFunc
+	embeddingsShield  gin.HandlerFunc
 }
 
 // @sk-task 114-real-health-probes#T2.2: Accept healthSvc and replace static handlers (AC-001, AC-005, AC-008)
@@ -131,6 +132,22 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 	}
 	chain = append(chain, chatHandler)
 
+	// @sk-task embeddings-passthrough#T1.2: embeddings chain uses the dedicated
+	// input shield (one-way masking) and skips session/conversation/cache/SSE,
+	// which are chat-specific. Model access, usage and budget still apply.
+	embeddingsChain := []gin.HandlerFunc{}
+	if s.modelAccessMw != nil {
+		embeddingsChain = append(embeddingsChain, s.modelAccessMw)
+	}
+	embeddingsChain = append(embeddingsChain, s.embeddingsShield)
+	if s.usageMiddleware != nil {
+		embeddingsChain = append(embeddingsChain, s.usageMiddleware)
+	}
+	if s.budgetMw != nil {
+		embeddingsChain = append(embeddingsChain, s.budgetMw)
+	}
+	embeddingsChain = append(embeddingsChain, chatHandler)
+
 	// @sk-task usage-accounting-integrity#T3.1+T3.2: /completions shares the chat chain
 	//
 	// The routing handler derives the upstream path from the request path, so
@@ -142,6 +159,9 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 		group.POST("/chat/completions", chain...)
 		group.POST("/messages", chain...)
 		group.POST("/completions", chain...)
+		if s.embeddingsShield != nil {
+			group.POST("/embeddings", embeddingsChain...)
+		}
 	}
 }
 
@@ -173,6 +193,15 @@ func (s *Server) RegisterBudgetMiddleware(mw gin.HandlerFunc) {
 // @sk-task semantic-cache-masked#T2.2: Register cache middleware on proxy routes (AC-001)
 func (s *Server) RegisterCacheMiddleware(mw gin.HandlerFunc) {
 	s.cacheMw = mw
+}
+
+// @sk-task embeddings-passthrough#T1.2: register the embeddings input shield (AC-001)
+//
+// RegisterEmbeddingsShield sets the middleware used for POST /embeddings. The
+// route is mounted only when this is set, so embeddings stays disabled until the
+// binary wires the shield.
+func (s *Server) RegisterEmbeddingsShield(mw gin.HandlerFunc) {
+	s.embeddingsShield = mw
 }
 
 func (s *Server) withSessionMiddleware(next gin.HandlerFunc) gin.HandlerFunc {

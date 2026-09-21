@@ -16,6 +16,7 @@ import (
 
 	"github.com/bzdvdn/maskchain/src/internal/api/health"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
+	"github.com/bzdvdn/maskchain/src/internal/domain/analytics"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 	"github.com/bzdvdn/maskchain/src/internal/domain/virtualkey"
@@ -268,6 +269,85 @@ func TestCompletionsUsesFullChain(t *testing.T) {
 	}
 	if usageRan == 0 || budgetRan == 0 {
 		t.Errorf("expected usage and budget middleware to run on /completions (usage=%d budget=%d)", usageRan, budgetRan)
+	}
+}
+
+// @sk-test embeddings-passthrough#T3.2: embeddings route parity, auth and accounting stages (AC-001, AC-005)
+func TestEmbeddingsRouteParityAndAuth(t *testing.T) {
+	repo := &selfFakeRepo{keys: []*virtualkey.VirtualKey{{
+		ID:            "k1",
+		TenantID:      "acme",
+		KeyHash:       virtualkey.KeyHash("sk-mc_secret"),
+		AllowedModels: []string{"emb"},
+		Enabled:       true,
+	}}}
+	slug, err := value.NewTenantSlug("acme")
+	if err != nil {
+		t.Fatalf("slug: %v", err)
+	}
+	tenant := entity.NewTenant(slug, "Acme", "Authorization")
+
+	srv := newTestServer()
+	srv.RegisterAuth(middleware.VirtualKeyAuth(repo, middleware.NewTenantProvider([]*entity.Tenant{tenant})))
+	srv.RegisterModelAccess(middleware.ModelAccess())
+	srv.RegisterEmbeddingsShield(func(c *gin.Context) { c.Next() })
+	budgetRan := 0
+	srv.RegisterBudgetMiddleware(func(c *gin.Context) { budgetRan++; c.Next() })
+	srv.RegisterProxyRoute(func(c *gin.Context) { c.Next() }, nil)
+
+	post := func(path string, withAuth bool) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"emb","input":"hi"}`))
+		req.Header.Set("Content-Type", "application/json")
+		if withAuth {
+			req.Header.Set("Authorization", "Bearer sk-mc_secret")
+		}
+		srv.engine.ServeHTTP(w, req)
+		return w
+	}
+
+	for _, path := range []string{"/api/v1/embeddings", "/v1/embeddings"} {
+		if w := post(path, true); w.Code != http.StatusOK {
+			t.Errorf("%s with key: expected 200, got %d: %s", path, w.Code, w.Body.String())
+		}
+		if w := post(path, false); w.Code != http.StatusUnauthorized {
+			t.Errorf("%s without key: expected 401, got %d", path, w.Code)
+		}
+	}
+	if budgetRan == 0 {
+		t.Error("expected the budget stage to run on /embeddings")
+	}
+}
+
+// @sk-test embeddings-passthrough#T3.2: embeddings usage is recorded with input-only cost (AC-005)
+func TestEmbeddingsUsageAccounting(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ch := make(chan analytics.TokenUsage, 1)
+	reg := analytics.NewCostRateRegistry([]*analytics.CostRate{
+		{Model: "emb", InputPricePer1K: 2, OutputPricePer1K: 9, Currency: "USD"},
+	})
+	engine := gin.New()
+	engine.Use(middleware.NewUsageMiddleware(reg, ch, slog.Default()).Handler())
+	engine.POST("/api/v1/embeddings", func(c *gin.Context) {
+		c.Data(http.StatusOK, "application/json", []byte(`{"data":[[0.1]],"usage":{"prompt_tokens":1000,"total_tokens":1000}}`))
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/api/v1/embeddings", strings.NewReader(`{"model":"emb","input":"hi"}`))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+
+	select {
+	case u := <-ch:
+		if u.InputTokens != 1000 || u.OutputTokens != 0 {
+			t.Errorf("tokens = %d/%d, want 1000/0", u.InputTokens, u.OutputTokens)
+		}
+		// Input-only cost: 1000/1k * 2 = 2 (output rate must not contribute).
+		if u.Cost != 2 {
+			t.Errorf("cost = %f, want 2", u.Cost)
+		}
+	default:
+		t.Fatal("expected an embeddings usage record")
 	}
 }
 

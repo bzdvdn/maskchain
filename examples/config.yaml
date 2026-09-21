@@ -98,6 +98,13 @@ routing:
           providers: ["mistral"]
         - model: "gpt://b1ggb5ebrubb9a4gbp2o/yandexgpt/latest"
           providers: ["yandex"]
+        # Embeddings models are routed the same way and served at
+        # POST /api/v1/embeddings (alias /v1/embeddings); the input text is
+        # masked per tenant policy before the provider call.
+        - model: "nomic-embed-text"
+          providers: ["ollama"]
+        - model: "mistral-embed"
+          providers: ["mistral"]
 
 shield:
   action_on_suspicious: mask
