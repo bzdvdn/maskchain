@@ -8,16 +8,23 @@ import {
   YAxis,
 } from 'recharts'
 
+import { money } from '../utils/format'
+
+export type ChartMetric = 'tokens' | 'cost' | 'requests'
+
 interface Point {
   bucket: string
-  input_tokens: number
-  output_tokens: number
+  input_tokens?: number
+  output_tokens?: number
+  cost?: number
+  requests?: number
 }
 
 interface Props {
   data: Point[]
   height?: number
   compare?: Point[]
+  metric?: ChartMetric
 }
 
 const INPUT = 'var(--accent)'
@@ -52,10 +59,24 @@ function fmtLabel(iso: string): string {
   return `${d.getDate()}.${pad2(d.getMonth() + 1)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 }
 
-function ChartTooltip({ active, payload, label }: {
+// metricValue formats a value for the tooltip; the unit follows the metric.
+function metricValue(metric: ChartMetric, v: number): string {
+  if (metric === 'cost') return money(v)
+  if (metric === 'requests') return v.toLocaleString()
+  return v.toLocaleString()
+}
+
+// axisTick formats a value compactly for the y-axis.
+function axisTick(metric: ChartMetric, v: number): string {
+  if (metric === 'cost') return v >= 1 ? `$${v.toFixed(1)}` : `$${v.toFixed(3)}`
+  return fmtShort(v)
+}
+
+function ChartTooltip({ active, payload, label, metric }: {
   active?: boolean
   payload?: { name: string; value: number; color: string; dataKey: string }[]
   label?: string
+  metric: ChartMetric
 }) {
   if (!active || !payload?.length) return null
   return (
@@ -74,35 +95,63 @@ function ChartTooltip({ active, payload, label }: {
         <div key={p.dataKey} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ width: 8, height: 8, borderRadius: 2, background: p.color, display: 'inline-block', flexShrink: 0 }} />
           <span style={{ color: TICK, textTransform: 'capitalize' }}>{p.name}:</span>
-          <span style={{ color: 'var(--text)', fontWeight: 600 }}>{p.value.toLocaleString()}</span>
+          <span style={{ color: 'var(--text)', fontWeight: 600 }}>{metricValue(metric, p.value)}</span>
         </div>
       ))}
     </div>
   )
 }
 
-export function TimeSeriesChart({ data, height = 220, compare }: Props) {
+const METRIC_LABEL: Record<ChartMetric, string> = {
+  tokens: 'Tokens',
+  cost: 'Cost',
+  requests: 'Requests',
+}
+
+export function TimeSeriesChart({ data, height = 220, compare, metric = 'tokens' }: Props) {
   if (!data.length) {
     return (
-      <div className="text-muted" style={{ padding: 24, textAlign: 'center' }}>
+      <div role="img" aria-label={`${METRIC_LABEL[metric]} trend: no data for this period`} className="text-muted" style={{ padding: 24, textAlign: 'center' }}>
         No data for this period
       </div>
     )
   }
 
+  const allZero = data.every((d) => {
+    if (metric === 'cost') return (d.cost ?? 0) === 0
+    if (metric === 'requests') return (d.requests ?? 0) === 0
+    return (d.input_tokens ?? 0) === 0 && (d.output_tokens ?? 0) === 0
+  })
+  if (allZero) {
+    // A flat accent line at zero would read as activity; show a neutral state.
+    return (
+      <div role="img" aria-label={`${METRIC_LABEL[metric]} trend: no activity in this period`} className="text-muted" style={{ padding: 24, textAlign: 'center' }}>
+        No activity in this period
+      </div>
+    )
+  }
+
+  const single = data.length === 1
+
   const chartData = data.map((d, i) => {
     const cmp = compare?.[i]
-    return {
-      ...d,
-      label: fmtLabel(d.bucket),
-      Input: d.input_tokens,
-      Output: d.output_tokens,
-      Compare: cmp ? cmp.input_tokens + cmp.output_tokens : null,
+    const base = { bucket: d.bucket, label: fmtLabel(d.bucket) }
+    if (metric === 'tokens') {
+      return {
+        ...base,
+        Input: d.input_tokens ?? 0,
+        Output: d.output_tokens ?? 0,
+        Compare: cmp ? (cmp.input_tokens ?? 0) + (cmp.output_tokens ?? 0) : null,
+      }
     }
+    if (metric === 'cost') {
+      return { ...base, Cost: d.cost ?? 0, Compare: cmp ? cmp.cost ?? 0 : null }
+    }
+    return { ...base, Requests: d.requests ?? 0, Compare: cmp ? cmp.requests ?? 0 : null }
   })
 
   return (
-    <div style={{ width: '100%' }}>
+    <div role="img" aria-label={`${METRIC_LABEL[metric]} trend over ${data.length} buckets`} style={{ width: '100%' }}>
       <ResponsiveContainer width="100%" height={height}>
         <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <defs>
@@ -126,31 +175,47 @@ export function TimeSeriesChart({ data, height = 220, compare }: Props) {
             interval="preserveStartEnd"
           />
           <YAxis
-            tickFormatter={(v: number) => fmtShort(v)}
+            tickFormatter={(v: number) => axisTick(metric, v)}
             tick={{ fill: TICK, fontSize: 10 }}
             tickLine={false}
             axisLine={false}
-            width={44}
+            width={52}
           />
-          <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'var(--text-muted)', strokeDasharray: '3 3', strokeOpacity: 0.4 }} />
-          <Area
-            type="monotone"
-            dataKey="Input"
-            stroke={INPUT}
-            strokeWidth={2}
-            fill="url(#gradInput)"
-            dot={false}
-            activeDot={{ r: 4, strokeWidth: 0, fill: INPUT }}
-          />
-          <Area
-            type="monotone"
-            dataKey="Output"
-            stroke={OUTPUT}
-            strokeWidth={2}
-            fill="url(#gradOutput)"
-            dot={false}
-            activeDot={{ r: 4, strokeWidth: 0, fill: OUTPUT }}
-          />
+          <Tooltip content={<ChartTooltip metric={metric} />} cursor={{ stroke: 'var(--text-muted)', strokeDasharray: '3 3', strokeOpacity: 0.4 }} />
+
+          {metric === 'tokens' ? (
+            <>
+              <Area
+                type="monotone"
+                dataKey="Input"
+                stroke={INPUT}
+                strokeWidth={2}
+                fill="url(#gradInput)"
+                dot={single ? { r: 3 } : false}
+                activeDot={{ r: 4, strokeWidth: 0, fill: INPUT }}
+              />
+              <Area
+                type="monotone"
+                dataKey="Output"
+                stroke={OUTPUT}
+                strokeWidth={2}
+                fill="url(#gradOutput)"
+                dot={single ? { r: 3 } : false}
+                activeDot={{ r: 4, strokeWidth: 0, fill: OUTPUT }}
+              />
+            </>
+          ) : (
+            <Area
+              type="monotone"
+              dataKey={metric === 'cost' ? 'Cost' : 'Requests'}
+              stroke={INPUT}
+              strokeWidth={2}
+              fill="url(#gradInput)"
+              dot={single ? { r: 3 } : false}
+              activeDot={{ r: 4, strokeWidth: 0, fill: INPUT }}
+            />
+          )}
+
           {compare && (
             <Area
               type="monotone"
@@ -167,18 +232,32 @@ export function TimeSeriesChart({ data, height = 220, compare }: Props) {
       </ResponsiveContainer>
 
       <div style={{ display: 'flex', gap: 20, justifyContent: 'center', marginTop: 10 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: TICK }}>
-          <span style={{ width: 10, height: 10, borderRadius: 2, background: INPUT, display: 'inline-block', flexShrink: 0 }} /> Input
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: TICK }}>
-          <span style={{ width: 10, height: 10, borderRadius: 2, background: OUTPUT, display: 'inline-block', flexShrink: 0 }} /> Output
-        </span>
+        {metric === 'tokens' ? (
+          <>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: TICK }}>
+              <span style={{ width: 10, height: 10, borderRadius: 2, background: INPUT, display: 'inline-block', flexShrink: 0 }} /> Input
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: TICK }}>
+              <span style={{ width: 10, height: 10, borderRadius: 2, background: OUTPUT, display: 'inline-block', flexShrink: 0 }} /> Output
+            </span>
+          </>
+        ) : (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: TICK }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: INPUT, display: 'inline-block', flexShrink: 0 }} />
+            {metric === 'cost' ? 'Cost' : 'Requests'}
+          </span>
+        )}
         {compare && (
           <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: TICK }}>
             <span style={{ width: 14, height: 0, borderTop: '1.5px dashed var(--text-muted)', display: 'inline-block' }} /> prev period
           </span>
         )}
       </div>
+      {single && (
+        <div className="text-muted" style={{ fontSize: 11, textAlign: 'center', marginTop: 4 }}>
+          Single data point — widen the range for a trend.
+        </div>
+      )}
     </div>
   )
 }

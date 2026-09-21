@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { BarChart3, KeyRound, Shield, Users, Wallet, Zap, AlertTriangle, Plus } from 'lucide-react'
 import { TimeRangePicker, useRange, defaultRange, type RangeValue } from '../components/TimeRangePicker'
 import { Segmented, StatusPill, Button, type StatusTone } from '../components/ui'
-import { relativeTime, money, fmtTokens, groupNum } from '../utils/format'
+import { TimeSeriesChart, type ChartMetric } from '../components/TimeSeriesChart'
+import { relativeTime, money, fmtTokens, groupNum, rangeLabel } from '../utils/format'
 import {
   getAnalyticsTokens,
   getAnalyticsCost,
@@ -16,13 +17,19 @@ import { listKeys } from '../api/keys'
 import { listConversations } from '../api/conversations'
 import { useGatewayBase } from '../hooks/useGatewayBase'
 
-type Metric = 'tokens' | 'cost' | 'requests'
+type Metric = ChartMetric
 
 const METRICS: { key: Metric; label: string }[] = [
   { key: 'tokens', label: 'Tokens' },
   { key: 'cost', label: 'Cost' },
   { key: 'requests', label: 'Requests' },
 ]
+
+const METRIC_LABEL: Record<Metric, string> = {
+  tokens: 'Tokens',
+  cost: 'Cost',
+  requests: 'Requests',
+}
 
 interface AttentionItem {
   tone: StatusTone
@@ -52,43 +59,21 @@ function seriesValue(p: SeriesPoint, metric: Metric): number {
   return p.input_tokens + p.output_tokens
 }
 
-function TrendChart({ points, metric }: { points: SeriesPoint[]; metric: Metric }) {
-  const values = points.map((p) => seriesValue(p, metric))
-  if (values.length === 0) {
-    return <div className="u-center muted">No data for this period</div>
-  }
-  const max = Math.max(1, ...values)
-  const W = 600
-  const H = 200
-  const step = W / Math.max(1, values.length - 1)
-  const path = values
-    .map((v, i) => `${i === 0 ? 'M' : 'L'}${i * step},${H - (v / max) * (H - 20) - 10}`)
-    .join(' ')
-  const area = `${path} L${W},${H} L0,${H} Z`
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" className="trend-svg">
-      <defs>
-        <linearGradient id="hqTrend" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.32" />
-          <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {[40, 80, 120, 160].map((y) => (
-        <line key={y} x1="0" y1={y} x2={W} y2={y} stroke="var(--border-soft)" />
-      ))}
-      <path d={area} fill="url(#hqTrend)" />
-      <path d={path} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
 function Sparkline({ points, metric }: { points: SeriesPoint[]; metric: Metric }) {
   const values = points.map((p) => seriesValue(p, metric))
+  if (values.length === 0 || values.every((v) => v === 0)) {
+    // No activity: a neutral baseline reads better than a flat accent line.
+    return (
+      <svg viewBox="0 0 120 30" preserveAspectRatio="none" width="100%" height="30" className="spark-svg" aria-hidden="true">
+        <line x1="0" y1="29" x2="120" y2="29" stroke="var(--border)" strokeWidth="1.5" strokeDasharray="3 3" />
+      </svg>
+    )
+  }
   const max = Math.max(1, ...values)
   const step = 120 / Math.max(1, values.length - 1)
   const d = values.map((v, i) => `${i === 0 ? 'M' : 'L'}${i * step},${30 - (v / max) * 26}`).join(' ')
   return (
-    <svg viewBox="0 0 120 30" preserveAspectRatio="none" width="100%" height="30" className="spark-svg">
+    <svg viewBox="0 0 120 30" preserveAspectRatio="none" width="100%" height="30" className="spark-svg" aria-hidden="true">
       <path d={d} fill="none" stroke="var(--accent)" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   )
@@ -106,7 +91,9 @@ export function Dashboard() {
   const [totalCost, setTotalCost] = useState(0)
   const [totalRequests, setTotalRequests] = useState(0)
   const [series, setSeries] = useState<SeriesPoint[]>([])
+  const [seriesError, setSeriesError] = useState(false)
   const [prevTotals, setPrevTotals] = useState({ total_output_tokens: 0, total_input_tokens: 0, total_cost: 0 })
+  const [prevRequests, setPrevRequests] = useState(0)
   const [passRate, setPassRate] = useState(0)
   const [attention, setAttention] = useState<AttentionItem[]>([])
   const [activity, setActivity] = useState<{ id: string; tenant_id: string; model: string; status: string; created_at: string }[]>([])
@@ -135,6 +122,7 @@ export function Dashboard() {
         total_output_tokens: prevToks.totals?.total_output_tokens ?? 0,
         total_cost: prevCost.totals?.total_cost ?? 0,
       })
+      setPrevRequests(prevCost.totals?.request_count ?? 0)
       setError('')
     } catch {
       setError('No data yet')
@@ -145,8 +133,10 @@ export function Dashboard() {
     try {
       const d = await getAnalyticsSeries(from, to, workspace)
       setSeries(Array.isArray(d.series) ? d.series : [])
+      setSeriesError(false)
     } catch {
       setSeries([])
+      setSeriesError(true)
     }
   }, [from, to, workspace])
 
@@ -219,7 +209,7 @@ export function Dashboard() {
 
   useEffect(() => {
     let active = true
-    listConversations(1, 100)
+    listConversations(1, 100, workspace ? { tenant_id: workspace } : {})
       .then((conv) => {
         if (!active) return
         const rows = Array.isArray(conv.items) ? conv.items : []
@@ -235,15 +225,21 @@ export function Dashboard() {
   const tokensTotal = totals.total_input_tokens + totals.total_output_tokens
   const tokensDelta = deltaPct(tokensTotal, prevTotals.total_input_tokens + prevTotals.total_output_tokens)
   const costDelta = deltaPct(totalCost, prevTotals.total_cost)
+  const requestsDelta = deltaPct(totalRequests, prevRequests)
 
   const firstRun = series.length === 0 && tokensTotal === 0 && attention.length === 0 && activity.length === 0 && !error
 
-  const cards = [
-    { label: 'Spend · last 24h', value: money(totalCost), delta: costDelta },
-    { label: 'Requests · last 24h', value: groupNum(totalRequests), delta: null },
-    { label: 'Tokens · last 24h', value: fmtTokens(tokensTotal), delta: tokensDelta },
-    { label: 'Pass rate · last 100', value: `${passRate}%`, delta: null },
+  const scope = workspace ? ` · ${workspace}` : ''
+  const rLabel = rangeLabel(range.mode, from, to)
+  const cards: { key: string; label: string; value: string; delta: number | null; metric: Metric | null }[] = [
+    { key: 'spend', label: `Spend · ${rLabel}${scope}`, value: money(totalCost), delta: costDelta, metric: 'cost' },
+    { key: 'requests', label: `Requests · ${rLabel}${scope}`, value: groupNum(totalRequests), delta: requestsDelta, metric: 'requests' },
+    { key: 'tokens', label: `Tokens · ${rLabel}${scope}`, value: fmtTokens(tokensTotal), delta: tokensDelta, metric: 'tokens' },
+    { key: 'pass', label: `Pass rate · last 100${scope || ' · all tenants'}`, value: `${passRate}%`, delta: null, metric: null },
   ]
+
+  const trendTotal = metric === 'cost' ? money(totalCost) : metric === 'requests' ? groupNum(totalRequests) : fmtTokens(tokensTotal)
+  const trendDelta = metric === 'cost' ? costDelta : metric === 'requests' ? requestsDelta : tokensDelta
 
   return (
     <div>
@@ -265,13 +261,24 @@ export function Dashboard() {
         <>
       <div className="card u-mb24">
         <div className="card-header-row">
-          <h3>Traffic trend</h3>
+          <h3>Traffic trend · {METRIC_LABEL[metric]} · {rLabel}{scope}</h3>
           <div className="u-flex-lg">
             <Segmented<Metric> options={METRICS} value={metric} onChange={setMetric} ariaLabel="Trend metric" />
             <TimeRangePicker value={range} onChange={setRange} />
           </div>
         </div>
-        <TrendChart points={series} metric={metric} />
+        <div className="muted-sm u-mb8">
+          Total: {trendTotal}
+          {trendDelta !== null && ` · ${trendDelta >= 0 ? '▲' : '▼'} ${Math.abs(trendDelta)}% vs previous period`}
+        </div>
+        {seriesError ? (
+          <p className="text-muted">Could not load the trend for this range. Try again.</p>
+        ) : (
+          <TimeSeriesChart data={series} metric={metric} />
+        )}
+        <div className="muted-sm u-mt8">
+          Tokens = input + output · Cost in the configured currency · Requests from usage records
+        </div>
       </div>
 
       <div className="stats-grid">
@@ -284,9 +291,11 @@ export function Dashboard() {
                 {card.delta >= 0 ? '▲' : '▼'} {Math.abs(card.delta)}%
               </div>
             )}
-            <div className="u-mt6">
-              <Sparkline points={series} metric={metric} />
-            </div>
+            {card.metric && (
+              <div className="u-mt6">
+                <Sparkline points={series} metric={card.metric} />
+              </div>
+            )}
           </div>
         ))}
       </div>

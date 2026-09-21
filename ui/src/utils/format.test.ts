@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { absDate, relativeTime, groupNum, money, fmtTokens } from './format'
+import { absDate, relativeTime, groupNum, money, fmtTokens, rangeLabel } from './format'
 
 describe('absDate', () => {
   it('formats an ISO timestamp as locale-neutral local datetime', () => {
@@ -65,5 +65,23 @@ describe('groupNum', () => {
   it('groups digits without locale dependence', () => {
     expect(groupNum(84209)).toBe('84,209')
     expect(groupNum('1000000')).toBe('1,000,000')
+  })
+})
+describe('rangeLabel', () => {
+  it('maps presets to their names', () => {
+    expect(rangeLabel('today')).toBe('Today')
+    expect(rangeLabel('yesterday')).toBe('Yesterday')
+    expect(rangeLabel('7d')).toBe('7d')
+    expect(rangeLabel('30d')).toBe('30d')
+    expect(rangeLabel('all')).toBe('All')
+  })
+
+  it('renders a custom range as a deterministic date span', () => {
+    expect(rangeLabel('custom', '2026-07-01T00:00:00Z', '2026-07-07T00:00:00Z')).toBe('Jul 1 – Jul 7')
+  })
+
+  it('falls back to Custom when bounds are missing or invalid', () => {
+    expect(rangeLabel('custom')).toBe('Custom')
+    expect(rangeLabel('custom', 'not-a-date', 'also-bad')).toBe('Custom')
   })
 })

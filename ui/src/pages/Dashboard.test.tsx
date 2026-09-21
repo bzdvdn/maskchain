@@ -66,7 +66,7 @@ describe('Dashboard metric toggle', () => {
   it('re-issues a series request with the same range when the metric changes', async () => {
     render(<MemoryRouter><Dashboard /></MemoryRouter>)
 
-    await screen.findByText('Traffic trend')
+    await screen.findByText(/Traffic trend/)
     expect(mockSeries).toHaveBeenCalledTimes(1)
 
     fireEvent.click(screen.getByRole('button', { name: 'Cost' }))
@@ -94,5 +94,88 @@ describe('Dashboard needs attention', () => {
     render(<MemoryRouter><Dashboard /></MemoryRouter>)
 
     expect(await screen.findByText('All systems nominal.')).toBeTruthy()
+  })
+})
+// @sk-test operations-hq-charts#T4.3: each card plots its own metric (AC-001)
+describe('Dashboard KPI sparklines', () => {
+  it('draws a different sparkline per card metric', async () => {
+    mockSeries.mockResolvedValue({
+      series: [
+        { bucket: '2026-08-30T00:00:00Z', input_tokens: 100, output_tokens: 0, cost: 10, requests: 1 },
+        { bucket: '2026-08-31T00:00:00Z', input_tokens: 0, output_tokens: 100, cost: 1, requests: 10 },
+      ],
+    })
+
+    const { container } = render(<MemoryRouter><Dashboard /></MemoryRouter>)
+    await screen.findByText(/Traffic trend/)
+
+    const paths = Array.from(container.querySelectorAll('.spark-svg path')).map((p) => p.getAttribute('d'))
+    expect(paths.length).toBe(3)
+    expect(new Set(paths).size).toBeGreaterThan(1)
+  })
+})
+
+// @sk-test operations-hq-charts#T4.3: card labels reflect range and scope (AC-002)
+describe('Dashboard labels', () => {
+  it('labels cards with the selected range and all-tenants scope', async () => {
+    render(<MemoryRouter><Dashboard /></MemoryRouter>)
+    expect(await screen.findByText('Spend · 7d')).toBeTruthy()
+    expect(screen.getByText('Pass rate · last 100 · all tenants')).toBeTruthy()
+  })
+
+  it('includes the workspace in labels and scopes pass rate', async () => {
+    localStorage.setItem('maskchain.workspace', 'acme')
+    render(<MemoryRouter><Dashboard /></MemoryRouter>)
+
+    expect(await screen.findByText('Spend · 7d · acme')).toBeTruthy()
+    await waitFor(() => expect(mockConversations).toHaveBeenCalledWith(1, 100, { tenant_id: 'acme' }))
+    localStorage.clear()
+  })
+})
+
+// @sk-test operations-hq-charts#T4.3: trend header states metric, range and total (AC-004)
+describe('Dashboard trend header', () => {
+  it('names the metric and range and updates on switch', async () => {
+    render(<MemoryRouter><Dashboard /></MemoryRouter>)
+    expect(await screen.findByText(/Traffic trend · Tokens · 7d/)).toBeTruthy()
+    expect(screen.getByText(/Total:/)).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cost' }))
+    expect(await screen.findByText(/Traffic trend · Cost · 7d/)).toBeTruthy()
+  })
+})
+
+// @sk-test operations-hq-charts#T4.3: requests delta is computed (AC-005)
+describe('Dashboard requests delta', () => {
+  it('renders a delta on the Requests card', async () => {
+    mockCost
+      .mockResolvedValueOnce({ records: [], totals: { total_cost: 10, request_count: 100 } } as never)
+      .mockResolvedValueOnce({ records: [], totals: { total_cost: 5, request_count: 80 } } as never)
+
+    render(<MemoryRouter><Dashboard /></MemoryRouter>)
+    // requests: (100-80)/80 = +25% (distinct from the spend delta)
+    expect(await screen.findByText(/▲ 25%/)).toBeTruthy()
+  })
+})
+
+// @sk-test operations-hq-charts#T4.3: semantics and empty states are explicit (AC-007, AC-008)
+describe('Dashboard semantics and empty states', () => {
+  it('states the units and meaning of the values', async () => {
+    render(<MemoryRouter><Dashboard /></MemoryRouter>)
+    expect(await screen.findByText(/Tokens = input \+ output/)).toBeTruthy()
+  })
+
+  it('shows the chart empty state when the series is empty', async () => {
+    mockTokens.mockResolvedValue({ records: [], totals: { total_input_tokens: 10, total_output_tokens: 5 } } as never)
+    mockSeries.mockResolvedValue({ series: [] })
+    render(<MemoryRouter><Dashboard /></MemoryRouter>)
+    expect(await screen.findByText('No data for this period')).toBeTruthy()
+  })
+
+  it('shows a neutral state when the series is all zero', async () => {
+    mockTokens.mockResolvedValue({ records: [], totals: { total_input_tokens: 10, total_output_tokens: 5 } } as never)
+    mockSeries.mockResolvedValue({ series: [{ bucket: '2026-08-30T00:00:00Z', input_tokens: 0, output_tokens: 0, cost: 0, requests: 0 }] })
+    render(<MemoryRouter><Dashboard /></MemoryRouter>)
+    expect(await screen.findByText('No activity in this period')).toBeTruthy()
   })
 })

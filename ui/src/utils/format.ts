@@ -42,3 +42,30 @@ export function fmtTokens(n: number): string {
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
   return String(n)
 }
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+const RANGE_LABELS: Record<string, string> = {
+  today: 'Today',
+  yesterday: 'Yesterday',
+  '7d': '7d',
+  '30d': '30d',
+  all: 'All',
+}
+
+function shortDay(d: Date): string {
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}`
+}
+
+// rangeLabel returns a short human label for a time-range selection. Presets map
+// to their name; anything else (custom) renders as a date span, falling back to
+// "Custom" when the bounds are missing or invalid.
+export function rangeLabel(mode: string, from?: string, to?: string): string {
+  if (RANGE_LABELS[mode]) return RANGE_LABELS[mode]
+  const f = from ? new Date(from) : null
+  const t = to ? new Date(to) : null
+  if (f && t && !Number.isNaN(f.getTime()) && !Number.isNaN(t.getTime())) {
+    return `${shortDay(f)} – ${shortDay(t)}`
+  }
+  return 'Custom'
+}
