@@ -6,11 +6,11 @@ import {
   deleteTenant,
   applyCompliancePack,
   getComplianceReport,
-  COMPLIANCE_PACKS,
   type TenantResponse,
   type DictionaryItem,
   type ComplianceReport,
 } from '../../api/tenants'
+import { useShieldCatalog } from '../../hooks/useShieldCatalog'
 import { listConversations } from '../../api/conversations'
 import { DictionaryModal } from '../../components/DictionaryModal'
 import { ConfirmModal } from '../../components/ConfirmModal'
@@ -42,6 +42,7 @@ export function TenantDetail() {
   const [report, setReport] = useState<ComplianceReport | null>(null)
   const [reportLoading, setReportLoading] = useState(false)
   const [activity, setActivity] = useState<{ id: string; model: string; status: string; created_at: string }[]>([])
+  const { packs } = useShieldCatalog()
 
   useEffect(() => {
     if (!slug) return
@@ -215,9 +216,10 @@ export function TenantDetail() {
           <div className="card">
             <div className="card-header-row"><h3>Apply compliance packs</h3></div>
             <div className="u-wrap">
-              {COMPLIANCE_PACKS.map((p) => (
-                <Button key={p} size="small" onClick={() => handleApplyPack(p)} disabled={applyingPack === p}>
-                  {applyingPack === p ? 'Applying…' : `Apply ${p}`}
+              {packs.length === 0 && <span className="muted">No compliance packs available.</span>}
+              {packs.map((p) => (
+                <Button key={p.key} size="small" onClick={() => handleApplyPack(p.key)} disabled={applyingPack === p.key}>
+                  {applyingPack === p.key ? 'Applying…' : `Apply ${p.key}`}
                 </Button>
               ))}
             </div>
@@ -225,14 +227,14 @@ export function TenantDetail() {
           <div className="card">
             <div className="card-header-row"><h3>Reports</h3></div>
             <div className="u-wrap u-mb12">
-              {COMPLIANCE_PACKS.map((p) => (
+              {packs.map((p) => (
                 <Button
-                  key={p}
+                  key={p.key}
                   size="small"
-                  variant={reportPack === p ? 'primary' : 'default'}
-                  onClick={() => handleShowReport(p)}
+                  variant={reportPack === p.key ? 'primary' : 'default'}
+                  onClick={() => handleShowReport(p.key)}
                 >
-                  {p} report
+                  {p.key} report
                 </Button>
               ))}
             </div>

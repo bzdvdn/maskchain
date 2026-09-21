@@ -24,7 +24,7 @@ func LoadComplianceRegistry(cfg *config.Config, log *slog.Logger) *compliance.Re
 		return nil
 	}
 
-	catalog := compliance.NewCatalogFromRegistry(complianceDetectorRegistry())
+	catalog := compliance.NewCatalogFromRegistry(ReferenceDetectorRegistry())
 	reg, errs := compliance.LoadPacksFromDir(dir, catalog)
 	for _, e := range errs {
 		log.Warn("compliance preset skipped", slog.String("error", e.Error()))
@@ -36,10 +36,11 @@ func LoadComplianceRegistry(cfg *config.Config, log *slog.Logger) *compliance.Re
 	return reg
 }
 
-// complianceDetectorRegistry is the reference detector set for preset
-// validation. It mirrors the runtime detector types registered by the gateway
-// so presets cannot reference IDs the engine does not serve.
-func complianceDetectorRegistry() *detector.DetectorRegistry {
+// ReferenceDetectorRegistry is the reference detector set for preset
+// validation and for the admin shield catalog. It mirrors the runtime detector
+// types registered by the gateway so presets and the catalog cannot reference
+// or advertise IDs the engine does not serve.
+func ReferenceDetectorRegistry() *detector.DetectorRegistry {
 	reg := detector.NewDetectorRegistry()
 	_ = reg.Register(entity.DetectorTypeRegex, detector.NewCompositeDetector())
 	_ = reg.Register(entity.DetectorTypeDictionary, detector.NewDictionaryDetector(nil))

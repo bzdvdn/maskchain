@@ -3,7 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { TenantDetail } from './TenantDetail'
-import { COMPLIANCE_PACKS } from '../../api/tenants'
+
+const COMPLIANCE_PACKS = ['HIPAA', 'PCI DSS', 'GDPR', 'Legal', 'SOC 2']
 
 vi.mock('../../api/tenants', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../api/tenants')>()
@@ -17,6 +18,13 @@ vi.mock('../../api/tenants', async (importOriginal) => {
 })
 vi.mock('../../api/conversations', () => ({
   listConversations: vi.fn().mockResolvedValue({ items: [] as never }),
+}))
+vi.mock('../../api/shield', () => ({
+  getShieldCatalog: vi.fn().mockResolvedValue({
+    detectors: ['regex', 'dictionary', 'prompt_injection'],
+    reactions: ['allow', 'block', 'log', 'review'],
+    packs: ['HIPAA', 'PCI DSS', 'GDPR', 'Legal', 'SOC 2'].map((key) => ({ key, name: key })),
+  }),
 }))
 vi.mock('../../components/Toast', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../components/Toast')>()

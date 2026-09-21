@@ -11,6 +11,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	adminhandler "github.com/bzdvdn/maskchain/src/internal/api/handler/admin"
+	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 )
 
@@ -73,6 +75,23 @@ func TestSwaggerUIDocsNoRedirect(t *testing.T) {
 	}
 	if loc := w.Header().Get("Location"); loc != "" {
 		t.Errorf("expected no redirect, got Location %q", loc)
+	}
+}
+
+// @sk-test shield-detector-catalog#T4.2: catalog requires an admin session (AC-003)
+func TestCatalogRequiresAdminSession(t *testing.T) {
+	srv := newTestAdminServer(t)
+	srv.RegisterAdminSessionMiddleware(func(c *gin.Context) {
+		middleware.AbortWithError(c, http.StatusUnauthorized, middleware.ErrorCodeUnauthorized, "unauthorized")
+	})
+	srv.RegisterCatalogHandler(adminhandler.NewCatalogHandler(nil, nil))
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/shield/catalog", nil)
+	srv.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without a session, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

@@ -3,8 +3,8 @@ import { ShieldCheck, RefreshCw } from 'lucide-react'
 import { Button, Card, EmptyState, PageHeader, Spinner, StatusPill, type StatusTone } from '../components/ui'
 import { useToast } from '../components/Toast'
 import { useWorkspace } from '../hooks/useWorkspace'
+import { useShieldCatalog } from '../hooks/useShieldCatalog'
 import {
-  COMPLIANCE_PACKS,
   applyCompliancePack,
   getComplianceReport,
   listTenants,
@@ -24,12 +24,21 @@ export function Compliance() {
   const [workspace, setWorkspace] = useWorkspace()
   const [tenants, setTenants] = useState<TenantListItem[]>([])
   const [loadingTenants, setLoadingTenants] = useState(true)
-  const [pack, setPack] = useState<string>(COMPLIANCE_PACKS[0])
+  const [pack, setPack] = useState<string>('')
   const [report, setReport] = useState<ComplianceReport | null>(null)
   const [busy, setBusy] = useState(false)
   const [reportError, setReportError] = useState(false)
+  const { packs, loading: loadingPacks } = useShieldCatalog()
 
   const tenant = useMemo(() => tenants.find((t) => t.slug === workspace)?.slug ?? workspace, [tenants, workspace])
+
+  useEffect(() => {
+    if (packs.length === 0) {
+      setPack('')
+      return
+    }
+    if (!packs.some((p) => p.key === pack)) setPack(packs[0].key)
+  }, [packs, pack])
 
   useEffect(() => {
     listTenants()
@@ -100,12 +109,13 @@ export function Compliance() {
           </label>
           <label className="filter-field">
             <span>Pack</span>
-            <select value={pack} onChange={(e) => setPack(e.target.value)}>
-              {COMPLIANCE_PACKS.map((p) => <option key={p} value={p}>{p}</option>)}
+            <select value={pack} onChange={(e) => setPack(e.target.value)} disabled={loadingPacks || packs.length === 0}>
+              {packs.length === 0 && <option value="">No packs available</option>}
+              {packs.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}
             </select>
           </label>
           <div className="u-grow" />
-          <Button variant="primary" onClick={handleApply} disabled={busy || !tenant}>
+          <Button variant="primary" onClick={handleApply} disabled={busy || !tenant || !pack}>
             <ShieldCheck size={14} /> Apply {pack}
           </Button>
         </div>

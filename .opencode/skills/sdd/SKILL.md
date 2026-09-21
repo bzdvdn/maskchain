@@ -15,7 +15,7 @@ Every phase is its own independent skill, invoked directly with `/spk-<phase>`
 2. Read .speckeep/constitution.summary.md first (fallback: CONSTITUTION.md).
 3. Branch-first: work on feature/<slug> (only spec/propose may create/switch the branch).
 4. Keep context narrow: current slug + Touches: surfaces only.
-5. Run the readiness script: ./.speckeep/scripts/check-ready.sh <phase> <slug> and trust its exit code.
+5. Run the readiness script ./.speckeep/scripts/check-ready.sh <phase> <slug> only for the gated phases and trust its exit code; auxiliary commands have no gate.
 6. End every phase with the end block (Slug / Status / Artifacts / Blockers / Ready for) and preserve the prompt's exact final line.
 
 ## Gates (never skip)
@@ -35,6 +35,9 @@ Every phase is its own independent skill, invoked directly with `/spk-<phase>`
 - `/spk-implement` — Implement one feature from tasks
 - `/spk-verify` — Verify one implemented feature package
 - `/spk-converge` — Close a feature fast: re-check tasks/proofs, append follow-up tasks, repeat until converged
+
+## Auxiliary commands (outside the phase chain, no readiness gate)
+
 - `/spk-handoff` — Generate a session handoff document for one feature
 - `/spk-challenge` — Adversarial review of a feature spec or plan
 - `/spk-scope` — Quick scope boundary check for a feature

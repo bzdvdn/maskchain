@@ -59,7 +59,6 @@ Stop if: no structural changes detected (check trigger checklist first).
 
 Reminders:
 
-- readiness: ./.speckeep/scripts/check-ready.sh repo-map [<slug>] (run it, trust the exit code).
 - Write/patch only the artifacts named above; keep context to the current slug and Touches: surfaces.
 - Do not expand scope, re-plan, or commit without being asked.
 - End with the end block and preserve the prompt's exact final line.

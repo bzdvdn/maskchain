@@ -143,6 +143,18 @@ func (s *AdminServer) RegisterComplianceHandler(h *admin.ComplianceHandler, mw g
 	group.GET("/report", h.HandleComplianceReport)
 }
 
+// @sk-task shield-detector-catalog#T2.1: Register the shield catalog route (AC-001, AC-003)
+//
+// RegisterCatalogHandler mounts GET /api/v1/shield/catalog behind the admin
+// session middleware so only control-plane users can read the catalog.
+func (s *AdminServer) RegisterCatalogHandler(h *admin.CatalogHandler) {
+	group := s.engine.Group("/api/v1/shield")
+	if s.adminSessionMw != nil {
+		group.Use(s.adminSessionMw)
+	}
+	group.GET("/catalog", h.Handle)
+}
+
 // @sk-task 118-api-consistency#T3.4: Register Swagger UI at /api/v1/docs (AC-008, RQ-010)
 //
 // Assets are served under /api/v1/docs/ so the relative URLs inside the bundled

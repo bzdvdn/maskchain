@@ -45,7 +45,6 @@ Stop if: slug is missing, tasks.md does not exist, or no completed tasks exist.
 
 Reminders:
 
-- readiness: ./.speckeep/scripts/check-ready.sh rollback [<slug>] (run it, trust the exit code).
 - Write/patch only the artifacts named above; keep context to the current slug and Touches: surfaces.
 - Do not expand scope, re-plan, or commit without being asked.
 - End with the end block and preserve the prompt's exact final line.

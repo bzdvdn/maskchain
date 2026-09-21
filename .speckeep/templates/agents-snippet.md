@@ -10,7 +10,7 @@ Core rules:
 - Constitution: load `.speckeep/constitution.summary.md` first if it exists; fall back to `project.constitution_file` (default: `CONSTITUTION.md`) only when the summary is absent.
 - Domain language: if `.speckeep/glossary.md` exists, read it once per session and reuse its terms in spec/plan/tasks; never introduce a synonym for a term it already defines. It is optional and created/updated only via `/spk.glossary` — do not generate it implicitly from another phase.
 - Branching: only `/spk.spec` and `/spk.propose` may switch/create `feature/<slug>` (or `--branch`). Other phases must already be on the correct branch.
-- Scripts: before each phase, run `check-ready.* <phase> <slug>` (and any extras from Commands); trust stdout/exit code; never read `.speckeep/scripts/*` source.
+- Scripts: run `check-ready.* <phase> <slug>` only before the gated chain phases (`constitution`, `spec`, `propose`, `inspect`, `plan`, `tasks`, `implement`, `verify`, `converge`; plus `archive` via the CLI). Auxiliary commands (`repo-map`, `glossary`, `challenge`, `handoff`, `recap`, `scope`, `rollback`, `hotfix`) are not phases and have no readiness gate — do not run it for them. Trust stdout/exit code; never read `.speckeep/scripts/*` source.
 - Skills: the SpecKeep workflow is provided as an `sdd` skill pack in your skills directory (`<tool>/skills/sdd/` — root `SKILL.md` + thin per-phase files under `phases/`). Prefer loading the matching phase skill; they delegate to the canonical prompts in `.speckeep/templates/prompts/*` and gate on `speckeep check`/`guard`.
 - Scope/load: default to the current slug only; avoid broad repo scans; prefer `Touches:` surfaces.
 - Git safety: no `git commit/push/tag` and no PRs unless explicitly asked.

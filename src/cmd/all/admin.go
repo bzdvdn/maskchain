@@ -166,6 +166,12 @@ func buildAdminServer(
 		vkHandler := adminhandler.NewVirtualKeyHandler(vkRepo, auditAdapter, vkCache)
 		srv.RegisterVirtualKeyHandler(vkHandler)
 
+		// @sk-task shield-detector-catalog#T2.2: expose the shield catalog (AC-001, AC-002)
+		srv.RegisterCatalogHandler(adminhandler.NewCatalogHandler(
+			bootstrap.ReferenceDetectorRegistry().Types(),
+			complianceRegistry,
+		))
+
 		gatewayURL := ""
 		if cfg.Admin != nil {
 			gatewayURL = cfg.Admin.GatewayURL
