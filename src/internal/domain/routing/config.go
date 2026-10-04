@@ -20,11 +20,14 @@ const GlobalTenant = "*"
 //
 // ProviderConfig represents a domain entity or configuration.
 type ProviderConfig struct {
-	Name              string
-	BaseURL           string
-	HealthEndpoint    string
-	Timeout           string
-	Priority          int
+	Name           string
+	BaseURL        string
+	HealthEndpoint string
+	Timeout        string
+	Priority       int
+	// Weight is the relative share used when several healthy providers share
+	// the minimum priority tier. 0 means unweighted (effective weight 1).
+	Weight            int
 	APIType           string
 	APIKeys           []string
 	AuthScheme        string
@@ -53,7 +56,20 @@ type RuleConfig struct {
 	Source string
 }
 
+// @sk-task model-aliases-weighted-lb#T1.1: tenant-scoped model alias (AC-001, AC-009)
+//
+// AliasConfig maps a requested model name to the model that should actually be
+// routed for a tenant (or the reserved global tenant "*").
+type AliasConfig struct {
+	Tenant string
+	Alias  string
+	Target string
+	// Source records provenance: "yaml" or "ui".
+	Source string
+}
+
 type RoutingConfig struct {
 	Providers []ProviderConfig
 	Rules     []RuleConfig
+	Aliases   []AliasConfig
 }

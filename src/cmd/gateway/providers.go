@@ -23,8 +23,8 @@ type providerDeps struct {
 
 // @sk-task 150-admin-routing-crud#T5.1: Gateway resolves routing from the DB registry with yaml fallback
 func initProviders(routingCfg *config.RoutingConfig, egressCfg *config.EgressConfig, pgPool *pgxpool.Pool, logger *slog.Logger) (*providerDeps, error) {
-	providers, rules := bootstrap.LoadRoutingFromDB(context.Background(), routingCfg, pgPool, logger)
-	domainCfg := &routingDomain.RoutingConfig{Providers: providers, Rules: rules}
+	providers, rules, aliases := bootstrap.LoadRoutingFromDB(context.Background(), routingCfg, pgPool, logger)
+	domainCfg := &routingDomain.RoutingConfig{Providers: providers, Rules: rules, Aliases: aliases}
 	registry, err := routingSvc.NewProviderRegistry(domainCfg)
 	if err != nil {
 		return nil, err

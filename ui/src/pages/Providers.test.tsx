@@ -141,3 +141,22 @@ describe('Providers model removal', () => {
     await waitFor(() => expect(mockDeleteProviderModel).toHaveBeenCalledWith('openrouter', 'gpt-4o'))
   })
 })
+
+// @sk-test model-aliases-weighted-lb#T3.5: provider weight is saved (AC-009)
+describe('Providers weight', () => {
+  it('saves the configured weight', async () => {
+    mockProviders.mockResolvedValue([])
+    render(<Providers />)
+
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Add Provider' }))[0])
+    fireEvent.change(screen.getByPlaceholderText('openrouter'), { target: { value: 'p1' } })
+    fireEvent.change(screen.getByPlaceholderText('https://openrouter.ai/api/v1'), { target: { value: 'https://x' } })
+    setApiKey('sk-x')
+    const weightInput = screen.getByText('Weight').parentElement?.querySelector('input') as HTMLInputElement
+    fireEvent.change(weightInput, { target: { value: '3' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(mockUpsert).toHaveBeenCalledTimes(1))
+    expect(mockUpsert.mock.calls[0][0].weight).toBe(3)
+  })
+})

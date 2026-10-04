@@ -179,6 +179,7 @@ func (h *RoutingHandler) UpsertProvider(c *gin.Context) {
 		HealthEndpoint:     req.HealthEndpoint,
 		Timeout:            req.Timeout,
 		Priority:           req.Priority,
+		Weight:             req.Weight,
 		APIKeys:            req.APIKeys,
 		AuthScheme:         req.AuthScheme,
 		AuthHeader:         req.AuthHeader,
@@ -541,6 +542,58 @@ func (h *RoutingHandler) DeleteRoute(c *gin.Context) {
 		return
 	}
 	h.writeAudit(c, "delete_route", req.Model, map[string]any{"tenant": req.Tenant})
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// @sk-task model-aliases-weighted-lb#T3.1: tenant model alias CRUD (AC-009, AC-010)
+func (h *RoutingHandler) ListAliases(c *gin.Context) {
+	aliases, err := h.repo.ListAliases(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list aliases"})
+		return
+	}
+	out := make([]dto.AliasResponse, 0, len(aliases))
+	for _, a := range aliases {
+		out = append(out, dto.AliasResponse{Tenant: a.Tenant, Alias: a.Alias, Target: a.Target, Source: a.Source})
+	}
+	c.JSON(http.StatusOK, gin.H{"data": out})
+}
+
+func (h *RoutingHandler) UpsertAlias(c *gin.Context) {
+	var req dto.AliasRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if req.Alias == "" || req.Target == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "alias and target are required"})
+		return
+	}
+	if err := h.repo.UpsertAlias(c.Request.Context(), routing.AliasConfig{
+		Tenant: req.Tenant, Alias: req.Alias, Target: req.Target,
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	h.writeAudit(c, "upsert_alias", req.Alias, map[string]any{"tenant": req.Tenant, "target": req.Target})
+	c.JSON(http.StatusOK, gin.H{"data": dto.AliasResponse{Tenant: req.Tenant, Alias: req.Alias, Target: req.Target, Source: "ui"}})
+}
+
+func (h *RoutingHandler) DeleteAlias(c *gin.Context) {
+	var req dto.AliasRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.repo.DeleteAlias(c.Request.Context(), req.Tenant, req.Alias); err != nil {
+		if errors.Is(err, routing.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "alias not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	h.writeAudit(c, "delete_alias", req.Alias, map[string]any{"tenant": req.Tenant})
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 

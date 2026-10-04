@@ -21,6 +21,7 @@ type fakeRegistryRepo struct {
 	providers          []routingDomain.ProviderConfig
 	rules              []routingDomain.RuleConfig
 	routes             map[string][]string
+	aliases            []routingDomain.AliasConfig
 	failUpsertProvider bool
 }
 
@@ -115,6 +116,36 @@ func (f *fakeRegistryRepo) removeRuleRoute(tenant, model string) {
 
 func (f *fakeRegistryRepo) SeedFromYAML(_ context.Context, providers []routingDomain.ProviderConfig, _ []routingDomain.RuleConfig) (bool, error) {
 	f.providers = providers
+	return true, nil
+}
+
+func (f *fakeRegistryRepo) ListAliases(_ context.Context) ([]routingDomain.AliasConfig, error) {
+	return f.aliases, nil
+}
+
+func (f *fakeRegistryRepo) UpsertAlias(_ context.Context, a routingDomain.AliasConfig) error {
+	for i := range f.aliases {
+		if f.aliases[i].Tenant == a.Tenant && f.aliases[i].Alias == a.Alias {
+			f.aliases[i] = a
+			return nil
+		}
+	}
+	f.aliases = append(f.aliases, a)
+	return nil
+}
+
+func (f *fakeRegistryRepo) DeleteAlias(_ context.Context, tenant, alias string) error {
+	for i := range f.aliases {
+		if f.aliases[i].Tenant == tenant && f.aliases[i].Alias == alias {
+			f.aliases = append(f.aliases[:i], f.aliases[i+1:]...)
+			return nil
+		}
+	}
+	return routingDomain.ErrNotFound
+}
+
+func (f *fakeRegistryRepo) SeedAliasesFromYAML(_ context.Context, aliases []routingDomain.AliasConfig) (bool, error) {
+	f.aliases = aliases
 	return true, nil
 }
 
@@ -465,5 +496,66 @@ func TestRoutingHandlerUpsertRouteWildcardValidation(t *testing.T) {
 	}
 	if w := putRoute(t, h, `{"tenant":"*","model":"groq/*","providers":["nope"]}`); w.Code != http.StatusBadRequest {
 		t.Errorf("unknown provider: expected 400, got %d", w.Code)
+	}
+}
+
+// @sk-test model-aliases-weighted-lb#T3.3: alias CRUD round-trips through the admin API (AC-009)
+func TestRoutingHandlerAliasCRUD(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &fakeRegistryRepo{}
+	h := NewRoutingHandler(repo, &fakeCostRates{}, &fakeTx{}, nil, nil, nil)
+	router := gin.New()
+	router.GET("/api/v1/routing/aliases", h.ListAliases)
+	router.PUT("/api/v1/routing/aliases", h.UpsertAlias)
+	router.DELETE("/api/v1/routing/aliases", h.DeleteAlias)
+
+	put := httptest.NewRequest(http.MethodPut, "/api/v1/routing/aliases",
+		strings.NewReader(`{"tenant":"acme","alias":"gpt-4o","target":"openai/gpt-4o-2024"}`))
+	put.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, put)
+	if w.Code != http.StatusOK {
+		t.Fatalf("upsert: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/routing/aliases", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("list: expected 200, got %d", w.Code)
+	}
+	var list struct {
+		Data []dto.AliasResponse `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(list.Data) != 1 || list.Data[0].Alias != "gpt-4o" || list.Data[0].Target != "openai/gpt-4o-2024" {
+		t.Fatalf("aliases = %+v, want one gpt-4o alias", list.Data)
+	}
+
+	del := httptest.NewRequest(http.MethodDelete, "/api/v1/routing/aliases",
+		strings.NewReader(`{"tenant":"acme","alias":"gpt-4o"}`))
+	del.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, del)
+	if w.Code != http.StatusOK {
+		t.Fatalf("delete: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(repo.aliases) != 0 {
+		t.Errorf("aliases after delete = %+v, want empty", repo.aliases)
+	}
+}
+
+// @sk-test model-aliases-weighted-lb#T3.3: provider weight passes through the admin API (AC-009)
+func TestRoutingHandlerProviderWeight(t *testing.T) {
+	repo := &fakeRegistryRepo{}
+	h := NewRoutingHandler(repo, &fakeCostRates{}, &fakeTx{}, nil, nil, nil)
+
+	w := postProvider(t, h, `{"name":"openrouter","api_type":"openai","base_url":"https://x","api_keys":["sk-x"],"weight":3}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(repo.providers) != 1 || repo.providers[0].Weight != 3 {
+		t.Fatalf("providers = %+v, want weight 3", repo.providers)
 	}
 }

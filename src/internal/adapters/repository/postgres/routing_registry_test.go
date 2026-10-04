@@ -195,3 +195,16 @@ func TestSealTextEmptyStaysNonNull(t *testing.T) {
 		t.Errorf("expected empty slice, got %q", sealed)
 	}
 }
+
+// @sk-test model-aliases-weighted-lb#T1.6: incomplete alias entries are dropped before seeding (AC-009)
+func TestAliasesForSeed(t *testing.T) {
+	got := aliasesForSeed([]routingDomain.AliasConfig{
+		{Tenant: "acme", Alias: "m", Target: "target"},
+		{Tenant: "", Alias: "m", Target: "target"},
+		{Tenant: "acme", Alias: "", Target: "target"},
+		{Tenant: "acme", Alias: "m", Target: ""},
+	})
+	if len(got) != 1 || got[0].Alias != "m" || got[0].Target != "target" {
+		t.Fatalf("aliasesForSeed = %+v, want one complete alias", got)
+	}
+}

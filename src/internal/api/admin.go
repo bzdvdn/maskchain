@@ -234,6 +234,10 @@ func (s *AdminServer) RegisterRoutingHandler(h *admin.RoutingHandler) {
 	group.GET("/routes", h.ListRoutes)
 	group.PUT("/routes", h.UpsertRoute)
 	group.DELETE("/routes", h.DeleteRoute)
+	// @sk-task model-aliases-weighted-lb#T3.1: tenant model aliases (AC-009)
+	group.GET("/aliases", h.ListAliases)
+	group.PUT("/aliases", h.UpsertAlias)
+	group.DELETE("/aliases", h.DeleteAlias)
 }
 
 // @sk-task 300-virtual-keys#T3.1: Register virtual key CRUD routes (AC-001)

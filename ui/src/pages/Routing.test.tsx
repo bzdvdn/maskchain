@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { Routing } from './Routing'
 
@@ -9,12 +9,15 @@ vi.mock('../api/routing', () => ({
   listProviders: vi.fn(),
   listRoutes: vi.fn(),
   listModels: vi.fn(),
+  listAliases: vi.fn(),
   listCostRates: vi.fn(),
   deleteProvider: vi.fn(),
   deleteRoute: vi.fn(),
+  deleteAlias: vi.fn(),
   deleteCostRate: vi.fn(),
   upsertProvider: vi.fn(),
   upsertRoute: vi.fn(),
+  upsertAlias: vi.fn(),
   upsertCostRate: vi.fn(),
   isMaskedKey: (v?: string) => !!v && v.includes('***'),
 }))
@@ -27,14 +30,17 @@ vi.mock('../components/Toast', async (importOriginal) => {
   }
 })
 
-import { listProviders, listRoutes, listModels } from '../api/routing'
+import { listProviders, listRoutes, listModels, listAliases, upsertAlias } from '../api/routing'
 
 const mockProviders = vi.mocked(listProviders)
 const mockRoutes = vi.mocked(listRoutes)
 const mockModels = vi.mocked(listModels)
+const mockAliases = vi.mocked(listAliases)
+const mockUpsertAlias = vi.mocked(upsertAlias)
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockAliases.mockResolvedValue([])
   mockProviders.mockResolvedValue([
     { name: 'openai', api_type: 'openai', base_url: 'https://api.openai.com/v1' },
     { name: 'anthropic', api_type: 'anthropic', base_url: 'https://api.anthropic.com' },
@@ -64,5 +70,22 @@ describe('Routing overrides', () => {
     // the model without an override is shown as inherited
     expect(screen.getByText('inherited')).toBeTruthy()
     expect(screen.getByText('llama3.2')).toBeTruthy()
+  })
+})
+
+// @sk-test model-aliases-weighted-lb#T3.5: adding an alias calls the admin API (AC-009)
+describe('Routing aliases', () => {
+  it('adds a tenant alias', async () => {
+    mockUpsertAlias.mockResolvedValue({ tenant: 'default', alias: 'alias-model', target: 'target-model' })
+    render(<MemoryRouter><Routing /></MemoryRouter>)
+
+    const addButtons = await screen.findAllByRole('button', { name: 'Add Alias' })
+    fireEvent.click(addButtons[0])
+    fireEvent.change(screen.getByPlaceholderText('gpt-4o'), { target: { value: 'alias-model' } })
+    fireEvent.change(screen.getByPlaceholderText('openai/gpt-4o-2024'), { target: { value: 'target-model' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(mockUpsertAlias).toHaveBeenCalledTimes(1))
+    expect(mockUpsertAlias.mock.calls[0][0]).toMatchObject({ alias: 'alias-model', target: 'target-model' })
   })
 })

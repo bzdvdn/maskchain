@@ -287,6 +287,11 @@ function ProviderModal({
           </div>
           <div className="form-field"><label>Timeout</label><input value={p.timeout ?? ''} onChange={(e) => set({ timeout: e.target.value })} placeholder="60s" /></div>
           <div className="form-field"><label>Priority</label><input type="number" value={p.priority ?? 0} onChange={(e) => set({ priority: Number(e.target.value) })} /></div>
+          <div className="form-field">
+            <label>Weight</label>
+            <input type="number" min={0} value={p.weight ?? 0} onChange={(e) => set({ weight: Number(e.target.value) })} />
+            <div className="muted meta-sm u-mt4">Relative share among healthy providers of the same priority (0 = unweighted).</div>
+          </div>
 
           {p.api_type === 'bedrock' && (
             <>

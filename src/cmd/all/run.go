@@ -151,9 +151,9 @@ func run() {
 	}
 
 	loadCtx, loadCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	providers, rules := bootstrap.LoadRoutingFromDB(loadCtx, cfg.Routing, pgPool, logger)
+	providers, rules, aliases := bootstrap.LoadRoutingFromDB(loadCtx, cfg.Routing, pgPool, logger)
 	loadCancel()
-	registry, err = routingSvc.NewProviderRegistry(&routingDomain.RoutingConfig{Providers: providers, Rules: rules})
+	registry, err = routingSvc.NewProviderRegistry(&routingDomain.RoutingConfig{Providers: providers, Rules: rules, Aliases: aliases})
 	if err != nil {
 		logger.Error("failed to create provider registry", slog.String("error", err.Error()))
 		os.Exit(1)

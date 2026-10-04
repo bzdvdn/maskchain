@@ -22,4 +22,14 @@ type RegistryRepository interface {
 	// SeedFromYAML inserts yaml defaults only when the tables are empty.
 	// Returns true if seeding was performed.
 	SeedFromYAML(ctx context.Context, providers []ProviderConfig, rules []RuleConfig) (bool, error)
+	// @sk-task model-aliases-weighted-lb#T1.4: tenant model aliases (AC-009)
+	//
+	// ListAliases returns all tenant model aliases.
+	ListAliases(ctx context.Context) ([]AliasConfig, error)
+	// UpsertAlias creates or updates a tenant alias (source becomes "ui").
+	UpsertAlias(ctx context.Context, a AliasConfig) error
+	// DeleteAlias removes a tenant alias.
+	DeleteAlias(ctx context.Context, tenant, alias string) error
+	// SeedAliasesFromYAML inserts yaml aliases only when absent.
+	SeedAliasesFromYAML(ctx context.Context, aliases []AliasConfig) (bool, error)
 }

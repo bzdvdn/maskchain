@@ -114,11 +114,14 @@ type ShieldConfig struct {
 //
 // ProviderConfig represents a domain entity or configuration.
 type ProviderConfig struct {
-	Name              string            `mapstructure:"name" yaml:"name"`
-	BaseURL           string            `mapstructure:"base_url" yaml:"base_url"`
-	HealthEndpoint    string            `mapstructure:"health_endpoint" yaml:"health_endpoint"`
-	Timeout           string            `mapstructure:"timeout" yaml:"timeout"`
-	Priority          int               `mapstructure:"priority" yaml:"priority"`
+	Name           string `mapstructure:"name" yaml:"name"`
+	BaseURL        string `mapstructure:"base_url" yaml:"base_url"`
+	HealthEndpoint string `mapstructure:"health_endpoint" yaml:"health_endpoint"`
+	Timeout        string `mapstructure:"timeout" yaml:"timeout"`
+	Priority       int    `mapstructure:"priority" yaml:"priority"`
+	// Weight is the relative share among healthy providers of the minimum
+	// priority tier; 0 means unweighted.
+	Weight            int               `mapstructure:"weight" yaml:"weight"`
 	APIType           string            `mapstructure:"api_type" yaml:"api_type"`
 	APIKeys           []string          `mapstructure:"api_keys" yaml:"api_keys" validate:"required"`
 	AuthScheme        string            `mapstructure:"auth_scheme" yaml:"auth_scheme"`
@@ -144,9 +147,19 @@ type RuleConfig struct {
 	Routes []RouteConfig `mapstructure:"routes" yaml:"routes"`
 }
 
+// @sk-task model-aliases-weighted-lb#T1.1: tenant-scoped model alias (AC-001, AC-009)
+//
+// AliasConfig maps a requested model name to the model to route for a tenant.
+type AliasConfig struct {
+	Tenant string `mapstructure:"tenant" yaml:"tenant"`
+	Alias  string `mapstructure:"alias" yaml:"alias"`
+	Target string `mapstructure:"target" yaml:"target"`
+}
+
 type RoutingConfig struct {
 	Providers []ProviderConfig `mapstructure:"providers" yaml:"providers"`
 	Rules     []RuleConfig     `mapstructure:"rules" yaml:"rules"`
+	Aliases   []AliasConfig    `mapstructure:"aliases" yaml:"aliases"`
 }
 
 // @sk-task 61-observability#T1.2: Add OtelConfig section (AC-001, AC-006, AC-007)

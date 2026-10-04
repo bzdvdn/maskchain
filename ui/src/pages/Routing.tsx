@@ -8,11 +8,15 @@ import { useToast } from '../components/Toast'
 import { Link } from 'react-router-dom'
 import {
   GLOBAL_TENANT,
+  deleteAlias,
   deleteRoute,
+  listAliases,
   listModels,
   listProviders,
   listRoutes,
+  upsertAlias,
   upsertRoute,
+  type AliasDto,
   type ModelAggregate,
   type RouteDto,
 } from '../api/routing'
@@ -23,20 +27,24 @@ export function Routing() {
   const [routes, setRoutes] = useState<RouteDto[]>([])
   const [models, setModels] = useState<ModelAggregate[]>([])
   const [providers, setProviders] = useState<string[]>([])
+  const [aliases, setAliases] = useState<AliasDto[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<unknown>(null)
   const [editing, setEditing] = useState<RouteDto | null>(null)
   const [deleting, setDeleting] = useState<RouteDto | null>(null)
+  const [aliasEditing, setAliasEditing] = useState<AliasDto | null>(null)
+  const [aliasDeleting, setAliasDeleting] = useState<AliasDto | null>(null)
   const [busy, setBusy] = useState(false)
 
   const reload = async () => {
     setLoading(true)
     setError(null)
     try {
-      const [r, m, p] = await Promise.all([listRoutes(), listModels(), listProviders()])
+      const [r, m, p, a] = await Promise.all([listRoutes(), listModels(), listProviders(), listAliases()])
       setRoutes(r ?? [])
       setModels(m ?? [])
       setProviders((p ?? []).map((x) => x.name).sort())
+      setAliases(a ?? [])
     } catch (err) {
       setError(err)
       toast('Failed to load routing', 'error')
@@ -87,6 +95,33 @@ export function Routing() {
       await reload()
     } catch (e: any) {
       toast(e?.message ?? 'Save failed', 'error')
+    }
+  }
+
+  // @sk-task model-aliases-weighted-lb#T3.4: tenant alias management (AC-009)
+  const saveAlias = async (payload: AliasDto) => {
+    try {
+      await upsertAlias(payload)
+      toast('Alias saved', 'success')
+      setAliasEditing(null)
+      await reload()
+    } catch (e: any) {
+      toast(e?.message ?? 'Save failed', 'error')
+    }
+  }
+
+  const removeAlias = async () => {
+    if (!aliasDeleting) return
+    setBusy(true)
+    try {
+      await deleteAlias(aliasDeleting)
+      toast(`Alias "${aliasDeleting.alias}" deleted`, 'success')
+      setAliasDeleting(null)
+      await reload()
+    } catch (e: any) {
+      toast(e?.message ?? 'Delete failed', 'error')
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -174,6 +209,60 @@ export function Routing() {
           </table>
         </div>
       </div>
+
+      <div className="card table-card u-mt16">
+        <div className="card-header-row">
+          <h3>Model aliases</h3>
+          <div className="header-actions">
+            <Button size="small" onClick={() => setAliasEditing({ tenant: 'default', alias: '', target: '' })}>Add Alias</Button>
+          </div>
+        </div>
+        <div className="table-wrap table-flush">
+          <table className="tbl">
+            <thead>
+              <tr><th>Tenant</th><th>Alias</th><th>Routes to</th><th className="num">Actions</th></tr>
+            </thead>
+            <AsyncSection
+              as="tbody"
+              colSpan={4}
+              loading={loading}
+              empty={aliases.length === 0}
+              emptyMessage="No aliases — requested models route by their own name"
+              emptyAction={<Button size="small" onClick={() => setAliasEditing({ tenant: 'default', alias: '', target: '' })}>Add Alias</Button>}
+            >
+              {aliases.map((a) => (
+                <tr key={`${a.tenant}/${a.alias}`}>
+                  <td><code>{a.tenant === GLOBAL_TENANT ? 'all tenants' : tenantLabel(a.tenant)}</code></td>
+                  <td className="mono">{a.alias}</td>
+                  <td className="mono">{a.target}</td>
+                  <td>
+                    <div className="u-actions">
+                      <Button size="small" onClick={() => setAliasEditing(a)}>Edit</Button>
+                      <Button size="small" variant="danger" onClick={() => setAliasDeleting(a)}>Delete</Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </AsyncSection>
+          </table>
+        </div>
+        <div className="muted meta-sm" style={{ padding: '8px 12px' }}>
+          An alias maps a requested model name to the model that is actually routed, per tenant.
+        </div>
+      </div>
+
+      {aliasEditing && (
+        <AliasModal initial={aliasEditing} onClose={() => setAliasEditing(null)} onSave={saveAlias} />
+      )}
+
+      <ConfirmModal
+        open={!!aliasDeleting}
+        title="Delete alias"
+        message={`Delete alias "${aliasDeleting?.alias}"? Requests will route by their own name.`}
+        busy={busy}
+        onConfirm={removeAlias}
+        onCancel={() => setAliasDeleting(null)}
+      />
 
       {editing && (
         <OverrideModal
@@ -264,6 +353,48 @@ function OverrideModal({
               ))}
             </div>
           </div>
+    </Modal>
+  )
+}
+
+// @sk-task model-aliases-weighted-lb#T3.4: alias editor (AC-009)
+function AliasModal({
+  initial,
+  onClose,
+  onSave,
+}: {
+  initial: AliasDto
+  onClose: () => void
+  onSave: (a: AliasDto) => void
+}) {
+  const [a, setA] = useState<AliasDto>({ ...initial })
+  const [err, setErr] = useState('')
+  const set = (patch: Partial<AliasDto>) => setA((prev) => ({ ...prev, ...patch }))
+
+  const submit = () => {
+    setErr('')
+    if (!a.alias) { setErr('Alias is required'); return }
+    if (!a.target) { setErr('Target model is required'); return }
+    onSave({ ...a })
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={initial.alias ? 'Edit Alias' : 'Add Alias'}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={submit}>Save</Button>
+        </>
+      }
+    >
+      {err && <div className="confirm-dialog u-mt8"><p>{err}</p></div>}
+      <div className="form-field"><label>Tenant</label><input value={a.tenant === '' ? 'default' : a.tenant} onChange={(e) => set({ tenant: e.target.value })} placeholder="default" /></div>
+      <div className="form-field"><label>Alias (requested model)</label><input value={a.alias} onChange={(e) => set({ alias: e.target.value })} placeholder="gpt-4o" /></div>
+      <div className="form-field"><label>Routes to (target model)</label><input value={a.target} onChange={(e) => set({ target: e.target.value })} placeholder="openai/gpt-4o-2024" /></div>
+      <div className="muted meta-sm">An alias is single-hop: the target is routed as-is (exact or wildcard).</div>
     </Modal>
   )
 }

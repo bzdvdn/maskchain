@@ -184,7 +184,7 @@ func buildAdminServer(
 
 		healthChecker := adminhandler.NewProviderHealthChecker(5 * time.Second)
 		loadCtx, loadCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		registryProviders, _ := bootstrap.LoadRoutingFromDB(loadCtx, cfg.Routing, pgPool, logger)
+		registryProviders, _, _ := bootstrap.LoadRoutingFromDB(loadCtx, cfg.Routing, pgPool, logger)
 		loadCancel()
 		var targets []adminhandler.ProviderTarget
 		for _, p := range registryProviders {

@@ -212,7 +212,7 @@ func (r *PostgresRegistryRepository) ListProviders(ctx context.Context) ([]routi
 	q := getQuerier(ctx, r.pool)
 
 	rows, err := q.Query(ctx, `
-		SELECT name, api_type, base_url, health_endpoint, timeout, priority, api_keys,
+		SELECT name, api_type, base_url, health_endpoint, timeout, priority, weight, api_keys,
 			auth_scheme, auth_header, auth_prefix, additional_headers, proxy_url,
 			aws_region, aws_access_key_id, aws_secret_access_key, source
 		FROM routing_providers
@@ -227,7 +227,7 @@ func (r *PostgresRegistryRepository) ListProviders(ctx context.Context) ([]routi
 		var p routingDomain.ProviderConfig
 		var rawKeys, rawHeaders, rawAWSAccess, rawAWSSecret []byte
 		var source string
-		if err := rows.Scan(&p.Name, &p.APIType, &p.BaseURL, &p.HealthEndpoint, &p.Timeout, &p.Priority,
+		if err := rows.Scan(&p.Name, &p.APIType, &p.BaseURL, &p.HealthEndpoint, &p.Timeout, &p.Priority, &p.Weight,
 			&rawKeys, &p.AuthScheme, &p.AuthHeader, &p.AuthPrefix, &rawHeaders, &p.ProxyURL,
 			&p.AWSRegion, &rawAWSAccess, &rawAWSSecret, &source); err != nil {
 			return nil, err
@@ -448,8 +448,8 @@ func (r *PostgresRegistryRepository) UpsertProvider(ctx context.Context, p routi
 		INSERT INTO routing_providers
 			(name, api_type, base_url, health_endpoint, timeout, priority, api_keys,
 			 auth_scheme, auth_header, auth_prefix, additional_headers, proxy_url,
-			 aws_region, aws_access_key_id, aws_secret_access_key, source)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'ui')
+			 aws_region, aws_access_key_id, aws_secret_access_key, weight, source)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'ui')
 		ON CONFLICT (name) DO UPDATE SET
 			api_type = EXCLUDED.api_type,
 			base_url = EXCLUDED.base_url,
@@ -465,11 +465,12 @@ func (r *PostgresRegistryRepository) UpsertProvider(ctx context.Context, p routi
 			aws_region = EXCLUDED.aws_region,
 			aws_access_key_id = EXCLUDED.aws_access_key_id,
 			aws_secret_access_key = EXCLUDED.aws_secret_access_key,
+			weight = EXCLUDED.weight,
 			source = 'ui',
 			updated_at = now()`,
 		p.Name, p.APIType, p.BaseURL, p.HealthEndpoint, p.Timeout, p.Priority, keys,
 		p.AuthScheme, p.AuthHeader, p.AuthPrefix, headers, p.ProxyURL,
-		p.AWSRegion, awsAccess, awsSecret)
+		p.AWSRegion, awsAccess, awsSecret, p.Weight)
 	if err != nil {
 		return fmt.Errorf("upsert provider %s: %w", p.Name, err)
 	}
@@ -564,12 +565,12 @@ func (r *PostgresRegistryRepository) SeedFromYAML(ctx context.Context, providers
 		}
 		tag, err := q.Exec(ctx, `
 			INSERT INTO routing_providers
-				(name, api_type, base_url, health_endpoint, timeout, priority, api_keys, auth_scheme, auth_header, auth_prefix, additional_headers, proxy_url, aws_region, aws_access_key_id, aws_secret_access_key, source)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'yaml')
+				(name, api_type, base_url, health_endpoint, timeout, priority, api_keys, auth_scheme, auth_header, auth_prefix, additional_headers, proxy_url, aws_region, aws_access_key_id, aws_secret_access_key, weight, source)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'yaml')
 			ON CONFLICT (name) DO NOTHING`,
 			p.Name, p.APIType, p.BaseURL, p.HealthEndpoint, p.Timeout, p.Priority, keys,
 			p.AuthScheme, p.AuthHeader, p.AuthPrefix, headers, p.ProxyURL,
-			p.AWSRegion, awsAccess, awsSecret)
+			p.AWSRegion, awsAccess, awsSecret, p.Weight)
 		if err != nil {
 			return false, fmt.Errorf("seed provider %s: %w", p.Name, err)
 		}
@@ -676,4 +677,90 @@ func providerModelRoutes(p routingDomain.ProviderConfig) []string {
 		out = append(out, m)
 	}
 	return out
+}
+
+// @sk-task model-aliases-weighted-lb#T1.3: routing alias persistence (AC-009)
+func (r *PostgresRegistryRepository) ListAliases(ctx context.Context) ([]routingDomain.AliasConfig, error) {
+	q := getQuerier(ctx, r.pool)
+
+	rows, err := q.Query(ctx, `SELECT tenant, alias, target, source FROM routing_aliases ORDER BY tenant, alias`)
+	if err != nil {
+		return nil, fmt.Errorf("list aliases: %w", err)
+	}
+	defer rows.Close()
+
+	out := []routingDomain.AliasConfig{}
+	for rows.Next() {
+		var a routingDomain.AliasConfig
+		if err := rows.Scan(&a.Tenant, &a.Alias, &a.Target, &a.Source); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (r *PostgresRegistryRepository) UpsertAlias(ctx context.Context, a routingDomain.AliasConfig) error {
+	q := getQuerier(ctx, r.pool)
+
+	_, err := q.Exec(ctx, `
+		INSERT INTO routing_aliases (tenant, alias, target, source)
+		VALUES ($1, $2, $3, 'ui')
+		ON CONFLICT (tenant, alias) DO UPDATE SET
+			target = EXCLUDED.target, source = 'ui', updated_at = now()`,
+		a.Tenant, a.Alias, a.Target)
+	if err != nil {
+		return fmt.Errorf("upsert alias %s/%s: %w", a.Tenant, a.Alias, err)
+	}
+	return nil
+}
+
+func (r *PostgresRegistryRepository) DeleteAlias(ctx context.Context, tenant, alias string) error {
+	q := getQuerier(ctx, r.pool)
+
+	tag, err := q.Exec(ctx, `DELETE FROM routing_aliases WHERE tenant = $1 AND alias = $2`, tenant, alias)
+	if err != nil {
+		return fmt.Errorf("delete alias %s/%s: %w", tenant, alias, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return routingDomain.ErrNotFound
+	}
+	return nil
+}
+
+// aliasesForSeed filters out incomplete alias entries before seeding.
+func aliasesForSeed(aliases []routingDomain.AliasConfig) []routingDomain.AliasConfig {
+	out := make([]routingDomain.AliasConfig, 0, len(aliases))
+	for _, a := range aliases {
+		if a.Tenant == "" || a.Alias == "" || a.Target == "" {
+			continue
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
+// SeedAliasesFromYAML inserts aliases that are not already stored; existing
+// (tenant, alias) entries are never modified.
+func (r *PostgresRegistryRepository) SeedAliasesFromYAML(ctx context.Context, aliases []routingDomain.AliasConfig) (bool, error) {
+	q := getQuerier(ctx, r.pool)
+
+	seeded := false
+	for _, a := range aliasesForSeed(aliases) {
+		tag, err := q.Exec(ctx, `
+			INSERT INTO routing_aliases (tenant, alias, target, source)
+			VALUES ($1, $2, $3, 'yaml')
+			ON CONFLICT (tenant, alias) DO NOTHING`,
+			a.Tenant, a.Alias, a.Target)
+		if err != nil {
+			return false, fmt.Errorf("seed alias %s/%s: %w", a.Tenant, a.Alias, err)
+		}
+		if tag.RowsAffected() > 0 {
+			seeded = true
+		}
+	}
+	return seeded, nil
 }

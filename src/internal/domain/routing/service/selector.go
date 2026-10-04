@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"math/rand/v2"
 	"strings"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/routing"
@@ -17,28 +18,126 @@ var (
 // RouteSelector represents a domain entity or configuration.
 type RouteSelector struct {
 	registry *ProviderRegistry
+	intN     func(max int) int
 }
 
 func NewRouteSelector(registry *ProviderRegistry) *RouteSelector {
-	return &RouteSelector{registry: registry}
+	return &RouteSelector{registry: registry, intN: rand.IntN}
+}
+
+// @sk-task model-aliases-weighted-lb#T2.1: injectable RNG for deterministic tests (AC-006)
+//
+// NewRouteSelectorWithRand builds a selector with an explicit intN (0 <= intN(n) < n)
+// so weighted selection can be tested deterministically.
+func NewRouteSelectorWithRand(registry *ProviderRegistry, intN func(max int) int) *RouteSelector {
+	if intN == nil {
+		intN = rand.IntN
+	}
+	return &RouteSelector{registry: registry, intN: intN}
 }
 
 // @sk-task routing-ia#T1.1: tenant route with global fallback (AC-001, AC-002)
+// @sk-task model-aliases-weighted-lb#T2.1: alias resolution + weighted pick (AC-001..AC-008)
+//
+// Select resolves the tenant alias, resolves the provider chain, filters to the
+// healthy providers of the minimum priority tier, and picks a primary weighted
+// by provider weight. It returns the primary and a fallback chain ordered with
+// the primary first.
 func (s *RouteSelector) Select(model string, tenantID string) (*routing.Provider, []string, error) {
-	providers, ok := s.providersFor(model, tenantID)
+	resolved, _ := s.registry.ResolveAlias(tenantID, model)
+
+	providers, ok := s.providersFor(resolved, tenantID)
 	if !ok {
 		return nil, nil, ErrNoRoute
 	}
+
+	healthy := make([]*routing.Provider, 0, len(providers))
 	for _, name := range providers {
 		p := s.registry.Get(name)
-		if p == nil {
-			continue
-		}
-		if p.HealthStatus() == routing.HealthHealthy {
-			return p, providers, nil
+		if p != nil && p.HealthStatus() == routing.HealthHealthy {
+			healthy = append(healthy, p)
 		}
 	}
-	return nil, providers, ErrNoHealthyProvider
+	if len(healthy) == 0 {
+		return nil, providers, ErrNoHealthyProvider
+	}
+
+	primary := s.pick(healthy)
+	return primary, orderChain(primary.Name, providers), nil
+}
+
+// pick selects among the healthy providers: the minimum priority tier only,
+// then a weighted-random choice within that tier.
+func (s *RouteSelector) pick(healthy []*routing.Provider) *routing.Provider {
+	minPriority := healthy[0].Priority
+	for _, p := range healthy {
+		if p.Priority < minPriority {
+			minPriority = p.Priority
+		}
+	}
+	tier := make([]*routing.Provider, 0, len(healthy))
+	for _, p := range healthy {
+		if p.Priority == minPriority {
+			tier = append(tier, p)
+		}
+	}
+	return chooseWeighted(tier, s.intN)
+}
+
+// effectiveWeight treats a missing weight (0) as 1 so unweighted providers still
+// participate rather than being dropped.
+func effectiveWeight(p *routing.Provider) int {
+	if p.Weight > 0 {
+		return p.Weight
+	}
+	return 1
+}
+
+// chooseWeighted returns a provider from the tier in proportion to its effective
+// weight. When no provider in the tier is explicitly weighted, it returns the
+// first provider so unweighted deployments keep their deterministic ordered
+// behavior.
+func chooseWeighted(tier []*routing.Provider, intN func(max int) int) *routing.Provider {
+	if len(tier) == 0 {
+		return nil
+	}
+	anyWeighted := false
+	for _, p := range tier {
+		if p.Weight > 0 {
+			anyWeighted = true
+			break
+		}
+	}
+	if !anyWeighted {
+		return tier[0]
+	}
+
+	total := 0
+	for _, p := range tier {
+		total += effectiveWeight(p)
+	}
+	draw := intN(total)
+	acc := 0
+	for _, p := range tier {
+		acc += effectiveWeight(p)
+		if draw < acc {
+			return p
+		}
+	}
+	return tier[len(tier)-1]
+}
+
+// orderChain returns the provider names with primary first, then the rest in
+// their declared order, forming the fallback chain.
+func orderChain(primary string, names []string) []string {
+	out := make([]string, 0, len(names))
+	out = append(out, primary)
+	for _, n := range names {
+		if n != primary {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 func (s *RouteSelector) GetProviderList(model string, tenantID string) ([]string, error) {

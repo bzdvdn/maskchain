@@ -35,6 +35,7 @@ func yamlProvidersToRegistry(cfg *config.RoutingConfig) []routingDomain.Provider
 			AdditionalHeaders:  p.AdditionalHeaders,
 			ProxyURL:           p.ProxyURL,
 			Models:             p.Models,
+			Weight:             p.Weight,
 			AWSRegion:          p.AWSRegion,
 			AWSAccessKeyID:     p.AWSAccessKeyID,
 			AWSSecretAccessKey: p.AWSSecretAccessKey,
@@ -82,30 +83,59 @@ func yamlCostRatesToDomain(cfg *config.Config) []*analytics.CostRate {
 	return out
 }
 
+// yamlAliasesToRegistry converts yaml model aliases into registry aliases
+// carrying yaml provenance so they can be seeded.
+func yamlAliasesToRegistry(cfg *config.RoutingConfig) []routingDomain.AliasConfig {
+	if cfg == nil {
+		return []routingDomain.AliasConfig{}
+	}
+	out := make([]routingDomain.AliasConfig, 0, len(cfg.Aliases))
+	for _, a := range cfg.Aliases {
+		out = append(out, routingDomain.AliasConfig{
+			Tenant: a.Tenant,
+			Alias:  a.Alias,
+			Target: a.Target,
+			Source: "yaml",
+		})
+	}
+	return out
+}
+
+// @sk-task model-aliases-weighted-lb#T1.5: carry aliases into the registry (AC-009)
+//
 // LoadRoutingFromDB seeds the registry from yaml when the tables are empty and
 // returns the effective registry contents. When no database pool is available
 // it falls back to the yaml configuration only.
-func LoadRoutingFromDB(ctx context.Context, yamlCfg *config.RoutingConfig, pgPool *pgxpool.Pool, logger *slog.Logger) ([]routingDomain.ProviderConfig, []routingDomain.RuleConfig) {
+func LoadRoutingFromDB(ctx context.Context, yamlCfg *config.RoutingConfig, pgPool *pgxpool.Pool, logger *slog.Logger) ([]routingDomain.ProviderConfig, []routingDomain.RuleConfig, []routingDomain.AliasConfig) {
 	yamlProviders := yamlProvidersToRegistry(yamlCfg)
 	yamlRules := yamlRulesToRegistry(yamlCfg)
+	yamlAliases := yamlAliasesToRegistry(yamlCfg)
 	if pgPool == nil {
-		return yamlProviders, yamlRules
+		return yamlProviders, yamlRules, yamlAliases
 	}
 	repo := postgres.NewPostgresRegistryRepository(pgPool)
 	if _, err := repo.SeedFromYAML(ctx, yamlProviders, yamlRules); err != nil {
 		logger.Error("failed to seed routing registry", slog.String("error", err.Error()))
 	}
+	if _, err := repo.SeedAliasesFromYAML(ctx, yamlAliases); err != nil {
+		logger.Error("failed to seed routing aliases", slog.String("error", err.Error()))
+	}
 	providers, err := repo.ListProviders(ctx)
 	if err != nil {
 		logger.Error("failed to list routing providers", slog.String("error", err.Error()))
-		return yamlProviders, yamlRules
+		return yamlProviders, yamlRules, yamlAliases
 	}
 	rules, err := repo.ListRules(ctx)
 	if err != nil {
 		logger.Error("failed to list routing rules", slog.String("error", err.Error()))
-		return yamlProviders, yamlRules
+		return yamlProviders, yamlRules, yamlAliases
 	}
-	return providers, rules
+	aliases, err := repo.ListAliases(ctx)
+	if err != nil {
+		logger.Error("failed to list routing aliases", slog.String("error", err.Error()))
+		return providers, rules, yamlAliases
+	}
+	return providers, rules, aliases
 }
 
 // LoadCostRatesFromDB seeds cost rates from yaml when the table is empty and

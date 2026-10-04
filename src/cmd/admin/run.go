@@ -145,7 +145,7 @@ func run() {
 
 		healthChecker := admin.NewProviderHealthChecker(5 * time.Second)
 		loadCtx, loadCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		registryProviders, _ := bootstrap.LoadRoutingFromDB(loadCtx, cfg.Routing, b.PGPool, logger)
+		registryProviders, _, _ := bootstrap.LoadRoutingFromDB(loadCtx, cfg.Routing, b.PGPool, logger)
 		loadCancel()
 		var targets []admin.ProviderTarget
 		for _, p := range registryProviders {

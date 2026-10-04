@@ -108,6 +108,24 @@ func validateRoutingRoutes(cfg *Config) error {
 	return nil
 }
 
+// @sk-task model-aliases-weighted-lb#T3.2: provider weight + alias validation (AC-010)
+func validateRoutingWeightAndAliases(cfg *Config) error {
+	if cfg.Routing == nil {
+		return nil
+	}
+	for i, p := range cfg.Routing.Providers {
+		if p.Weight < 0 {
+			return fmt.Errorf("routing.providers.%d.weight: must not be negative, got %d", i, p.Weight)
+		}
+	}
+	for i, a := range cfg.Routing.Aliases {
+		if a.Alias == "" || a.Target == "" {
+			return fmt.Errorf("routing.aliases.%d: alias and target are required", i)
+		}
+	}
+	return nil
+}
+
 // validateCompliance validates the compliance preset configuration.
 func validateCompliance(cfg *Config) error {
 	c := cfg.Compliance
@@ -191,6 +209,9 @@ func validateConfig(cfg *Config, v *viper.Viper) error {
 		return err
 	}
 	if err := validateRoutingRoutes(cfg); err != nil {
+		return err
+	}
+	if err := validateRoutingWeightAndAliases(cfg); err != nil {
 		return err
 	}
 	val := reflect.ValueOf(cfg).Elem()

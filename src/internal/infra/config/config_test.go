@@ -485,3 +485,47 @@ func TestValidateRoutingRoutes(t *testing.T) {
 		t.Errorf("non-wildcard routes are not validated here: %v", err)
 	}
 }
+
+// @sk-test model-aliases-weighted-lb#T1.6: provider weight and routing aliases parse from YAML (AC-009)
+func TestRoutingConfigWeightAndAliases(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	content := []byte("log:\n  level: debug\nrouting:\n  providers:\n    - name: test\n      base_url: https://api.example.com/v1\n      api_type: openai\n      api_keys:\n        - sk-x\n      weight: 3\n  aliases:\n    - tenant: acme\n      alias: gpt-4o\n      target: openai/gpt-4o-2024\n")
+	if err := os.WriteFile(cfgPath, content, 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := ParseAndLoadConfig([]string{"--config=" + cfgPath})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Routing.Providers[0].Weight != 3 {
+		t.Errorf("weight = %d, want 3", cfg.Routing.Providers[0].Weight)
+	}
+	if len(cfg.Routing.Aliases) != 1 {
+		t.Fatalf("aliases = %+v, want 1", cfg.Routing.Aliases)
+	}
+	if a := cfg.Routing.Aliases[0]; a.Tenant != "acme" || a.Alias != "gpt-4o" || a.Target != "openai/gpt-4o-2024" {
+		t.Errorf("alias = %+v, want acme/gpt-4o -> openai/gpt-4o-2024", a)
+	}
+}
+
+// @sk-test model-aliases-weighted-lb#T3.3: negative weight and empty alias target are rejected (AC-010)
+func TestValidateRoutingWeightAndAliases(t *testing.T) {
+	neg := &Config{Routing: &RoutingConfig{Providers: []ProviderConfig{{Name: "p", Weight: -1}}}}
+	if err := validateRoutingWeightAndAliases(neg); err == nil {
+		t.Error("negative weight must be rejected")
+	}
+
+	emptyTarget := &Config{Routing: &RoutingConfig{Aliases: []AliasConfig{{Tenant: "acme", Alias: "m", Target: ""}}}}
+	if err := validateRoutingWeightAndAliases(emptyTarget); err == nil {
+		t.Error("empty alias target must be rejected")
+	}
+
+	valid := &Config{Routing: &RoutingConfig{
+		Providers: []ProviderConfig{{Name: "p", Weight: 2}},
+		Aliases:   []AliasConfig{{Tenant: "acme", Alias: "m", Target: "t"}},
+	}}
+	if err := validateRoutingWeightAndAliases(valid); err != nil {
+		t.Errorf("valid config rejected: %v", err)
+	}
+}

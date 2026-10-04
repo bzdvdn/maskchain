@@ -33,7 +33,9 @@ type Provider struct {
 	HealthEndpoint string
 	Timeout        string
 	Priority       int
-	healthStatus   atomic.Int32
+	// @sk-task model-aliases-weighted-lb#T1.2: Weight for weighted selection (AC-006)
+	Weight       int
+	healthStatus atomic.Int32
 }
 
 func NewProvider(name, baseURL, healthEndpoint, timeout string, priority int) *Provider {

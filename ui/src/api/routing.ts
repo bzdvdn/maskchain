@@ -7,6 +7,7 @@ export interface ProviderDto {
   health_endpoint?: string
   timeout?: string
   priority?: number
+  weight?: number
   api_keys?: string[]
   auth_scheme?: string
   auth_header?: string
@@ -38,6 +39,14 @@ export interface RouteDto {
   tenant: string
   model: string
   providers: string[]
+  source?: string
+}
+
+// @sk-task model-aliases-weighted-lb#T3.4: tenant model alias (AC-009)
+export interface AliasDto {
+  tenant: string
+  alias: string
+  target: string
   source?: string
 }
 
@@ -95,6 +104,21 @@ export function deleteProviderModel(name: string, model: string): Promise<void> 
 
 export function listRoutes(): Promise<RouteDto[]> {
   return apiFetch(`${ROUTING}/routes`).then((d) => unwrap<RouteDto[]>(d))
+}
+
+export function listAliases(): Promise<AliasDto[]> {
+  return apiFetch(`${ROUTING}/aliases`).then((d) => unwrap<AliasDto[]>(d))
+}
+
+export function upsertAlias(a: AliasDto): Promise<AliasDto> {
+  return apiFetch(`${ROUTING}/aliases`, { method: 'PUT', body: a })
+}
+
+export function deleteAlias(a: AliasDto): Promise<void> {
+  return apiFetch(`${ROUTING}/aliases`, {
+    method: 'DELETE',
+    body: { tenant: a.tenant, alias: a.alias },
+  })
 }
 
 export function upsertRoute(r: RouteDto): Promise<RouteDto> {

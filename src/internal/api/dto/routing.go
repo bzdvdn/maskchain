@@ -30,12 +30,14 @@ func WithMaskedSecrets(keys []string, awsAccess, awsSecret string) ([]string, st
 //
 // ProviderRequest represents a domain entity or configuration.
 type ProviderRequest struct {
-	Name               string            `json:"name" binding:"required"`
-	APIType            string            `json:"api_type"`
-	BaseURL            string            `json:"base_url" binding:"required"`
-	HealthEndpoint     string            `json:"health_endpoint"`
-	Timeout            string            `json:"timeout"`
-	Priority           int               `json:"priority"`
+	Name           string `json:"name" binding:"required"`
+	APIType        string `json:"api_type"`
+	BaseURL        string `json:"base_url" binding:"required"`
+	HealthEndpoint string `json:"health_endpoint"`
+	Timeout        string `json:"timeout"`
+	Priority       int    `json:"priority"`
+	// @sk-task model-aliases-weighted-lb#T3.1: provider weight (AC-009)
+	Weight             int               `json:"weight"`
 	APIKeys            []string          `json:"api_keys"`
 	AuthScheme         string            `json:"auth_scheme"`
 	AuthHeader         string            `json:"auth_header"`
@@ -70,6 +72,7 @@ type ProviderResponse struct {
 	HealthEndpoint     string            `json:"health_endpoint"`
 	Timeout            string            `json:"timeout"`
 	Priority           int               `json:"priority"`
+	Weight             int               `json:"weight"`
 	APIKeys            []string          `json:"api_keys"`
 	AuthScheme         string            `json:"auth_scheme"`
 	AuthHeader         string            `json:"auth_header"`
@@ -94,6 +97,7 @@ func ProviderToResponse(p routingDomain.ProviderConfig, status string, latency i
 		HealthEndpoint:     p.HealthEndpoint,
 		Timeout:            p.Timeout,
 		Priority:           p.Priority,
+		Weight:             p.Weight,
 		APIKeys:            maskedKeys,
 		AuthScheme:         p.AuthScheme,
 		AuthHeader:         p.AuthHeader,
@@ -121,4 +125,18 @@ type RouteResponse struct {
 	Model     string   `json:"model"`
 	Providers []string `json:"providers"`
 	Source    string   `json:"source"`
+}
+
+// @sk-task model-aliases-weighted-lb#T3.1: tenant model alias DTOs (AC-009)
+type AliasRequest struct {
+	Tenant string `json:"tenant"`
+	Alias  string `json:"alias" binding:"required"`
+	Target string `json:"target"`
+}
+
+type AliasResponse struct {
+	Tenant string `json:"tenant"`
+	Alias  string `json:"alias"`
+	Target string `json:"target"`
+	Source string `json:"source"`
 }

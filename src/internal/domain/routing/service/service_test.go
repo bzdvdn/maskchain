@@ -786,3 +786,166 @@ func TestRouteSelectorWildcardPrefixWins(t *testing.T) {
 		t.Errorf("expected shorter prefix groq, got %s", p.Name)
 	}
 }
+
+// @sk-test model-aliases-weighted-lb#T2.2: alias resolves the requested model (AC-001)
+func TestRouteSelectorResolvesAlias(t *testing.T) {
+	reg, _ := NewProviderRegistry(&routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{{Name: "openai", BaseURL: "http://openai"}},
+		Rules: []routing.RuleConfig{{Tenant: "acme", Routes: []routing.RouteConfig{
+			{Model: "openai/gpt-4o-2024", Providers: []string{"openai"}},
+		}}},
+		Aliases: []routing.AliasConfig{{Tenant: "acme", Alias: "gpt-4o", Target: "openai/gpt-4o-2024"}},
+	})
+	sel := NewRouteSelector(reg)
+
+	p, _, err := sel.Select("gpt-4o", "acme")
+	if err != nil {
+		t.Fatalf("alias should resolve, got %v", err)
+	}
+	if p.Name != "openai" {
+		t.Errorf("expected openai via alias, got %s", p.Name)
+	}
+}
+
+// @sk-test model-aliases-weighted-lb#T2.2: aliases are tenant-scoped (AC-002)
+func TestRouteSelectorAliasTenantScoped(t *testing.T) {
+	reg, _ := NewProviderRegistry(&routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
+			{Name: "pa", BaseURL: "http://pa"},
+			{Name: "pb", BaseURL: "http://pb"},
+		},
+		Rules: []routing.RuleConfig{
+			{Tenant: "acme", Routes: []routing.RouteConfig{{Model: "a-model", Providers: []string{"pa"}}}},
+			{Tenant: routing.GlobalTenant, Routes: []routing.RouteConfig{{Model: "m", Providers: []string{"pb"}}}},
+		},
+		Aliases: []routing.AliasConfig{{Tenant: "acme", Alias: "m", Target: "a-model"}},
+	})
+	sel := NewRouteSelector(reg)
+
+	if p, _, _ := sel.Select("m", "acme"); p.Name != "pa" {
+		t.Errorf("acme alias should route to pa, got %s", p.Name)
+	}
+	if p, _, _ := sel.Select("m", "beta"); p.Name != "pb" {
+		t.Errorf("beta has no alias and should route m to pb, got %s", p.Name)
+	}
+}
+
+// @sk-test model-aliases-weighted-lb#T2.2: alias target with no route yields NO_ROUTE (AC-003)
+func TestRouteSelectorAliasNoRoute(t *testing.T) {
+	reg, _ := NewProviderRegistry(&routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{{Name: "openai", BaseURL: "http://openai"}},
+		Rules:     []routing.RuleConfig{},
+		Aliases:   []routing.AliasConfig{{Tenant: "acme", Alias: "m", Target: "missing-model"}},
+	})
+	sel := NewRouteSelector(reg)
+
+	if _, _, err := sel.Select("m", "acme"); !errors.Is(err, ErrNoRoute) {
+		t.Fatalf("expected ErrNoRoute for an unrouted alias target, got %v", err)
+	}
+}
+
+// @sk-test model-aliases-weighted-lb#T2.2: alias target can be served by a wildcard route (AC-004)
+func TestRouteSelectorAliasWildcardTarget(t *testing.T) {
+	reg, _ := NewProviderRegistry(&routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{{Name: "groq", BaseURL: "http://groq"}},
+		Rules: []routing.RuleConfig{{Tenant: routing.GlobalTenant, Routes: []routing.RouteConfig{
+			{Model: "groq/*", Providers: []string{"groq"}},
+		}}},
+		Aliases: []routing.AliasConfig{{Tenant: "acme", Alias: "m", Target: "groq/llama-3.3-70b"}},
+	})
+	sel := NewRouteSelector(reg)
+
+	if p, _, _ := sel.Select("m", "acme"); p.Name != "groq" {
+		t.Errorf("alias target should resolve via wildcard to groq, got %s", p.Name)
+	}
+}
+
+// @sk-test model-aliases-weighted-lb#T2.2: minimum priority tier wins; next tier on unhealth (AC-005)
+func TestRouteSelectorPriorityTier(t *testing.T) {
+	reg, _ := NewProviderRegistry(&routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
+			{Name: "primary", BaseURL: "http://primary", Priority: 1},
+			{Name: "backup", BaseURL: "http://backup", Priority: 5},
+		},
+		Rules: []routing.RuleConfig{{Tenant: "default", Routes: []routing.RouteConfig{
+			{Model: "m", Providers: []string{"backup", "primary"}},
+		}}},
+	})
+	sel := NewRouteSelector(reg)
+
+	if p, _, _ := sel.Select("m", ""); p.Name != "primary" {
+		t.Errorf("expected the priority-1 primary, got %s", p.Name)
+	}
+	reg.Get("primary").SetHealthStatus(routing.HealthUnhealthy)
+	if p, _, _ := sel.Select("m", ""); p.Name != "backup" {
+		t.Errorf("expected the backup when primary is unhealthy, got %s", p.Name)
+	}
+}
+
+// @sk-test model-aliases-weighted-lb#T2.2: weighted pick follows weights (AC-006)
+func TestRouteSelectorWeightedPick(t *testing.T) {
+	reg, _ := NewProviderRegistry(&routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
+			{Name: "a", BaseURL: "http://a", Weight: 3},
+			{Name: "b", BaseURL: "http://b", Weight: 1},
+		},
+		Rules: []routing.RuleConfig{{Tenant: "default", Routes: []routing.RouteConfig{
+			{Model: "m", Providers: []string{"a", "b"}},
+		}}},
+	})
+	draws := []int{0, 2, 3}
+	i := 0
+	sel := NewRouteSelectorWithRand(reg, func(max int) int { v := draws[i%len(draws)]; i++; return v % max })
+
+	want := []string{"a", "a", "b"}
+	for _, w := range want {
+		p, _, err := sel.Select("m", "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if p.Name != w {
+			t.Fatalf("weighted draw picked %s, want %s", p.Name, w)
+		}
+	}
+}
+
+// @sk-test model-aliases-weighted-lb#T2.2: no weights keeps ordered behavior (AC-007)
+func TestRouteSelectorNoWeightsOrdered(t *testing.T) {
+	reg, _ := NewProviderRegistry(&routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
+			{Name: "a", BaseURL: "http://a"},
+			{Name: "b", BaseURL: "http://b"},
+		},
+		Rules: []routing.RuleConfig{{Tenant: "default", Routes: []routing.RouteConfig{
+			{Model: "m", Providers: []string{"a", "b"}},
+		}}},
+	})
+	// A draw that would pick b if weights were used; unweighted must stay ordered.
+	sel := NewRouteSelectorWithRand(reg, func(int) int { return 0 })
+	for range 5 {
+		if p, _, _ := sel.Select("m", ""); p.Name != "a" {
+			t.Fatalf("unweighted selection should stay ordered (a), got %s", p.Name)
+		}
+	}
+}
+
+// @sk-test model-aliases-weighted-lb#T2.2: unhealthy providers are excluded from selection (AC-008)
+func TestRouteSelectorUnhealthyExcluded(t *testing.T) {
+	reg, _ := NewProviderRegistry(&routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
+			{Name: "a", BaseURL: "http://a", Weight: 3},
+			{Name: "b", BaseURL: "http://b", Weight: 1},
+		},
+		Rules: []routing.RuleConfig{{Tenant: "default", Routes: []routing.RouteConfig{
+			{Model: "m", Providers: []string{"a", "b"}},
+		}}},
+	})
+	reg.Get("a").SetHealthStatus(routing.HealthUnhealthy)
+	sel := NewRouteSelector(reg)
+
+	for range 5 {
+		if p, _, _ := sel.Select("m", ""); p.Name != "b" {
+			t.Fatalf("unhealthy provider must be excluded, got %s", p.Name)
+		}
+	}
+}
