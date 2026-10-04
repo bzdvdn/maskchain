@@ -1,17 +1,27 @@
 package ports
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+// ErrUnsupportedEndpoint signals that the selected provider cannot serve the
+// requested endpoint shape. It is a terminal condition, not a transport
+// failure: callers should surface it to the client instead of retrying.
+var ErrUnsupportedEndpoint = errors.New("unsupported provider endpoint")
 
 // @sk-task 80-tenant-isolation#T3.1: Add Headers field for X-Tenant-ID propagation (AC-007)
 // @sk-task anthropic-messages-endpoint#T1.1: Add Path field for native messages endpoint (AC-003)
+// @sk-task provider-path-fidelity#T1.1: Add RawQuery field for query-string forwarding (AC-008)
 //
 // ProviderRequest represents a domain entity or configuration.
 type ProviderRequest struct {
-	Method  string
-	URL     string
-	Body    []byte
-	Headers map[string]string
-	Path    string
+	Method   string
+	URL      string
+	Body     []byte
+	Headers  map[string]string
+	Path     string
+	RawQuery string
 }
 
 type ProviderResponse struct {

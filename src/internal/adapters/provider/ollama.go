@@ -52,7 +52,10 @@ func newOllamaClient(cfg *config.ProviderConfig, ec *egress.Client) *OllamaClien
 
 // @sk-task ollama-provider#T2.1: Implement OllamaClient with Call and Stream (AC-002, AC-003, AC-004)
 func (c *OllamaClient) Call(ctx context.Context, req *ports.ProviderRequest) (*ports.ProviderResponse, error) {
-	providerReq := c.buildRequest(req)
+	providerReq, err := c.buildRequest(req)
+	if err != nil {
+		return nil, err
+	}
 	providerReq.Headers["Content-Type"] = "application/json"
 
 	resp, err := c.ec.Call(ctx, providerReq)
@@ -71,7 +74,10 @@ func (c *OllamaClient) Call(ctx context.Context, req *ports.ProviderRequest) (*p
 
 // @sk-task ollama-provider#T2.1: Implement OllamaClient with Call and Stream (AC-002, AC-003, AC-004)
 func (c *OllamaClient) Stream(ctx context.Context, req *ports.ProviderRequest) (<-chan ports.ProviderChunk, error) {
-	providerReq := c.buildRequest(req)
+	providerReq, err := c.buildRequest(req)
+	if err != nil {
+		return nil, err
+	}
 	providerReq.Headers["Content-Type"] = "application/json"
 	providerReq.Headers["Accept"] = "text/event-stream"
 
@@ -83,7 +89,7 @@ func (c *OllamaClient) Stream(ctx context.Context, req *ports.ProviderRequest) (
 	return ch, nil
 }
 
-func (c *OllamaClient) buildRequest(req *ports.ProviderRequest) *ports.ProviderRequest {
+func (c *OllamaClient) buildRequest(req *ports.ProviderRequest) (*ports.ProviderRequest, error) {
 	headers := make(map[string]string)
 	for k, v := range c.additionalHeaders {
 		headers[k] = v
@@ -97,10 +103,15 @@ func (c *OllamaClient) buildRequest(req *ports.ProviderRequest) *ports.ProviderR
 		authKey, authValue := buildAuthHeader(c.authScheme, c.authHeader, c.authPrefix, c.apiKey)
 		headers[authKey] = authValue
 	}
+	// @sk-task provider-path-fidelity#T2.3: resolve upstream path from request (AC-001, AC-002, AC-003)
+	upstreamURL, err := ResolveUpstreamURL("ollama", c.baseURL, req)
+	if err != nil {
+		return nil, err
+	}
 	return &ports.ProviderRequest{
 		Method:  "POST",
-		URL:     c.baseURL + "/v1/chat/completions",
+		URL:     upstreamURL,
 		Body:    req.Body,
 		Headers: headers,
-	}
+	}, nil
 }

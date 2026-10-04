@@ -676,3 +676,78 @@ func TestRoutingHandlerEmbeddingsNoRoute(t *testing.T) {
 		t.Errorf("expected NO_ROUTE error, got %s", w.Body.String())
 	}
 }
+
+// @sk-test provider-path-fidelity#T2.4: handler forwards the request path and query to the provider (AC-008)
+func TestRoutingHandlerForwardsPathAndQuery(t *testing.T) {
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{{Name: "primary", BaseURL: "http://localhost:1"}},
+		Rules: []routing.RuleConfig{
+			{Tenant: "default", Routes: []routing.RouteConfig{
+				{Model: "gpt-4", Providers: []string{"primary"}},
+			}},
+		},
+	}
+	reg, _ := routingSvc.NewProviderRegistry(cfg)
+	sel := routingSvc.NewRouteSelector(reg)
+	mock := &mockPortClient{statusCode: http.StatusOK}
+	fb := routingSvc.NewFallbackHandler(map[string]ports.ProviderClient{"primary": mock})
+	handler := NewRoutingProxyHandler(sel, fb)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions?foo=bar&baz=1",
+		strings.NewReader(`{"model":"gpt-4"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler.HandleChatCompletion(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if mock.capturedReq == nil {
+		t.Fatal("expected the provider to be called")
+	}
+	if mock.capturedReq.URL != "/v1/chat/completions" {
+		t.Errorf("upstream URL = %q, want /v1/chat/completions", mock.capturedReq.URL)
+	}
+	if mock.capturedReq.Path != "/v1/chat/completions" {
+		t.Errorf("upstream Path = %q, want /v1/chat/completions", mock.capturedReq.Path)
+	}
+	if mock.capturedReq.RawQuery != "foo=bar&baz=1" {
+		t.Errorf("upstream RawQuery = %q, want foo=bar&baz=1", mock.capturedReq.RawQuery)
+	}
+}
+
+// @sk-test provider-path-fidelity#T3.5: unsupported shape returns explicit 400 (AC-006)
+func TestRoutingHandlerUnsupportedEndpoint(t *testing.T) {
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{{Name: "openai", BaseURL: "http://localhost:1"}},
+		Rules: []routing.RuleConfig{
+			{Tenant: "default", Routes: []routing.RouteConfig{
+				{Model: "gpt-4", Providers: []string{"openai"}},
+			}},
+		},
+	}
+	reg, _ := routingSvc.NewProviderRegistry(cfg)
+	sel := routingSvc.NewRouteSelector(reg)
+	unsupported := &mockPortClient{err: ports.ErrUnsupportedEndpoint}
+	fb := routingSvc.NewFallbackHandler(map[string]ports.ProviderClient{"openai": unsupported})
+	handler := NewRoutingProxyHandler(sel, fb)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(`{"model":"gpt-4"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler.HandleChatCompletion(c)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unsupported endpoint, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "UNSUPPORTED_ENDPOINT") {
+		t.Errorf("expected UNSUPPORTED_ENDPOINT code, got %s", w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "/v1/messages") {
+		t.Errorf("expected message to name the endpoint, got %s", w.Body.String())
+	}
+}

@@ -177,10 +177,12 @@ type mockProviderClient struct {
 	streamErr   error
 	streamCh    chan ports.ProviderChunk
 	streamChunk ports.ProviderChunk
+	capturedReq *ports.ProviderRequest
 }
 
 // @sk-test 70-routing-engine#T4.1: TestFallbackHandler (AC-002, AC-007)
 func (m *mockProviderClient) Call(_ context.Context, req *ports.ProviderRequest) (*ports.ProviderResponse, error) {
+	m.capturedReq = req
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -190,7 +192,8 @@ func (m *mockProviderClient) Call(_ context.Context, req *ports.ProviderRequest)
 	}, nil
 }
 
-func (m *mockProviderClient) Stream(_ context.Context, _ *ports.ProviderRequest) (<-chan ports.ProviderChunk, error) {
+func (m *mockProviderClient) Stream(_ context.Context, req *ports.ProviderRequest) (<-chan ports.ProviderChunk, error) {
+	m.capturedReq = req
 	if m.streamErr != nil {
 		return nil, m.streamErr
 	}
@@ -392,6 +395,76 @@ func TestFallbackHandlerStream_AllFailed(t *testing.T) {
 	got := <-ch
 	if got.Err == nil {
 		t.Fatal("expected error chunk when all providers fail")
+	}
+}
+
+// @sk-test provider-path-fidelity#T3.5: fallback chain advances past an unsupported provider (AC-006, AC-007)
+func TestFallbackHandlerContinuesOnUnsupportedEndpoint(t *testing.T) {
+	clients := map[string]ports.ProviderClient{
+		"p1": &mockProviderClient{name: "p1", err: ports.ErrUnsupportedEndpoint},
+		"p2": &mockProviderClient{name: "p2", statusCode: http.StatusOK},
+	}
+	fb := NewFallbackHandler(clients)
+
+	resp, name, err := fb.Call(context.Background(), []string{"p1", "p2"}, &ports.ProviderRequest{URL: "/v1/messages"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if name != "p2" {
+		t.Errorf("expected p2 after unsupported p1, got %s", name)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+// @sk-test provider-path-fidelity#T3.5: all-unsupported chain surfaces the sentinel (AC-006)
+func TestFallbackHandlerAllUnsupported(t *testing.T) {
+	clients := map[string]ports.ProviderClient{
+		"p1": &mockProviderClient{name: "p1", err: ports.ErrUnsupportedEndpoint},
+		"p2": &mockProviderClient{name: "p2", err: ports.ErrUnsupportedEndpoint},
+	}
+	fb := NewFallbackHandler(clients)
+
+	_, _, err := fb.Call(context.Background(), []string{"p1", "p2"}, &ports.ProviderRequest{URL: "/v1/messages"})
+	if !errors.Is(err, ports.ErrUnsupportedEndpoint) {
+		t.Fatalf("expected ErrUnsupportedEndpoint, got %v", err)
+	}
+}
+
+// @sk-test provider-path-fidelity#T3.5: streaming surfaces the sentinel before any bytes (AC-006)
+func TestFallbackHandlerStreamUnsupported(t *testing.T) {
+	clients := map[string]ports.ProviderClient{
+		"p1": &mockProviderClient{name: "p1", streamErr: ports.ErrUnsupportedEndpoint},
+		"p2": &mockProviderClient{name: "p2", streamErr: ports.ErrUnsupportedEndpoint},
+	}
+	fb := NewFallbackHandler(clients)
+
+	_, _, err := fb.Stream(context.Background(), []string{"p1", "p2"}, &ports.ProviderRequest{URL: "/v1/messages"})
+	if !errors.Is(err, ports.ErrUnsupportedEndpoint) {
+		t.Fatalf("expected ErrUnsupportedEndpoint before streaming, got %v", err)
+	}
+}
+
+// @sk-test provider-path-fidelity#T3.5: fallback uses the same derived path for Call and SSE (AC-007)
+func TestFallbackPreservesPath(t *testing.T) {
+	p1 := &mockProviderClient{name: "p1", err: ports.ErrUnsupportedEndpoint, streamErr: ports.ErrUnsupportedEndpoint}
+	p2 := &mockProviderClient{name: "p2", statusCode: http.StatusOK, streamChunk: ports.ProviderChunk{Done: true}}
+	fb := NewFallbackHandler(map[string]ports.ProviderClient{"p1": p1, "p2": p2})
+	req := &ports.ProviderRequest{URL: "/v1/completions", RawQuery: "a=b"}
+
+	if _, name, err := fb.Call(context.Background(), []string{"p1", "p2"}, req); err != nil || name != "p2" {
+		t.Fatalf("Call fallback: name=%s err=%v", name, err)
+	}
+	if p2.capturedReq == nil || p2.capturedReq.URL != "/v1/completions" || p2.capturedReq.RawQuery != "a=b" {
+		t.Errorf("fallback Call req = %+v, want URL /v1/completions?a=b", p2.capturedReq)
+	}
+
+	if _, name, err := fb.Stream(context.Background(), []string{"p1", "p2"}, req); err != nil || name != "p2" {
+		t.Fatalf("Stream fallback: name=%s err=%v", name, err)
+	}
+	if p2.capturedReq == nil || p2.capturedReq.URL != "/v1/completions" {
+		t.Errorf("fallback Stream req = %+v, want URL /v1/completions", p2.capturedReq)
 	}
 }
 

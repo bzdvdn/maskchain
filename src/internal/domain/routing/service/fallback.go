@@ -59,7 +59,7 @@ func (h *FallbackHandler) Call(ctx context.Context, providers []string, req *por
 				"error", err.Error(),
 				"retriable", isRetriableError(err),
 			)
-			if isRetriableError(err) {
+			if isRetriableError(err) || errors.Is(err, ports.ErrUnsupportedEndpoint) {
 				lastErr = err
 				continue
 			}
@@ -102,13 +102,17 @@ func (h *FallbackHandler) Stream(ctx context.Context, providers []string, req *p
 		}
 		ch, err := client.Stream(ctx, req)
 		if err != nil {
-			if isRetriableError(err) {
+			if isRetriableError(err) || errors.Is(err, ports.ErrUnsupportedEndpoint) {
 				lastErr = err
 				continue
 			}
 			return ch, name, err
 		}
 		return ch, name, nil
+	}
+	// @sk-task provider-path-fidelity#T3.2: surface unsupported-endpoint before streaming starts (AC-006)
+	if errors.Is(lastErr, ports.ErrUnsupportedEndpoint) {
+		return nil, "", lastErr
 	}
 	ch := make(chan ports.ProviderChunk, 1)
 	ch <- ports.ProviderChunk{Err: lastErr, Done: true}

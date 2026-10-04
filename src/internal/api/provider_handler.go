@@ -105,6 +105,12 @@ func respondWithError(c *gin.Context, status int, code, message string) {
 	c.JSON(status, dto.NewErrorResponse(code, message))
 }
 
+// @sk-task provider-path-fidelity#T3.3: explicit error when no provider serves the requested shape (AC-006)
+func respondUnsupportedEndpoint(c *gin.Context, providers []string, path string) {
+	msg := fmt.Sprintf("no configured provider supports endpoint %s (chain: %s)", path, fallbackNames(providers))
+	respondWithError(c, http.StatusBadRequest, "UNSUPPORTED_ENDPOINT", msg)
+}
+
 func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
@@ -156,6 +162,12 @@ func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
 
 	// @sk-task anthropic-messages-endpoint#T2.1+2.2: Set Path and upstream URL from request path (AC-003)
 	upstreamPath := strings.TrimPrefix(c.Request.URL.Path, "/api")
+	// @sk-task provider-path-fidelity#T3.3: log the resolved upstream path (RQ-007)
+	slog.DebugContext(c.Request.Context(), "proxy: upstream path resolved",
+		"upstream_path", upstreamPath,
+		"raw_query", c.Request.URL.RawQuery,
+		"primary", primaryName,
+	)
 
 	if firstProvider != nil {
 		// @sk-task 80-tenant-isolation#T3.1: Propagate X-Tenant-ID to upstream (AC-007)
@@ -164,6 +176,8 @@ func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
 			URL:    upstreamPath,
 			Body:   body,
 			Path:   c.Request.URL.Path,
+			// @sk-task provider-path-fidelity#T2.4: preserve the incoming query string (AC-008)
+			RawQuery: c.Request.URL.RawQuery,
 			Headers: map[string]string{
 				"X-Tenant-ID": tenantID,
 			},
@@ -202,6 +216,8 @@ func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
 		URL:    upstreamPath,
 		Body:   body,
 		Path:   c.Request.URL.Path,
+		// @sk-task provider-path-fidelity#T2.4: preserve the incoming query string (AC-008)
+		RawQuery: c.Request.URL.RawQuery,
 	}
 	if req.Stream {
 		// @sk-task 112-proxy-streaming-wiring#T3.1: Streaming branch fallback chain (AC-003, AC-006)
@@ -217,6 +233,11 @@ func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
 		"error", errString(fbErr),
 	)
 	if fbErr != nil {
+		// @sk-task provider-path-fidelity#T3.3: explicit 400 for unsupported shapes (AC-006)
+		if errors.Is(fbErr, ports.ErrUnsupportedEndpoint) {
+			respondUnsupportedEndpoint(c, providers, upstreamPath)
+			return
+		}
 		respondWithError(c, http.StatusServiceUnavailable, "NO_HEALTHY_PROVIDER", "no healthy provider for model "+req.Model)
 		return
 	}
@@ -231,6 +252,11 @@ func (h *RoutingProxyHandler) HandleChatCompletion(c *gin.Context) {
 func (h *RoutingProxyHandler) streamFromProvider(c *gin.Context, providerReq *ports.ProviderRequest, providers []string) {
 	ch, providerName, err := h.fallback.Stream(c.Request.Context(), providers, providerReq)
 	if err != nil {
+		// @sk-task provider-path-fidelity#T3.3: explicit 400 for unsupported shapes (AC-006)
+		if errors.Is(err, ports.ErrUnsupportedEndpoint) {
+			respondUnsupportedEndpoint(c, providers, providerReq.URL)
+			return
+		}
 		respondWithError(c, http.StatusServiceUnavailable, "NO_HEALTHY_PROVIDER", "no healthy provider for model")
 		return
 	}

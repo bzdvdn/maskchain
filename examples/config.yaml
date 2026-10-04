@@ -28,6 +28,10 @@ valkey:
   ttl_sec: 3600
 
 routing:
+  # base_url is the provider API root. The incoming request path (e.g.
+  # /v1/chat/completions, /v1/embeddings, /v1/messages) is appended to it, so do
+  # not add an endpoint suffix. A base_url that already ends in /v1 is not
+  # duplicated (see the groq example below).
   providers:
     - name: ollama
       api_type: ollama

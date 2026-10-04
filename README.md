@@ -220,7 +220,7 @@ routing:
       api_keys: ["${GEMINI_API_KEY}"]
     - name: groq
       api_type: proxy # generic OpenAI-compatible
-      base_url: https://api.groq.com/openai/v1
+      base_url: https://api.groq.com/openai/v1 # API root: /v1 endpoint path is appended, never duplicated
       api_keys: ["${GROQ_API_KEY}"]
     - name: bedrock
       api_type: bedrock
@@ -235,6 +235,12 @@ tenants:
     auth_header: "Authorization"
     api_keys: ["sk-test-default"]
 ```
+
+> **base_url semantics:** `base_url` is the provider API root. MaskChain appends
+> the incoming endpoint path (`/v1/chat/completions`, `/v1/embeddings`,
+> `/v1/messages`) to it, so do not include an endpoint suffix. A `base_url` that
+> already ends in `/v1` is not duplicated, so both `https://api.openai.com` and
+> `https://api.groq.com/openai/v1` are valid.
 
 > **Required env:** when DB-backed routing or tenancy is enabled, the service
 > fails closed and will not start without a 32-byte base64 at-rest key:

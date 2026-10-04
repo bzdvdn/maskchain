@@ -61,14 +61,15 @@ func (c *AnthropicClient) Call(ctx context.Context, req *ports.ProviderRequest) 
 		}
 	}
 
-	// Path == "/api/v1/messages" => native passthrough (no conversion)
-	// Path == "/api/v1/chat/completions" => also passthrough (backward compat, no conversion exists yet)
-	// Any other Path (incl. zero-value) => same behaviour (passthrough)
-	_ = req.Path
+	// @sk-task provider-path-fidelity#T3.1: native messages path + chat alias, other shapes rejected (AC-004, AC-006)
+	upstreamURL, err := ResolveUpstreamURL("anthropic", c.baseURL, req)
+	if err != nil {
+		return nil, err
+	}
 
 	providerReq := &ports.ProviderRequest{
 		Method:  "POST",
-		URL:     c.baseURL + "/v1/messages",
+		URL:     upstreamURL,
 		Body:    req.Body,
 		Headers: headers,
 	}
@@ -99,11 +100,15 @@ func (c *AnthropicClient) Stream(ctx context.Context, req *ports.ProviderRequest
 		}
 	}
 
-	_ = req.Path
+	// @sk-task provider-path-fidelity#T3.1: native messages path + chat alias, other shapes rejected (AC-004, AC-006)
+	upstreamURL, err := ResolveUpstreamURL("anthropic", c.baseURL, req)
+	if err != nil {
+		return nil, err
+	}
 
 	providerReq := &ports.ProviderRequest{
 		Method:  "POST",
-		URL:     c.baseURL + "/v1/messages",
+		URL:     upstreamURL,
 		Body:    req.Body,
 		Headers: headers,
 	}

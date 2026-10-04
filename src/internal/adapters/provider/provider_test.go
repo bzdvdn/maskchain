@@ -30,6 +30,7 @@ func TestOpenAIClient_Call(t *testing.T) {
 
 	client := newTestOpenAI(t, srv.URL, "sk-test-key")
 	resp, err := client.Call(context.Background(), &ports.ProviderRequest{
+		URL:  "/v1/chat/completions",
 		Body: []byte(`{"model":"gpt-4","messages":[{"role":"user","content":"hi"}]}`),
 	})
 	if err != nil {
@@ -71,6 +72,7 @@ func TestOpenAIClient_Stream(t *testing.T) {
 
 	client := newTestOpenAI(t, srv.URL, "sk-test-key")
 	ch, err := client.Stream(context.Background(), &ports.ProviderRequest{
+		URL:  "/v1/chat/completions",
 		Body: []byte(`{"model":"gpt-4","messages":[{"role":"user","content":"hi"}],"stream":true}`),
 	})
 	if err != nil {
@@ -107,6 +109,7 @@ func TestAnthropicClient_Call(t *testing.T) {
 
 	client := newTestAnthropic(t, srv.URL, "sk-ant-test-key")
 	resp, err := client.Call(context.Background(), &ports.ProviderRequest{
+		URL:  "/v1/messages",
 		Body: []byte(`{"model":"claude-3","messages":[{"role":"user","content":"hi"}]}`),
 	})
 	if err != nil {
@@ -146,6 +149,7 @@ func TestAnthropicClient_Stream(t *testing.T) {
 
 	client := newTestAnthropic(t, srv.URL, "sk-ant-test-key")
 	ch, err := client.Stream(context.Background(), &ports.ProviderRequest{
+		URL:  "/v1/messages",
 		Body: []byte(`{"model":"claude-3","messages":[{"role":"user","content":"hi"}],"stream":true}`),
 	})
 	if err != nil {
@@ -284,6 +288,7 @@ func TestOpenAIClient_Error(t *testing.T) {
 
 	client := newTestOpenAI(t, srv.URL, "sk-wrong")
 	resp, err := client.Call(context.Background(), &ports.ProviderRequest{
+		URL:  "/v1/chat/completions",
 		Body: []byte(`{"model":"gpt-4"}`),
 	})
 	if err != nil {
@@ -313,6 +318,7 @@ func TestAnthropicClient_Error(t *testing.T) {
 
 	client := newTestAnthropic(t, srv.URL, "sk-ant-wrong")
 	resp, err := client.Call(context.Background(), &ports.ProviderRequest{
+		URL:  "/v1/messages",
 		Body: []byte(`{"model":"claude-3"}`),
 	})
 	if err != nil {
@@ -387,6 +393,7 @@ func TestProviderClient_AuthHeader(t *testing.T) {
 	}, ec)
 
 	resp, err := client.Call(context.Background(), &ports.ProviderRequest{
+		URL:  "/v1/chat/completions",
 		Body: []byte(`{"model":"gpt-4"}`),
 	})
 	if err != nil {
@@ -419,6 +426,7 @@ func TestProviderClient_AdditionalHeaders(t *testing.T) {
 	}, ec)
 
 	resp, err := client.Call(context.Background(), &ports.ProviderRequest{
+		URL:  "/v1/chat/completions",
 		Body: []byte(`{"model":"gpt-4"}`),
 	})
 	if err != nil {
@@ -456,6 +464,7 @@ func TestProviderClient_CustomAuthPrefix(t *testing.T) {
 	}, ec)
 
 	resp, err := client.Call(context.Background(), &ports.ProviderRequest{
+		URL:  "/v1/chat/completions",
 		Body: []byte(`{"model":"gpt-4"}`),
 	})
 	if err != nil {
@@ -522,4 +531,141 @@ func TestModelDiscoverer(t *testing.T) {
 			t.Error("expected an error for a non-2xx models response")
 		}
 	})
+}
+
+// @sk-test provider-path-fidelity#T2.5: passthrough adapters hit the requested upstream endpoint (AC-001, AC-002, AC-003, AC-005, AC-008)
+func TestPassThroughPathFidelity(t *testing.T) {
+	tests := []struct {
+		name      string
+		apiType   string
+		suffixV1  bool
+		path      string
+		query     string
+		wantPath  string
+		wantQuery string
+	}{
+		{name: "openai embeddings", apiType: "openai", path: "/v1/embeddings", wantPath: "/v1/embeddings"},
+		{name: "proxy embeddings", apiType: "proxy", path: "/v1/embeddings", wantPath: "/v1/embeddings"},
+		{name: "ollama completions", apiType: "ollama", path: "/v1/completions", wantPath: "/v1/completions"},
+		{name: "openai chat with query", apiType: "openai", path: "/v1/chat/completions", query: "foo=bar&baz=1", wantPath: "/v1/chat/completions", wantQuery: "foo=bar&baz=1"},
+		{name: "base ending in v1 is not duplicated", apiType: "openai", suffixV1: true, path: "/v1/embeddings", wantPath: "/v1/embeddings"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotPath, gotQuery string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotPath = r.URL.Path
+				gotQuery = r.URL.RawQuery
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"ok":true}`))
+			}))
+			defer srv.Close()
+
+			base := srv.URL
+			if tt.suffixV1 {
+				base += "/v1"
+			}
+			client := newTestClientByType(t, tt.apiType, base)
+			if _, err := client.Call(context.Background(), &ports.ProviderRequest{
+				URL:      tt.path,
+				RawQuery: tt.query,
+				Body:     []byte(`{}`),
+			}); err != nil {
+				t.Fatalf("Call: %v", err)
+			}
+
+			if gotPath != tt.wantPath {
+				t.Errorf("upstream path = %q, want %q", gotPath, tt.wantPath)
+			}
+			if gotQuery != tt.wantQuery {
+				t.Errorf("upstream query = %q, want %q", gotQuery, tt.wantQuery)
+			}
+		})
+	}
+}
+
+func newTestClientByType(t *testing.T, apiType, baseURL string) ports.ProviderClient {
+	t.Helper()
+	ec := egress.NewClient(&config.EgressConfig{MaxIdleConns: 1, IdleTimeout: time.Second})
+	cfg := &config.ProviderConfig{Name: "test", APIType: apiType, BaseURL: baseURL, APIKeys: []string{"sk-test"}}
+	switch apiType {
+	case "openai":
+		return newOpenAIClient(cfg, ec)
+	case "proxy":
+		return newProxyClient(cfg, ec)
+	case "ollama":
+		return newOllamaClient(cfg, ec)
+	default:
+		t.Fatalf("unsupported api type %q", apiType)
+		return nil
+	}
+}
+
+// @sk-test provider-path-fidelity#T3.4: Anthropic native path, chat alias, unsupported rejection (AC-004, AC-006)
+func TestAnthropicPathFidelity(t *testing.T) {
+	cases := []struct {
+		name        string
+		requestPath string
+		wantPath    string
+	}{
+		{name: "native messages", requestPath: "/v1/messages", wantPath: "/v1/messages"},
+		{name: "chat alias maps to messages", requestPath: "/v1/chat/completions", wantPath: "/v1/messages"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotPath string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotPath = r.URL.Path
+				assertHeader(t, r, "anthropic-version", "2023-06-01")
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"ok":true}`))
+			}))
+			defer srv.Close()
+
+			client := newTestAnthropic(t, srv.URL, "sk-ant-test")
+			if _, err := client.Call(context.Background(), &ports.ProviderRequest{
+				URL:  tc.requestPath,
+				Body: []byte(`{}`),
+			}); err != nil {
+				t.Fatalf("Call: %v", err)
+			}
+			if gotPath != tc.wantPath {
+				t.Errorf("upstream path = %q, want %q", gotPath, tc.wantPath)
+			}
+		})
+	}
+
+	t.Run("embeddings rejected", func(t *testing.T) {
+		client := newTestAnthropic(t, "https://api.anthropic.com", "sk-ant-test")
+		_, err := client.Call(context.Background(), &ports.ProviderRequest{
+			URL:  "/v1/embeddings",
+			Body: []byte(`{}`),
+		})
+		if !errors.Is(err, ports.ErrUnsupportedEndpoint) {
+			t.Fatalf("expected ErrUnsupportedEndpoint, got %v", err)
+		}
+	})
+}
+
+// @sk-test provider-path-fidelity#T3.4: unsupported shape makes no upstream network call (AC-006)
+func TestOpenAIUnsupportedShapeNoUpstreamCall(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	client := newTestOpenAI(t, srv.URL, "sk-test-key")
+	_, err := client.Call(context.Background(), &ports.ProviderRequest{URL: "/v1/messages", Body: []byte(`{}`)})
+	if !errors.Is(err, ports.ErrUnsupportedEndpoint) {
+		t.Fatalf("expected ErrUnsupportedEndpoint, got %v", err)
+	}
+	if calls != 0 {
+		t.Fatalf("expected zero upstream calls for unsupported shape, got %d", calls)
+	}
 }

@@ -48,6 +48,7 @@ func TestOllamaClient_Call(t *testing.T) {
 
 	client := newTestOllama(t, srv.URL)
 	resp, err := client.Call(context.Background(), &ports.ProviderRequest{
+		URL:  "/v1/chat/completions",
 		Body: []byte(`{"model":"llama3.2","messages":[{"role":"user","content":"hi"}],"stream":false}`),
 	})
 	if err != nil {
@@ -88,6 +89,7 @@ func TestOllamaClient_Stream(t *testing.T) {
 
 	client := newTestOllama(t, srv.URL)
 	ch, err := client.Stream(context.Background(), &ports.ProviderRequest{
+		URL:  "/v1/chat/completions",
 		Body: []byte(`{"model":"llama3.2","messages":[{"role":"user","content":"hi"}],"stream":true}`),
 	})
 	if err != nil {
@@ -126,6 +128,7 @@ func TestOllamaClient_NoAuthHeaders(t *testing.T) {
 
 	client := newTestOllama(t, srv.URL)
 	resp, err := client.Call(context.Background(), &ports.ProviderRequest{
+		URL:  "/v1/chat/completions",
 		Body: []byte(`{"model":"llama3.2","messages":[{"role":"user","content":"hi"}]}`),
 	})
 	if err != nil {
@@ -140,6 +143,7 @@ func TestOllamaClient_NoAuthHeaders(t *testing.T) {
 func TestOllamaClient_Unreachable(t *testing.T) {
 	client := newTestOllama(t, "http://127.0.0.1:1")
 	_, err := client.Call(context.Background(), &ports.ProviderRequest{
+		URL:  "/v1/chat/completions",
 		Body: []byte(`{"model":"llama3.2","messages":[{"role":"user","content":"hi"}]}`),
 	})
 	if err == nil {

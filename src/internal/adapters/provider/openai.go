@@ -59,9 +59,14 @@ func (c *OpenAIClient) Call(ctx context.Context, req *ports.ProviderRequest) (*p
 			headers[k] = v
 		}
 	}
+	// @sk-task provider-path-fidelity#T2.1: resolve upstream path from request (AC-001, AC-002, AC-003)
+	upstreamURL, err := ResolveUpstreamURL("openai", c.baseURL, req)
+	if err != nil {
+		return nil, err
+	}
 	providerReq := &ports.ProviderRequest{
 		Method:  "POST",
-		URL:     c.baseURL + "/v1/chat/completions",
+		URL:     upstreamURL,
 		Body:    req.Body,
 		Headers: headers,
 	}
@@ -89,9 +94,14 @@ func (c *OpenAIClient) Stream(ctx context.Context, req *ports.ProviderRequest) (
 			headers[k] = v
 		}
 	}
+	// @sk-task provider-path-fidelity#T2.1: resolve upstream path from request (AC-001, AC-002, AC-003)
+	upstreamURL, err := ResolveUpstreamURL("openai", c.baseURL, req)
+	if err != nil {
+		return nil, err
+	}
 	providerReq := &ports.ProviderRequest{
 		Method:  "POST",
-		URL:     c.baseURL + "/v1/chat/completions",
+		URL:     upstreamURL,
 		Body:    req.Body,
 		Headers: headers,
 	}

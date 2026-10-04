@@ -28,6 +28,7 @@ func TestProxyClient_Call(t *testing.T) {
 
 	client := newTestProxy(t, srv.URL, "sk-proxy-key")
 	resp, err := client.Call(context.Background(), &ports.ProviderRequest{
+		URL:  "/v1/chat/completions",
 		Body: []byte(`{"model":"gpt-4","messages":[{"role":"user","content":"hi"}]}`),
 		Headers: map[string]string{
 			"X-Tenant-ID": "test-tenant",
@@ -72,6 +73,7 @@ func TestProxyClient_Stream(t *testing.T) {
 
 	client := newTestProxy(t, srv.URL, "sk-proxy-key")
 	ch, err := client.Stream(context.Background(), &ports.ProviderRequest{
+		URL:  "/v1/chat/completions",
 		Body: []byte(`{"model":"gpt-4","messages":[{"role":"user","content":"hi"}],"stream":true}`),
 	})
 	if err != nil {
@@ -109,6 +111,7 @@ func TestProxyClient_NoAuthLeak(t *testing.T) {
 	client := newTestProxy(t, srv.URL, "sk-proxy-key")
 	// Simulate a ProviderRequest that carries a tenant auth header
 	resp, err := client.Call(context.Background(), &ports.ProviderRequest{
+		URL:  "/v1/chat/completions",
 		Body: []byte(`{"model":"gpt-4"}`),
 		Headers: map[string]string{
 			"Authorization": "Bearer sk-tenant-key", // MUST NOT reach upstream
@@ -135,6 +138,7 @@ func TestProxyClient_EmptyAPIKey(t *testing.T) {
 
 	client := newTestProxy(t, srv.URL, "")
 	resp, err := client.Call(context.Background(), &ports.ProviderRequest{
+		URL:  "/v1/chat/completions",
 		Body: []byte(`{"model":"gpt-4"}`),
 	})
 	if err != nil {
@@ -156,6 +160,7 @@ func TestProxyClient_Error(t *testing.T) {
 
 	client := newTestProxy(t, srv.URL, "sk-wrong")
 	resp, err := client.Call(context.Background(), &ports.ProviderRequest{
+		URL:  "/v1/chat/completions",
 		Body: []byte(`{"model":"gpt-4"}`),
 	})
 	if err != nil {
@@ -195,6 +200,7 @@ func TestProxyClient_AdditionalHeaders(t *testing.T) {
 	}, ec)
 
 	resp, err := client.Call(context.Background(), &ports.ProviderRequest{
+		URL:  "/v1/chat/completions",
 		Body: []byte(`{"model":"gpt-4"}`),
 	})
 	if err != nil {
