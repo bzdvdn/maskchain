@@ -34,6 +34,7 @@ type ProviderRequest struct {
 	APIType        string `json:"api_type"`
 	BaseURL        string `json:"base_url" binding:"required"`
 	HealthEndpoint string `json:"health_endpoint"`
+	ModelsEndpoint string `json:"models_endpoint"`
 	Timeout        string `json:"timeout"`
 	Priority       int    `json:"priority"`
 	// @sk-task model-aliases-weighted-lb#T3.1: provider weight (AC-009)
@@ -70,6 +71,7 @@ type ProviderResponse struct {
 	APIType            string            `json:"api_type"`
 	BaseURL            string            `json:"base_url"`
 	HealthEndpoint     string            `json:"health_endpoint"`
+	ModelsEndpoint     string            `json:"models_endpoint"`
 	Timeout            string            `json:"timeout"`
 	Priority           int               `json:"priority"`
 	Weight             int               `json:"weight"`
@@ -95,6 +97,7 @@ func ProviderToResponse(p routingDomain.ProviderConfig, status string, latency i
 		APIType:            p.APIType,
 		BaseURL:            p.BaseURL,
 		HealthEndpoint:     p.HealthEndpoint,
+		ModelsEndpoint:     p.ModelsEndpoint,
 		Timeout:            p.Timeout,
 		Priority:           p.Priority,
 		Weight:             p.Weight,

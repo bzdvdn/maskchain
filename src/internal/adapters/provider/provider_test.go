@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -482,7 +483,7 @@ func TestModelDiscoverer(t *testing.T) {
 
 	t.Run("openai", func(t *testing.T) {
 		srv := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != "/models" {
+			if r.URL.Path != "/v1/models" {
 				t.Errorf("unexpected path %s", r.URL.Path)
 			}
 			assertHeader(t, r, "Authorization", "Bearer sk-test-key")
@@ -667,5 +668,103 @@ func TestOpenAIUnsupportedShapeNoUpstreamCall(t *testing.T) {
 	}
 	if calls != 0 {
 		t.Fatalf("expected zero upstream calls for unsupported shape, got %d", calls)
+	}
+}
+
+// @sk-test media-endpoints#T1.3: explicit Content-Type is forwarded (AC-002, AC-003)
+func TestPassthroughContentType(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get("Content-Type")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	client := newTestClientByType(t, "proxy", srv.URL)
+	if _, err := client.Call(context.Background(), &ports.ProviderRequest{
+		URL:         "/v1/images/edits",
+		ContentType: "multipart/form-data; boundary=abc123",
+		Body:        []byte("--abc123--"),
+	}); err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+	if got != "multipart/form-data; boundary=abc123" {
+		t.Errorf("Content-Type = %q, want multipart/form-data", got)
+	}
+
+	if _, err := client.Call(context.Background(), &ports.ProviderRequest{URL: "/v1/chat/completions", Body: []byte(`{}`)}); err != nil {
+		t.Fatalf("Call default: %v", err)
+	}
+	if got != "application/json" {
+		t.Errorf("default Content-Type = %q, want application/json", got)
+	}
+}
+
+// @sk-test model-discovery-endpoint: discovery path joins like the chat proxies (Mistral/OpenAI fix)
+func TestModelsEndpointJoin(t *testing.T) {
+	cases := []struct {
+		name    string
+		apiType string
+		base    string
+		custom  string
+		want    string
+	}{
+		{"openai root", "openai", "https://api.openai.com", "", "https://api.openai.com/v1/models"},
+		{"mistral root", "openai", "https://api.mistral.ai", "", "https://api.mistral.ai/v1/models"},
+		{"base already v1", "openai", "https://api.openai.com/v1", "", "https://api.openai.com/v1/models"},
+		{"groq proxy", "proxy", "https://api.groq.com/openai/v1", "", "https://api.groq.com/openai/v1/models"},
+		{"groq proxy no v1", "proxy", "https://api.groq.com/openai", "", "https://api.groq.com/openai/v1/models"},
+		{"anthropic", "anthropic", "https://api.anthropic.com", "", "https://api.anthropic.com/v1/models"},
+		{"ollama", "ollama", "http://localhost:11434", "", "http://localhost:11434/api/tags"},
+		{"custom path", "openai", "https://api.mistral.ai", "/custom/models", "https://api.mistral.ai/custom/models"},
+		{"custom url", "openai", "https://api.mistral.ai", "https://other.example/models", "https://other.example/models"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, _, err := modelsEndpoint(routingDomain.ProviderConfig{Name: "p", APIType: tc.apiType, BaseURL: tc.base, ModelsEndpoint: tc.custom})
+			if err != nil {
+				t.Fatalf("modelsEndpoint: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("endpoint = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// @sk-test model-discovery-endpoint: transient 5xx is retried (OpenRouter/CDN resilience)
+func TestModelDiscovererRetriesOn5xx(t *testing.T) {
+	attempts := 0
+	srv := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		if attempts == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":[{"id":"m1"}]}`))
+	})
+	defer srv.Close()
+
+	d := NewModelDiscoverer(nil)
+	ids, err := d.Discover(context.Background(), routingDomain.ProviderConfig{Name: "p", APIType: "openai", BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	if attempts != 2 {
+		t.Errorf("attempts = %d, want 2", attempts)
+	}
+	if len(ids) != 1 || ids[0] != "m1" {
+		t.Errorf("ids = %v, want [m1]", ids)
+	}
+}
+
+// @sk-test model-discovery-endpoint: transient transport errors are classified retryable
+func TestIsRetryableNetErr(t *testing.T) {
+	if !isRetryableNetErr(io.ErrUnexpectedEOF) {
+		t.Error("unexpected EOF should be retryable")
+	}
+	if isRetryableNetErr(errors.New("bad request")) {
+		t.Error("plain error should not be retryable")
 	}
 }

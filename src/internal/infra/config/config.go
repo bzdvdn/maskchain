@@ -117,6 +117,9 @@ type ProviderConfig struct {
 	Name           string `mapstructure:"name" yaml:"name"`
 	BaseURL        string `mapstructure:"base_url" yaml:"base_url"`
 	HealthEndpoint string `mapstructure:"health_endpoint" yaml:"health_endpoint"`
+	// ModelsEndpoint optionally overrides the path (or full URL) used to
+	// discover a provider's models. Empty uses the api_type default.
+	ModelsEndpoint string `mapstructure:"models_endpoint" yaml:"models_endpoint"`
 	Timeout        string `mapstructure:"timeout" yaml:"timeout"`
 	Priority       int    `mapstructure:"priority" yaml:"priority"`
 	// Weight is the relative share among healthy providers of the minimum

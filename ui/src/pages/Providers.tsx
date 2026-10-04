@@ -271,6 +271,11 @@ function ProviderModal({
             </select>
           </div>
           <div className="form-field"><label>Base URL</label><input value={p.base_url ?? ''} onChange={(e) => set({ base_url: e.target.value })} placeholder="https://openrouter.ai/api/v1" /></div>
+          <div className="form-field">
+            <label>Models endpoint (optional)</label>
+            <input value={p.models_endpoint ?? ''} onChange={(e) => set({ models_endpoint: e.target.value })} placeholder="/v1/models (default) or a full URL" />
+            <div className="muted meta-sm u-mt4">Overrides where model discovery looks. Leave blank for the api_type default.</div>
+          </div>
           <div className="form-field"><label>Health Endpoint</label><input value={p.health_endpoint ?? ''} onChange={(e) => set({ health_endpoint: e.target.value })} placeholder="/models" /></div>
           <div className="form-field">
             <label>API Keys (comma separated)</label>

@@ -3,8 +3,10 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"sort"
 	"strings"
@@ -17,7 +19,8 @@ import (
 
 const (
 	modelsRequestTimeout = 15 * time.Second
-	maxModelsBody        = 2 << 20 // 2 MiB
+	modelsMaxAttempts    = 3
+	maxModelsBody        = 4 << 20 // 4 MiB
 )
 
 // @sk-task routing-ia#T5.1: provider model discovery (AC-011)
@@ -33,7 +36,9 @@ func NewModelDiscoverer(egressCfg *config.EgressConfig) *ModelDiscoverer {
 }
 
 // Discover returns the sorted model ids the provider exposes. Provider types
-// without a models API return routing.ErrModelsUnsupported.
+// without a models API return routing.ErrModelsUnsupported. Transient transport
+// errors (connection reset / unexpected EOF, common behind CDN-protected
+// providers such as OpenRouter) and 429/5xx responses are retried.
 func (d *ModelDiscoverer) Discover(ctx context.Context, p routing.ProviderConfig) ([]string, error) {
 	endpoint, parse, err := modelsEndpoint(p)
 	if err != nil {
@@ -50,10 +55,34 @@ func (d *ModelDiscoverer) Discover(ctx context.Context, p routing.ProviderConfig
 	}
 	client := &http.Client{Transport: tp, Timeout: modelsRequestTimeout}
 
+	var lastErr error
+	for attempt := 1; attempt <= modelsMaxAttempts; attempt++ {
+		ids, retry, attemptErr := d.fetchModels(ctx, client, endpoint, p, parse)
+		if attemptErr == nil {
+			return ids, nil
+		}
+		lastErr = attemptErr
+		if !retry || attempt == modelsMaxAttempts {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil, lastErr
+		case <-time.After(time.Duration(attempt) * 250 * time.Millisecond):
+		}
+	}
+	return nil, lastErr
+}
+
+// fetchModels performs one discovery attempt and reports whether the failure is
+// worth retrying.
+func (d *ModelDiscoverer) fetchModels(ctx context.Context, client *http.Client, endpoint string, p routing.ProviderConfig, parse func([]byte) ([]string, error)) ([]string, bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return nil, fmt.Errorf("provider %s: request: %w", p.Name, err)
+		return nil, false, fmt.Errorf("provider %s: request: %w", p.Name, err)
 	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "maskchain")
 	applyProviderAuth(req, p)
 	for k, v := range p.AdditionalHeaders {
 		req.Header.Set(k, v)
@@ -61,35 +90,77 @@ func (d *ModelDiscoverer) Discover(ctx context.Context, p routing.ProviderConfig
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("provider %s: %w", p.Name, err)
+		return nil, isRetryableNetErr(err), fmt.Errorf("provider %s: %w", p.Name, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxModelsBody))
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxModelsBody))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("provider %s: models endpoint status %d", p.Name, resp.StatusCode)
+		retry := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
+		return nil, retry, fmt.Errorf("provider %s: models endpoint status %d", p.Name, resp.StatusCode)
+	}
+	if readErr != nil {
+		return nil, true, fmt.Errorf("provider %s: read models: %w", p.Name, readErr)
 	}
 
 	ids, err := parse(body)
 	if err != nil {
-		return nil, fmt.Errorf("provider %s: parse models: %w", p.Name, err)
+		return nil, false, fmt.Errorf("provider %s: parse models: %w", p.Name, err)
 	}
 	sort.Strings(ids)
-	return ids, nil
+	return ids, false, nil
+}
+
+// isRetryableNetErr reports whether a transport error is transient.
+func isRetryableNetErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
+		return true
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
+	}
+	msg := err.Error()
+	for _, s := range []string{"unexpected EOF", "connection reset", "broken pipe", "connection refused", "timeout"} {
+		if strings.Contains(msg, s) {
+			return true
+		}
+	}
+	return false
 }
 
 func modelsEndpoint(p routing.ProviderConfig) (string, func([]byte) ([]string, error), error) {
-	base := strings.TrimRight(p.BaseURL, "/")
+	var parse func([]byte) ([]string, error)
 	switch p.APIType {
-	case "openai", "proxy":
-		return base + "/models", parseOpenAIModels, nil
-	case "anthropic":
-		return base + "/v1/models", parseOpenAIModels, nil
+	case "openai", "proxy", "anthropic":
+		parse = parseOpenAIModels
 	case "ollama":
-		return base + "/api/tags", parseOllamaModels, nil
+		parse = parseOllamaModels
 	default:
 		return "", nil, fmt.Errorf("%w: api_type %q", routing.ErrModelsUnsupported, p.APIType)
 	}
+
+	base := strings.TrimRight(p.BaseURL, "/")
+	if custom := strings.TrimSpace(p.ModelsEndpoint); custom != "" {
+		if strings.HasPrefix(custom, "http://") || strings.HasPrefix(custom, "https://") {
+			return custom, parse, nil
+		}
+		if !strings.HasPrefix(custom, "/") {
+			custom = "/" + custom
+		}
+		return joinBasePath(base, custom), parse, nil
+	}
+
+	// Default discovery path, joined with the same /v1 de-dup rule the chat
+	// proxies use, so a base URL with or without /v1 resolves correctly.
+	defaultPath := "/v1/models"
+	if p.APIType == "ollama" {
+		defaultPath = "/api/tags"
+	}
+	return joinBasePath(base, defaultPath), parse, nil
 }
 
 func parseOpenAIModels(body []byte) ([]string, error) {

@@ -177,6 +177,7 @@ func (h *RoutingHandler) UpsertProvider(c *gin.Context) {
 		APIType:            req.APIType,
 		BaseURL:            req.BaseURL,
 		HealthEndpoint:     req.HealthEndpoint,
+		ModelsEndpoint:     req.ModelsEndpoint,
 		Timeout:            req.Timeout,
 		Priority:           req.Priority,
 		Weight:             req.Weight,

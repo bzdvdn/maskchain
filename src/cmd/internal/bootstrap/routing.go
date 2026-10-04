@@ -25,6 +25,7 @@ func yamlProvidersToRegistry(cfg *config.RoutingConfig) []routingDomain.Provider
 			Name:               p.Name,
 			BaseURL:            p.BaseURL,
 			HealthEndpoint:     p.HealthEndpoint,
+			ModelsEndpoint:     p.ModelsEndpoint,
 			Timeout:            p.Timeout,
 			Priority:           p.Priority,
 			APIType:            p.APIType,

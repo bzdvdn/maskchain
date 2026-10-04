@@ -5,6 +5,7 @@ export interface ProviderDto {
   api_type: string
   base_url: string
   health_endpoint?: string
+  models_endpoint?: string
   timeout?: string
   priority?: number
   weight?: number

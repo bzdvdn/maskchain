@@ -212,7 +212,7 @@ func (r *PostgresRegistryRepository) ListProviders(ctx context.Context) ([]routi
 	q := getQuerier(ctx, r.pool)
 
 	rows, err := q.Query(ctx, `
-		SELECT name, api_type, base_url, health_endpoint, timeout, priority, weight, api_keys,
+		SELECT name, api_type, base_url, health_endpoint, models_endpoint, timeout, priority, weight, api_keys,
 			auth_scheme, auth_header, auth_prefix, additional_headers, proxy_url,
 			aws_region, aws_access_key_id, aws_secret_access_key, source
 		FROM routing_providers
@@ -227,7 +227,7 @@ func (r *PostgresRegistryRepository) ListProviders(ctx context.Context) ([]routi
 		var p routingDomain.ProviderConfig
 		var rawKeys, rawHeaders, rawAWSAccess, rawAWSSecret []byte
 		var source string
-		if err := rows.Scan(&p.Name, &p.APIType, &p.BaseURL, &p.HealthEndpoint, &p.Timeout, &p.Priority, &p.Weight,
+		if err := rows.Scan(&p.Name, &p.APIType, &p.BaseURL, &p.HealthEndpoint, &p.ModelsEndpoint, &p.Timeout, &p.Priority, &p.Weight,
 			&rawKeys, &p.AuthScheme, &p.AuthHeader, &p.AuthPrefix, &rawHeaders, &p.ProxyURL,
 			&p.AWSRegion, &rawAWSAccess, &rawAWSSecret, &source); err != nil {
 			return nil, err
@@ -448,8 +448,8 @@ func (r *PostgresRegistryRepository) UpsertProvider(ctx context.Context, p routi
 		INSERT INTO routing_providers
 			(name, api_type, base_url, health_endpoint, timeout, priority, api_keys,
 			 auth_scheme, auth_header, auth_prefix, additional_headers, proxy_url,
-			 aws_region, aws_access_key_id, aws_secret_access_key, weight, source)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'ui')
+			 aws_region, aws_access_key_id, aws_secret_access_key, weight, models_endpoint, source)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'ui')
 		ON CONFLICT (name) DO UPDATE SET
 			api_type = EXCLUDED.api_type,
 			base_url = EXCLUDED.base_url,
@@ -466,11 +466,12 @@ func (r *PostgresRegistryRepository) UpsertProvider(ctx context.Context, p routi
 			aws_access_key_id = EXCLUDED.aws_access_key_id,
 			aws_secret_access_key = EXCLUDED.aws_secret_access_key,
 			weight = EXCLUDED.weight,
+			models_endpoint = EXCLUDED.models_endpoint,
 			source = 'ui',
 			updated_at = now()`,
 		p.Name, p.APIType, p.BaseURL, p.HealthEndpoint, p.Timeout, p.Priority, keys,
 		p.AuthScheme, p.AuthHeader, p.AuthPrefix, headers, p.ProxyURL,
-		p.AWSRegion, awsAccess, awsSecret, p.Weight)
+		p.AWSRegion, awsAccess, awsSecret, p.Weight, p.ModelsEndpoint)
 	if err != nil {
 		return fmt.Errorf("upsert provider %s: %w", p.Name, err)
 	}
@@ -565,12 +566,12 @@ func (r *PostgresRegistryRepository) SeedFromYAML(ctx context.Context, providers
 		}
 		tag, err := q.Exec(ctx, `
 			INSERT INTO routing_providers
-				(name, api_type, base_url, health_endpoint, timeout, priority, api_keys, auth_scheme, auth_header, auth_prefix, additional_headers, proxy_url, aws_region, aws_access_key_id, aws_secret_access_key, weight, source)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'yaml')
+				(name, api_type, base_url, health_endpoint, timeout, priority, api_keys, auth_scheme, auth_header, auth_prefix, additional_headers, proxy_url, aws_region, aws_access_key_id, aws_secret_access_key, weight, models_endpoint, source)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'yaml')
 			ON CONFLICT (name) DO NOTHING`,
 			p.Name, p.APIType, p.BaseURL, p.HealthEndpoint, p.Timeout, p.Priority, keys,
 			p.AuthScheme, p.AuthHeader, p.AuthPrefix, headers, p.ProxyURL,
-			p.AWSRegion, awsAccess, awsSecret, p.Weight)
+			p.AWSRegion, awsAccess, awsSecret, p.Weight, p.ModelsEndpoint)
 		if err != nil {
 			return false, fmt.Errorf("seed provider %s: %w", p.Name, err)
 		}

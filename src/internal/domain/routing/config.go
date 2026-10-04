@@ -23,6 +23,8 @@ type ProviderConfig struct {
 	Name           string
 	BaseURL        string
 	HealthEndpoint string
+	// ModelsEndpoint optionally overrides the default model-discovery path/URL.
+	ModelsEndpoint string
 	Timeout        string
 	Priority       int
 	// Weight is the relative share used when several healthy providers share
