@@ -45,7 +45,7 @@ Stop if: `tasks.md` is missing, the next task is not concrete, execution require
   - examples: `Proof: code src/export.go ExportHandler`, `Proof: test src/export_test.go TestExportFlow`, `Proof: docs docs/export.md`.
 - A `[x]` task without any `Proof:` line is not done: do not close the task, `speckeep check` and `speckeep archive` will reject it.
 - If proof cannot reference an existing file → stop and explain before closing.
-- Config mode (final line): follow the **Verify gate policy** in AGENTS.md — resolve `workflow.verify` from `.speckeep/speckeep.yaml` (already read once per session). If `required`, the archive gate demands a `verify: pass` report — do NOT offer archive directly; end with `/spk.verify`. If `optional` (or absent), archive is allowed once all `[x]` tasks carry `Proof:` entries.
+- Config mode (final line): follow the **Verify gate policy** in AGENTS.md — resolve `workflow.verify` from `.speckeep/speckeep.yaml` (already read once per session). If `required`, the archive gate demands a `verify: pass` report — do NOT offer archive directly; end with `/spk-verify`. If `optional` (or absent), archive is allowed once all `[x]` tasks carry `Proof:` entries.
 
 ## Modes
 
@@ -57,24 +57,31 @@ Stop if: `tasks.md` is missing, the next task is not concrete, execution require
 
 - Update code/files and mark completed tasks `[x]` in `tasks.md`.
 - Include a short `Proof plan:` block before the result summary for the tasks you touched.
-- Before finalizing, make an explicit map decision line: `Map update: yes|no` + reason (based on `/spk.repo-map` trigger checklist in `AGENTS.md`).
-- If `Map update: yes`, run `/spk.repo-map` and include `REPOSITORY_MAP.md` in changed files.
+- Before finalizing, make an explicit map decision line: `Map update: yes|no` + reason (based on `/spk-repo-map` trigger checklist in `AGENTS.md`).
+- If `Map update: yes`, run `/spk-repo-map` and include `REPOSITORY_MAP.md` in changed files.
 - If repository structure/navigation changed (new/moved modules, new entrypoints, major path reshaping), `Map update` must be `yes`.
 - If changes are local and do not affect structure/navigation, do not touch `REPOSITORY_MAP.md`.
 - Report: closed task IDs, changed files, and the observable proof.
 - Ensure every closed task has its `Proof:` line written into `tasks.md`.
 - If a closed task has no valid `Proof:` line, treat the task as still open and do not mark it `[x]`.
+- Before the final line, determine remaining work: run `speckeep check <slug>` (or count open tasks in `tasks.md`).
+- If open tasks remain:
+  - The run is a natural pause point — implement executes only the first unfinished phase by default.
+  - Do NOT re-invoke `/spk-implement` to continue: the implement prompt is already in context, and continuing in this session costs zero extra prompt tokens.
+  - Final line: `Ready for: continue — Phase N` and explicitly ask the user whether to continue (`continue`) or stop here.
+  - Reference `/spk-implement <slug>` again only for a fresh session (cleared context) that needs to re-enter implementation.
+- If no open tasks remain (every `[x]` task carries a `Proof:` line), final line depends on `workflow.verify`:
+  - `required`: `Ready for: /spk-verify <slug>`
+  - `optional` (default/absent): `Ready for: speckeep converge <slug>` (fast closing loop; then `speckeep archive <slug> .` once converged; a full audit remains available via `/spk-verify <slug>`)
 - End with standard end block (see AGENTS.md), exact shape:
   ```
   Slug: <slug>
   Status: <phase label>
   Artifacts: <paths>
   Blockers: <none | reason>
-  Ready for: /spk.verify <slug>   (or "speckeep archive <slug> ." when optional)
+  Ready for: <continue — Phase N | speckeep converge <slug> | /spk-verify <slug> | speckeep archive <slug> .>
   ```
-- Once all `[x]` tasks carry `Proof:` entries, final line (mandatory) depends on `workflow.verify`:
-  - if `required`: `Ready for: /spk.verify <slug>`
-  - if `optional` (default/absent): `Ready for: speckeep archive <slug> .` (optional full audit remains available via `/spk.verify <slug>`)
+- Do not emit `/spk-implement <slug>` when no tasks remain, and do not emit a converge/verify/archive line while open tasks remain.
 
 ---
 
