@@ -164,6 +164,12 @@ The Playground relays through the admin process, so set `admin.gateway_url`
 - `POST /api/v1/messages` — Anthropic Messages.
 - `POST /api/v1/completions` — legacy completions, same chain as chat.
 - `POST /api/v1/embeddings` (alias `/v1/embeddings`) — embeddings. The text `input` (a string or an array of strings) is masked per tenant policy before the provider call; vectors are returned unchanged (masking is one-way, never unmasked). Non-text input shapes (token arrays/base64) are rejected so they cannot bypass masking. Embeddings tokens count toward usage and budgets.
+- `GET /v1/models` — OpenAI-shaped model list (`{"object":"list","data":[{"id":…,"object":"model",…}]}`) scoped to the calling key. The existing `/api/v1/models` keeps its `{id, allowed}` array shape.
+- `POST /api/v1/moderations` (alias `/v1/moderations`) — OpenAI moderations; the `input` text (string or array) is masked per tenant policy before the provider call.
+- `POST /api/v1/rerank` (alias `/v1/rerank`) — Cohere-style rerank; `query` and every `documents[].text` are masked before the provider call, and the ranked response is passed through unchanged.
+- `POST /api/v1/messages/count_tokens` (alias `/v1/messages/count_tokens`) — Anthropic token counting; message and system text is masked so the count reflects what the provider will actually see.
+
+All of the above enforce virtual-key auth, model access, and budgets; the POST endpoints use a reduced chain (no session/conversation/cache/SSE) and mask their text fields one-way.
 
 ### Cost & usage accounting
 

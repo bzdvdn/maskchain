@@ -36,6 +36,7 @@ type Server struct {
 	budgetMw          gin.HandlerFunc
 	cacheMw           gin.HandlerFunc
 	embeddingsShield  gin.HandlerFunc
+	textShields       map[middleware.InputKind]gin.HandlerFunc
 	exportMw          gin.HandlerFunc
 }
 
@@ -157,6 +158,27 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 	}
 	embeddingsChain = append(embeddingsChain, chatHandler)
 
+	// @sk-task openai-endpoint-coverage#T3.1: non-chat JSON endpoints use a
+	// reduced chain (no session/conversation/cache/SSE) plus their input shield.
+	textChain := func(shield gin.HandlerFunc) []gin.HandlerFunc {
+		c := []gin.HandlerFunc{}
+		if s.modelAccessMw != nil {
+			c = append(c, s.modelAccessMw)
+		}
+		c = append(c, shield)
+		if s.usageMiddleware != nil {
+			c = append(c, s.usageMiddleware)
+		}
+		if s.budgetMw != nil {
+			c = append(c, s.budgetMw)
+		}
+		if s.exportMw != nil {
+			c = append(c, s.exportMw)
+		}
+		c = append(c, chatHandler)
+		return c
+	}
+
 	// @sk-task usage-accounting-integrity#T3.1+T3.2: /completions shares the chat chain
 	//
 	// The routing handler derives the upstream path from the request path, so
@@ -170,6 +192,16 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 		group.POST("/completions", chain...)
 		if s.embeddingsShield != nil {
 			group.POST("/embeddings", embeddingsChain...)
+		}
+		// @sk-task openai-endpoint-coverage#T3.1: JSON text endpoints (AC-003, AC-004, AC-005)
+		if mw := s.textShields[middleware.InputModerations]; mw != nil {
+			group.POST("/moderations", textChain(mw)...)
+		}
+		if mw := s.textShields[middleware.InputRerank]; mw != nil {
+			group.POST("/rerank", textChain(mw)...)
+		}
+		if mw := s.textShields[middleware.InputCountTokens]; mw != nil {
+			group.POST("/messages/count_tokens", textChain(mw)...)
 		}
 	}
 }
@@ -213,6 +245,18 @@ func (s *Server) RegisterEmbeddingsShield(mw gin.HandlerFunc) {
 	s.embeddingsShield = mw
 }
 
+// @sk-task openai-endpoint-coverage#T3.1: register a non-chat input shield (AC-003, AC-004, AC-005)
+//
+// RegisterTextShield sets the input shield for a JSON text endpoint kind. The
+// route is mounted only when its shield is registered, so each endpoint stays
+// disabled until the binary wires it.
+func (s *Server) RegisterTextShield(kind middleware.InputKind, mw gin.HandlerFunc) {
+	if s.textShields == nil {
+		s.textShields = make(map[middleware.InputKind]gin.HandlerFunc)
+	}
+	s.textShields[kind] = mw
+}
+
 // @sk-task log-export#T2.4: register the log export capture middleware (AC-001)
 //
 // RegisterExportMiddleware sets the middleware that captures masked traffic for
@@ -245,6 +289,8 @@ func (s *Server) RegisterVersionRoute(version string) {
 // after RegisterAuth so the virtual-key middleware resolves the tenant/key.
 func (s *Server) RegisterSelfHandler(h *SelfHandler) {
 	s.engine.GET("/api/v1/models", h.HandleModels)
+	// @sk-task openai-endpoint-coverage#T3.2: OpenAI-shaped catalog (AC-001, AC-002)
+	s.engine.GET("/v1/models", h.HandleModelsOpenAI)
 	s.engine.GET("/api/v1/me", h.HandleMe)
 }
 

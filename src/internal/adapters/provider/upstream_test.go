@@ -42,6 +42,20 @@ func TestResolveUpstreamURL(t *testing.T) {
 			want:    "https://api.openai.com/v1/completions",
 		},
 		{
+			name:    "openai moderations",
+			apiType: "openai",
+			baseURL: "https://api.openai.com",
+			path:    "/v1/moderations",
+			want:    "https://api.openai.com/v1/moderations",
+		},
+		{
+			name:    "proxy rerank",
+			apiType: "proxy",
+			baseURL: "https://api.cohere.com/v1",
+			path:    "/v1/rerank",
+			want:    "https://api.cohere.com/v1/rerank",
+		},
+		{
 			name:    "proxy base ending in v1 is not duplicated",
 			apiType: "proxy",
 			baseURL: "https://api.groq.com/openai/v1",
@@ -85,10 +99,31 @@ func TestResolveUpstreamURL(t *testing.T) {
 			want:    "https://api.anthropic.com/v1/messages",
 		},
 		{
+			name:    "anthropic count tokens",
+			apiType: "anthropic",
+			baseURL: "https://api.anthropic.com",
+			path:    "/v1/messages/count_tokens",
+			want:    "https://api.anthropic.com/v1/messages/count_tokens",
+		},
+		{
 			name:            "openai cannot serve messages",
 			apiType:         "openai",
 			baseURL:         "https://api.openai.com",
 			path:            "/v1/messages",
+			wantUnsupported: true,
+		},
+		{
+			name:            "openai cannot serve count tokens",
+			apiType:         "openai",
+			baseURL:         "https://api.openai.com",
+			path:            "/v1/messages/count_tokens",
+			wantUnsupported: true,
+		},
+		{
+			name:            "anthropic cannot serve moderations",
+			apiType:         "anthropic",
+			baseURL:         "https://api.anthropic.com",
+			path:            "/v1/moderations",
 			wantUnsupported: true,
 		},
 		{

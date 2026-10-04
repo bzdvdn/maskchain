@@ -16,6 +16,8 @@ var openAIShapedEndpoints = map[string]bool{
 	"/v1/chat/completions": true,
 	"/v1/completions":      true,
 	"/v1/embeddings":       true,
+	"/v1/moderations":      true,
+	"/v1/rerank":           true,
 }
 
 // ResolveUpstreamURL builds the upstream URL for a passthrough provider from the
@@ -76,8 +78,11 @@ func upstreamPathFor(apiType, requestPath string) (string, bool) {
 		}
 		return "", false
 	case "anthropic":
-		if requestPath == "/v1/messages" || requestPath == "/v1/chat/completions" {
+		switch requestPath {
+		case "/v1/messages", "/v1/chat/completions":
 			return "/v1/messages", true
+		case "/v1/messages/count_tokens":
+			return "/v1/messages/count_tokens", true
 		}
 		return "", false
 	default:

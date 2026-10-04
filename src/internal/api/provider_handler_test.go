@@ -751,3 +751,84 @@ func TestRoutingHandlerUnsupportedEndpoint(t *testing.T) {
 		t.Errorf("expected message to name the endpoint, got %s", w.Body.String())
 	}
 }
+
+// @sk-test openai-endpoint-coverage#T3.3: new endpoint paths, both prefixes, query preserved (AC-009)
+func TestRoutingHandlerNewEndpointPaths(t *testing.T) {
+	cases := []struct {
+		path      string
+		model     string
+		wantURL   string
+		wantQuery string
+	}{
+		{"/api/v1/moderations?x=1", "mod", "/v1/moderations", "x=1"},
+		{"/v1/moderations?x=1", "mod", "/v1/moderations", "x=1"},
+		{"/api/v1/rerank?x=1", "rr", "/v1/rerank", "x=1"},
+		{"/v1/rerank?x=1", "rr", "/v1/rerank", "x=1"},
+		{"/api/v1/messages/count_tokens?x=1", "claude-x", "/v1/messages/count_tokens", "x=1"},
+		{"/v1/messages/count_tokens?x=1", "claude-x", "/v1/messages/count_tokens", "x=1"},
+	}
+	for _, tc := range cases {
+		cfg := &routing.RoutingConfig{
+			Providers: []routing.ProviderConfig{{Name: "openai", BaseURL: "http://localhost:1"}},
+			Rules: []routing.RuleConfig{
+				{Tenant: "default", Routes: []routing.RouteConfig{
+					{Model: tc.model, Providers: []string{"openai"}},
+				}},
+			},
+		}
+		reg, _ := routingSvc.NewProviderRegistry(cfg)
+		sel := routingSvc.NewRouteSelector(reg)
+		mock := &mockPortClient{statusCode: http.StatusOK}
+		fb := routingSvc.NewFallbackHandler(map[string]ports.ProviderClient{"openai": mock})
+		handler := NewRoutingProxyHandler(sel, fb)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(`{"model":"`+tc.model+`"}`))
+		c.Request.Header.Set("Content-Type", "application/json")
+		handler.HandleChatCompletion(c)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s: expected 200, got %d: %s", tc.path, w.Code, w.Body.String())
+		}
+		if mock.capturedReq == nil {
+			t.Fatalf("%s: provider was not called", tc.path)
+		}
+		if mock.capturedReq.URL != tc.wantURL {
+			t.Errorf("%s: URL = %q, want %q", tc.path, mock.capturedReq.URL, tc.wantURL)
+		}
+		if mock.capturedReq.RawQuery != tc.wantQuery {
+			t.Errorf("%s: RawQuery = %q, want %q", tc.path, mock.capturedReq.RawQuery, tc.wantQuery)
+		}
+	}
+}
+
+// @sk-test openai-endpoint-coverage#T3.3: unsupported rerank shape returns 400 (AC-008)
+func TestRoutingHandlerRerankUnsupported(t *testing.T) {
+	cfg := &routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{{Name: "openai", BaseURL: "http://localhost:1"}},
+		Rules: []routing.RuleConfig{
+			{Tenant: "default", Routes: []routing.RouteConfig{
+				{Model: "rr", Providers: []string{"openai"}},
+			}},
+		},
+	}
+	reg, _ := routingSvc.NewProviderRegistry(cfg)
+	sel := routingSvc.NewRouteSelector(reg)
+	mock := &mockPortClient{err: ports.ErrUnsupportedEndpoint}
+	fb := routingSvc.NewFallbackHandler(map[string]ports.ProviderClient{"openai": mock})
+	handler := NewRoutingProxyHandler(sel, fb)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/rerank", strings.NewReader(`{"model":"rr"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	handler.HandleChatCompletion(c)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "UNSUPPORTED_ENDPOINT") {
+		t.Errorf("expected UNSUPPORTED_ENDPOINT, got %s", w.Body.String())
+	}
+}

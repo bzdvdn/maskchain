@@ -7,15 +7,11 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
-	appshield "github.com/bzdvdn/maskchain/src/internal/app/usecase/shield"
-	"github.com/bzdvdn/maskchain/src/internal/domain/shield/detector"
-	"github.com/bzdvdn/maskchain/src/internal/domain/shield/mask"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
 	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
@@ -88,71 +84,29 @@ func EmbeddingsShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *s
 		piiCfg := tenant.PIIConfig()
 		start := time.Now()
 
-		// Dictionary masking first, mirroring the chat path: known business terms
-		// become [MASK.N] placeholders so the PII scan does not re-flag them.
-		dictDetectors := make([]*detector.DictionaryDetector, 0)
-		for _, dict := range tenant.Dictionaries() {
-			if dict == nil {
-				continue
+		// @sk-task openai-endpoint-coverage#T2.1: shared dictionary+PII masking core (AC-002)
+		masked, phCounter, resp, scanErr := maskTexts(c.Request.Context(), engine, tenant, texts)
+		if scanErr != nil {
+			defaultAction := piiCfg.DefaultAction
+			if defaultAction == "" {
+				defaultAction = "block"
 			}
-			dictDetectors = append(dictDetectors, detector.NewDictionaryDetector(dict))
-		}
-		phCounter := 0
-		for i, text := range texts {
-			var all []detector.DetectorResult
-			for _, dd := range dictDetectors {
-				results, scanErr := dd.Scan(c.Request.Context(), text)
-				if scanErr != nil {
-					continue
-				}
-				all = append(all, results...)
-			}
-			if len(all) == 0 {
-				continue
-			}
-			kept := mask.ResolveOverlaps(all)
-			sort.Slice(kept, func(a, b int) bool { return kept[a].StartPos > kept[b].StartPos })
-			for _, r := range kept {
-				ph := fmt.Sprintf("[MASK.%d]", phCounter)
-				phCounter++
-				texts[i] = texts[i][:r.StartPos] + ph + texts[i][r.StartPos+len(r.Fragment):]
+			log.WarnContext(c.Request.Context(), "embeddings shield scan failed, applying default_action",
+				slog.String("error", scanErr.Error()),
+				slog.String("tenant_slug", tenantSlug),
+				slog.String("default_action", defaultAction),
+			)
+			if defaultAction == "block" {
+				c.Header("X-Shield-Status", "blocked")
+				c.AbortWithStatusJSON(http.StatusForbidden, shieldResponse{
+					ShieldStatus: "blocked",
+					Error:        "shield scan unavailable, blocked by default action",
+				})
+				return
 			}
 		}
 
-		var resp *appshield.ScanResponse
-		if engine != nil && piiCfg.Enabled && len(piiCfg.Rules) > 0 {
-			resp, err = engine.Scan(c.Request.Context(), appshield.ScanRequest{
-				Text:  strings.Join(texts, "\n"),
-				Rules: piiCfg.Rules,
-			})
-			if err != nil {
-				defaultAction := piiCfg.DefaultAction
-				if defaultAction == "" {
-					defaultAction = "block"
-				}
-				log.WarnContext(c.Request.Context(), "embeddings shield scan failed, applying default_action",
-					slog.String("error", err.Error()),
-					slog.String("tenant_slug", tenantSlug),
-					slog.String("default_action", defaultAction),
-				)
-				if defaultAction == "block" {
-					c.Header("X-Shield-Status", "blocked")
-					c.AbortWithStatusJSON(http.StatusForbidden, shieldResponse{
-						ShieldStatus: "blocked",
-						Error:        "shield scan unavailable, blocked by default action",
-					})
-					return
-				}
-			} else if resp != nil && len(resp.Replacements) > 0 {
-				for i := range texts {
-					for ph, original := range resp.Replacements {
-						texts[i] = strings.ReplaceAll(texts[i], original, ph)
-					}
-				}
-			}
-		}
-
-		c.Request.Body = io.NopCloser(bytes.NewBuffer(marshalEmbeddingsBody(body, texts, isArray)))
+		c.Request.Body = io.NopCloser(bytes.NewBuffer(marshalEmbeddingsBody(body, masked, isArray)))
 
 		duration := time.Since(start)
 		scanStatus := string(respStatus(resp))

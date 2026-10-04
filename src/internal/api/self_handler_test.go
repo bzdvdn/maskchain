@@ -205,3 +205,64 @@ func TestSelfHandlerUnauthorized(t *testing.T) {
 		}
 	}
 }
+
+// @sk-test openai-endpoint-coverage#T3.4: GET /v1/models OpenAI shape + key scope (AC-001, AC-002)
+func TestSelfHandlerModelsOpenAI(t *testing.T) {
+	type openAIModelList struct {
+		Object string `json:"object"`
+		Data   []struct {
+			ID      string `json:"id"`
+			Object  string `json:"object"`
+			Created int64  `json:"created"`
+			OwnedBy string `json:"owned_by"`
+		} `json:"data"`
+	}
+
+	fetch := func(t *testing.T, repo *selfFakeRepo) openAIModelList {
+		t.Helper()
+		engine := selfEngine(t, repo, "acme", "Authorization")
+		h := NewSelfHandler(selfRegistry(t, "acme", "gpt-4o", "gpt-4o-mini"), "1.2.3")
+		engine.GET("/v1/models", h.HandleModelsOpenAI)
+
+		req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+		req.Header.Set("Authorization", "Bearer sk-mc_secret")
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+		var list openAIModelList
+		if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
+			t.Fatalf("decode: %v (%s)", err, w.Body.String())
+		}
+		return list
+	}
+
+	t.Run("scoped key sees only allowed models", func(t *testing.T) {
+		repo := &selfFakeRepo{keys: []*virtualkey.VirtualKey{{
+			ID: "k1", TenantID: "acme", KeyHash: virtualkey.KeyHash("sk-mc_secret"),
+			AllowedModels: []string{"gpt-4o-mini"}, Enabled: true,
+		}}}
+		list := fetch(t, repo)
+		if list.Object != "list" {
+			t.Errorf("object = %q, want list", list.Object)
+		}
+		if len(list.Data) != 1 || list.Data[0].ID != "gpt-4o-mini" {
+			t.Fatalf("data = %+v, want only gpt-4o-mini", list.Data)
+		}
+		if list.Data[0].Object != "model" || list.Data[0].OwnedBy != "maskchain" || list.Data[0].Created != 0 {
+			t.Errorf("unexpected entry fields: %+v", list.Data[0])
+		}
+	})
+
+	t.Run("unscoped key sees all routed models", func(t *testing.T) {
+		repo := &selfFakeRepo{keys: []*virtualkey.VirtualKey{{
+			ID: "k1", TenantID: "acme", KeyHash: virtualkey.KeyHash("sk-mc_secret"), Enabled: true,
+		}}}
+		list := fetch(t, repo)
+		if len(list.Data) != 2 {
+			t.Fatalf("data = %+v, want 2 models", list.Data)
+		}
+	})
+}

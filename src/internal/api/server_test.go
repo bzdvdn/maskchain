@@ -443,6 +443,83 @@ func TestNilRoutingHandler(t *testing.T) {
 	}
 }
 
+// @sk-test openai-endpoint-coverage#T3.3: new JSON text routes mount on both
+// prefixes with auth + model access + budget stages (AC-006, AC-007, AC-009)
+func newTextEndpointsServer(t *testing.T, budgetMw gin.HandlerFunc) *Server {
+	t.Helper()
+	repo := &selfFakeRepo{keys: []*virtualkey.VirtualKey{{
+		ID: "k1", TenantID: "acme", KeyHash: virtualkey.KeyHash("sk-mc_secret"),
+		AllowedModels: []string{"gpt-4o-mini"}, Enabled: true,
+	}}}
+	slug, err := value.NewTenantSlug("acme")
+	if err != nil {
+		t.Fatalf("slug: %v", err)
+	}
+	tenant := entity.NewTenant(slug, "Acme", "Authorization")
+
+	srv := newTestServer()
+	srv.RegisterAuth(middleware.VirtualKeyAuth(repo, middleware.NewTenantProvider([]*entity.Tenant{tenant})))
+	srv.RegisterModelAccess(middleware.ModelAccess())
+	stub := func(c *gin.Context) { c.Next() }
+	srv.RegisterTextShield(middleware.InputModerations, stub)
+	srv.RegisterTextShield(middleware.InputRerank, stub)
+	srv.RegisterTextShield(middleware.InputCountTokens, stub)
+	if budgetMw != nil {
+		srv.RegisterBudgetMiddleware(budgetMw)
+	}
+	srv.RegisterProxyRoute(func(c *gin.Context) { c.Next() }, nil)
+	return srv
+}
+
+func postTextEndpoint(srv *Server, path, model string, withAuth bool) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"`+model+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	if withAuth {
+		req.Header.Set("Authorization", "Bearer sk-mc_secret")
+	}
+	srv.engine.ServeHTTP(w, req)
+	return w
+}
+
+func TestTextEndpointsRouteParityAndAuth(t *testing.T) {
+	srv := newTextEndpointsServer(t, func(c *gin.Context) { c.Next() })
+
+	paths := []string{
+		"/api/v1/moderations", "/v1/moderations",
+		"/api/v1/rerank", "/v1/rerank",
+		"/api/v1/messages/count_tokens", "/v1/messages/count_tokens",
+	}
+	for _, p := range paths {
+		if w := postTextEndpoint(srv, p, "gpt-4o-mini", true); w.Code != http.StatusOK {
+			t.Errorf("%s allowed: expected 200, got %d: %s", p, w.Code, w.Body.String())
+		}
+		if w := postTextEndpoint(srv, p, "gpt-4o-mini", false); w.Code != http.StatusUnauthorized {
+			t.Errorf("%s without key: expected 401, got %d", p, w.Code)
+		}
+		if w := postTextEndpoint(srv, p, "gpt-4o", true); w.Code != http.StatusForbidden {
+			t.Errorf("%s disallowed model: expected 403, got %d: %s", p, w.Code, w.Body.String())
+		}
+	}
+}
+
+// @sk-test openai-endpoint-coverage#T3.3: budget stage can block the new endpoints with 429 (AC-007)
+func TestTextEndpointsBudget429(t *testing.T) {
+	srv := newTextEndpointsServer(t, func(c *gin.Context) {
+		middleware.AbortWithError(c, http.StatusTooManyRequests, middleware.ErrorCodeBudgetExceeded, "budget exceeded")
+	})
+
+	for _, p := range []string{"/v1/moderations", "/v1/rerank", "/v1/messages/count_tokens"} {
+		w := postTextEndpoint(srv, p, "gpt-4o-mini", true)
+		if w.Code != http.StatusTooManyRequests {
+			t.Errorf("%s: expected 429, got %d: %s", p, w.Code, w.Body.String())
+		}
+		if !strings.Contains(w.Body.String(), "BUDGET_EXCEEDED") {
+			t.Errorf("%s: expected BUDGET_EXCEEDED, got %s", p, w.Body.String())
+		}
+	}
+}
+
 func newTestServer() *Server {
 	gin.SetMode(gin.TestMode)
 	cfg := &config.ServerConfig{

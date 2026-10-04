@@ -166,6 +166,10 @@ func run() {
 
 	// @sk-task embeddings-passthrough#T2.1: wire the embeddings input shield (AC-001)
 	srv.RegisterEmbeddingsShield(middleware.EmbeddingsShieldMiddleware(shieldEngine, cfg.Shield, logger))
+	// @sk-task openai-endpoint-coverage#T4.1: wire the non-chat JSON text shields (AC-003, AC-004, AC-005)
+	for _, kind := range []middleware.InputKind{middleware.InputModerations, middleware.InputRerank, middleware.InputCountTokens} {
+		srv.RegisterTextShield(kind, middleware.TextInputShieldMiddleware(kind, shieldEngine, cfg.Shield, logger))
+	}
 	srv.RegisterProxyRoute(middleware.ShieldMiddleware(shieldEngine, cfg.Shield, logger, sessionUseCase), routingHandler)
 	logger.Info("proxy routes registered")
 

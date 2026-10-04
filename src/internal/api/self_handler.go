@@ -36,6 +36,22 @@ type selfModel struct {
 	Allowed bool   `json:"allowed"`
 }
 
+// @sk-task openai-endpoint-coverage#T3.2: OpenAI-shaped model list (AC-001, AC-002)
+//
+// openAIModel is one entry of GET /v1/models.
+type openAIModel struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Created int64  `json:"created"`
+	OwnedBy string `json:"owned_by"`
+}
+
+// openAIModelList is the OpenAI list envelope.
+type openAIModelList struct {
+	Object string        `json:"object"`
+	Data   []openAIModel `json:"data"`
+}
+
 // selfMeResponse is the payload of GET /api/v1/me.
 type selfMeResponse struct {
 	TenantID      string            `json:"tenant_id"`
@@ -72,6 +88,31 @@ func (h *SelfHandler) HandleModels(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, out)
+}
+
+// @sk-task openai-endpoint-coverage#T3.2: GET /v1/models in the OpenAI shape (AC-001, AC-002)
+//
+// HandleModelsOpenAI lists the models the presenting key is allowed to use in
+// the OpenAI list shape. An unscoped key sees every model routed to the tenant;
+// a scoped key sees only its allowed models.
+func (h *SelfHandler) HandleModelsOpenAI(c *gin.Context) {
+	tenant, ok := middleware.TenantFromContext(c)
+	if !ok || tenant == nil {
+		middleware.AbortWithError(c, http.StatusUnauthorized, middleware.ErrorCodeUnauthorized, "unauthorized")
+		return
+	}
+
+	vk, hasKey := middleware.VirtualKeyFromContext(c)
+	models := h.modelsForTenant(tenant.Slug().String())
+	data := make([]openAIModel, 0, len(models))
+	for _, m := range models {
+		if hasKey && vk != nil && !vk.AllowsModel(m) {
+			continue
+		}
+		data = append(data, openAIModel{ID: m, Object: "model", Created: 0, OwnedBy: "maskchain"})
+	}
+
+	c.JSON(http.StatusOK, openAIModelList{Object: "list", Data: data})
 }
 
 // HandleMe returns the identity, model scopes and budget view of the current key.
