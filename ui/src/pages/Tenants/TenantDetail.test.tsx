@@ -115,3 +115,22 @@ describe('Tenant compliance clean', () => {
     }
   })
 })
+
+// @sk-test hotfix: Policies & Shield tolerates a null pii_config.rules (new tenant)
+describe('Tenant policies null rules', () => {
+  it('renders the PII shield without crashing when rules is null', async () => {
+    mockGet.mockResolvedValue({
+      slug: 'acme',
+      name: 'Acme Corp',
+      auth_header: 'X-Tenant',
+      retention_mode: 'full',
+      pii_config: { enabled: true, default_action: 'mask', rules: null },
+    } as never)
+
+    renderDetail()
+
+    await screen.findByText('Acme Corp')
+    fireEvent.click(screen.getByRole('tab', { name: 'Policies & Shield' }))
+    expect(await screen.findByText('PII shield')).toBeTruthy()
+  })
+})

@@ -171,7 +171,7 @@ export function TenantDetail() {
               <div className="kv u-mb12">
                 <div className="k">Default action</div><div className="v mono">{tenant.pii_config.default_action}</div>
               </div>
-              {tenant.pii_config.rules.length > 0 && (
+              {Array.isArray(tenant.pii_config.rules) && tenant.pii_config.rules.length > 0 && (
                 <div className="table-wrap">
                   <table className="tbl">
                     <thead><tr><th>Label</th><th>Type</th><th>Pattern</th><th>Action</th></tr></thead>
