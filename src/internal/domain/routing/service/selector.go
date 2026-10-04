@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/bzdvdn/maskchain/src/internal/domain/routing"
 )
@@ -48,9 +49,12 @@ func (s *RouteSelector) GetProviderList(model string, tenantID string) ([]string
 	return providers, nil
 }
 
-// providersFor resolves the provider chain for a model: the tenant-specific
-// route wins, otherwise the global default (GlobalTenant) is used. An empty
-// tenant is normalized to "default" so existing deployments are unchanged.
+// @sk-task provider-model-registry#T2.1: wildcard fallback with precedence (AC-003, AC-004)
+//
+// providersFor resolves the provider chain for a model in precedence order:
+// exact tenant route, wildcard tenant route, exact global route, wildcard
+// global route. An empty tenant is normalized to "default" so existing
+// deployments are unchanged.
 func (s *RouteSelector) providersFor(model, tenantID string) ([]string, bool) {
 	if tenantID == "" {
 		tenantID = "default"
@@ -58,8 +62,14 @@ func (s *RouteSelector) providersFor(model, tenantID string) ([]string, bool) {
 	if providers, ok := s.lookup(tenantID, model); ok {
 		return providers, true
 	}
+	if providers, ok := s.lookupWildcard(tenantID, model); ok {
+		return providers, true
+	}
 	if tenantID != routing.GlobalTenant {
 		if providers, ok := s.lookup(routing.GlobalTenant, model); ok {
+			return providers, true
+		}
+		if providers, ok := s.lookupWildcard(routing.GlobalTenant, model); ok {
 			return providers, true
 		}
 	}
@@ -78,4 +88,33 @@ func (s *RouteSelector) lookup(tenantID, model string) ([]string, bool) {
 		}
 	}
 	return nil, false
+}
+
+// lookupWildcard resolves the best wildcard route for a tenant: the longest
+// literal prefix that matches the model wins; any other wildcard acts as a
+// catch-all fallback. Among equal scores the first declared route wins.
+func (s *RouteSelector) lookupWildcard(tenantID, model string) ([]string, bool) {
+	var best []string
+	bestScore := -1
+	for _, rule := range s.registry.Rules() {
+		if rule.TenantID != tenantID {
+			continue
+		}
+		for _, route := range rule.Routes {
+			if !routing.IsWildcardModel(route.Model) {
+				continue
+			}
+			score := 0 // catch-all
+			if prefix := routing.WildcardPrefix(route.Model); prefix != "" {
+				if model == prefix || strings.HasPrefix(model, prefix+"/") {
+					score = len(prefix) + 1
+				}
+			}
+			if score > bestScore {
+				best = route.Providers
+				bestScore = score
+			}
+		}
+	}
+	return best, bestScore >= 0
 }

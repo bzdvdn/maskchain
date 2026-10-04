@@ -6,6 +6,7 @@ import { useToast } from '../components/Toast'
 import { relativeTime } from '../utils/format'
 import {
   deleteProvider,
+  deleteProviderModel,
   isMaskedKey,
   listModels,
   listProviderModels,
@@ -84,6 +85,17 @@ export function Providers() {
     }
   }
 
+  // @sk-task provider-model-registry#T3.4: remove one model from a provider (AC-008)
+  const removeModel = async (provider: string, model: string) => {
+    try {
+      await deleteProviderModel(provider, model)
+      toast(`Removed "${model}" from ${provider}`, 'success')
+      await reload()
+    } catch (e: any) {
+      toast(e?.message ?? 'Remove failed', 'error')
+    }
+  }
+
   return (
     <div>
       <div className="card">
@@ -129,8 +141,19 @@ export function Providers() {
                     </div>
                   </div>
                   <div className="u-wrap u-mb10">
-                    {attached.slice(0, 3).map((m) => <span key={m} className="chip">{m}</span>)}
-                    {attached.length > 3 && <span className="chip">+{attached.length - 3}</span>}
+                    {attached.map((m) => (
+                      <span key={m} className="chip">
+                        {m}
+                        <button
+                          type="button"
+                          aria-label={`Remove ${m}`}
+                          onClick={() => removeModel(p.name, m)}
+                          style={{ marginLeft: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'inherit', padding: 0 }}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
                     {attached.length === 0 && <span className="muted">no models attached</span>}
                   </div>
                   {p.proxy_url && <div className="muted meta-sm u-mb10">proxy: <code>{p.proxy_url}</code></div>}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -334,6 +335,10 @@ func (h *RoutingHandler) ListModels(c *gin.Context) {
 
 	for _, rule := range rules {
 		for _, rt := range rule.Routes {
+			// @sk-task provider-model-registry#T3.1: wildcard patterns are not models (AC-005)
+			if routing.IsWildcardModel(rt.Model) {
+				continue
+			}
 			a := ensure(rt.Model)
 			if rule.Tenant == routing.GlobalTenant {
 				a.defaults = rt.Providers
@@ -418,12 +423,107 @@ func (h *RoutingHandler) UpsertRoute(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	// @sk-task provider-model-registry#T3.2: validate wildcard + provider refs (AC-007)
+	if err := h.validateRoute(c.Request.Context(), req.Model, req.Providers); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	if err := h.repo.UpsertRoute(c.Request.Context(), req.Tenant, req.Model, req.Providers); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	h.writeAudit(c, "upsert_route", req.Model, map[string]any{"tenant": req.Tenant, "providers": req.Providers})
 	c.JSON(http.StatusOK, gin.H{"data": dto.RouteResponse{Tenant: req.Tenant, Model: req.Model, Providers: req.Providers, Source: "ui"}})
+}
+
+// @sk-task provider-model-registry#T3.1: remove a provider's model from the catalog (AC-008)
+func (h *RoutingHandler) DeleteProviderModel(c *gin.Context) {
+	name := c.Param("name")
+	model := c.Param("model")
+	if name == "" || model == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider and model are required"})
+		return
+	}
+
+	remove := func(ctx context.Context) error {
+		rules, err := h.repo.ListRules(ctx)
+		if err != nil {
+			return err
+		}
+		var current []string
+		found := false
+		for _, rule := range rules {
+			if rule.Tenant != routing.GlobalTenant {
+				continue
+			}
+			for _, rt := range rule.Routes {
+				if rt.Model == model {
+					current = rt.Providers
+					found = true
+				}
+			}
+		}
+		if !found {
+			return routing.ErrNotFound
+		}
+		remaining := make([]string, 0, len(current))
+		for _, p := range current {
+			if p != name {
+				remaining = append(remaining, p)
+			}
+		}
+		if len(remaining) == len(current) {
+			return routing.ErrNotFound
+		}
+		if len(remaining) == 0 {
+			return h.repo.DeleteRoute(ctx, routing.GlobalTenant, model)
+		}
+		return h.repo.UpsertRoute(ctx, routing.GlobalTenant, model, remaining)
+	}
+
+	var err error
+	if h.tx != nil {
+		err = h.tx.RunInTx(c.Request.Context(), remove)
+	} else {
+		err = remove(c.Request.Context())
+	}
+	if err != nil {
+		if errors.Is(err, routing.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "model not found for provider"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	h.writeAudit(c, "delete_provider_model", name, map[string]any{"model": model})
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// @sk-task provider-model-registry#T3.2: validate wildcard routes (AC-007)
+//
+// validateRoute rejects malformed wildcard patterns and wildcard routes that
+// reference an unknown provider.
+func (h *RoutingHandler) validateRoute(ctx context.Context, model string, providers []string) error {
+	if !routing.IsWildcardModel(model) {
+		return nil
+	}
+	if strings.Count(model, "*") != 1 || (model != "*" && !strings.HasSuffix(model, "/*")) {
+		return fmt.Errorf("route model %q: malformed wildcard pattern", model)
+	}
+	existing, err := h.repo.ListProviders(ctx)
+	if err != nil {
+		return err
+	}
+	names := make(map[string]struct{}, len(existing))
+	for _, p := range existing {
+		names[p.Name] = struct{}{}
+	}
+	for _, name := range providers {
+		if _, ok := names[name]; !ok {
+			return fmt.Errorf("route model %q: unknown provider %q", model, name)
+		}
+	}
+	return nil
 }
 
 func (h *RoutingHandler) DeleteRoute(c *gin.Context) {

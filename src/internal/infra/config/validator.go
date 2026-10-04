@@ -78,6 +78,36 @@ func validateProviderAuth(cfg *Config) error {
 	return nil
 }
 
+// validateRoutingRoutes rejects malformed wildcard patterns and wildcard routes
+// that reference an unknown provider.
+func validateRoutingRoutes(cfg *Config) error {
+	if cfg.Routing == nil {
+		return nil
+	}
+	providers := make(map[string]struct{}, len(cfg.Routing.Providers))
+	for _, p := range cfg.Routing.Providers {
+		if p.Name != "" {
+			providers[p.Name] = struct{}{}
+		}
+	}
+	for i, rule := range cfg.Routing.Rules {
+		for j, rt := range rule.Routes {
+			if !strings.Contains(rt.Model, "*") {
+				continue
+			}
+			if strings.Count(rt.Model, "*") != 1 || (rt.Model != "*" && !strings.HasSuffix(rt.Model, "/*")) {
+				return fmt.Errorf("routing.rules.%d.routes.%d.model: malformed wildcard pattern %q", i, j, rt.Model)
+			}
+			for _, name := range rt.Providers {
+				if _, ok := providers[name]; !ok {
+					return fmt.Errorf("routing.rules.%d.routes.%d: wildcard %q references unknown provider %q", i, j, rt.Model, name)
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // validateCompliance validates the compliance preset configuration.
 func validateCompliance(cfg *Config) error {
 	c := cfg.Compliance
@@ -158,6 +188,9 @@ func validateConfig(cfg *Config, v *viper.Viper) error {
 		return err
 	}
 	if err := validateProviderAuth(cfg); err != nil {
+		return err
+	}
+	if err := validateRoutingRoutes(cfg); err != nil {
 		return err
 	}
 	val := reflect.ValueOf(cfg).Elem()

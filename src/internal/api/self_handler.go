@@ -3,11 +3,13 @@ package api
 import (
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
+	routingDomain "github.com/bzdvdn/maskchain/src/internal/domain/routing"
 	routingSvc "github.com/bzdvdn/maskchain/src/internal/domain/routing/service"
 )
 
@@ -141,19 +143,22 @@ func (h *SelfHandler) HandleMe(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// modelsForTenant returns the sorted, de-duplicated set of models routed for a
-// tenant across all routing rules.
+// @sk-task provider-model-registry#T1.3: include global catalog models, exclude patterns (AC-005)
+//
+// modelsForTenant returns the sorted, de-duplicated set of models a tenant can
+// use: its own exact routes plus the global (fallback) exact routes. Wildcard
+// route patterns are excluded because they do not name a single model.
 func (h *SelfHandler) modelsForTenant(tenantID string) []string {
 	if h.registry == nil {
 		return nil
 	}
 	seen := make(map[string]struct{})
 	for _, rule := range h.registry.Rules() {
-		if rule.TenantID != tenantID {
+		if rule.TenantID != tenantID && rule.TenantID != routingDomain.GlobalTenant {
 			continue
 		}
 		for _, route := range rule.Routes {
-			if route.Model == "" {
+			if route.Model == "" || strings.Contains(route.Model, "*") {
 				continue
 			}
 			seen[route.Model] = struct{}{}

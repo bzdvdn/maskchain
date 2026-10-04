@@ -462,3 +462,26 @@ func TestDatabaseConfig_PoolDefaults(t *testing.T) {
 		t.Errorf("expected MaxConnLifetime=30m, got %v", cfg.DB.MaxConnLifetime)
 	}
 }
+
+// @sk-test provider-model-registry#T3.3: wildcard route validation (AC-007)
+func TestValidateRoutingRoutes(t *testing.T) {
+	base := func(rules ...RuleConfig) *Config {
+		return &Config{Routing: &RoutingConfig{
+			Providers: []ProviderConfig{{Name: "groq", APIType: "openai", BaseURL: "http://groq", APIKeys: []string{"k"}}},
+			Rules:     rules,
+		}}
+	}
+
+	if err := validateRoutingRoutes(base(RuleConfig{Tenant: "*", Routes: []RouteConfig{{Model: "groq/*", Providers: []string{"groq"}}}})); err != nil {
+		t.Errorf("valid wildcard rejected: %v", err)
+	}
+	if err := validateRoutingRoutes(base(RuleConfig{Tenant: "*", Routes: []RouteConfig{{Model: "foo*bar", Providers: []string{"groq"}}}})); err == nil {
+		t.Error("malformed wildcard pattern must be rejected")
+	}
+	if err := validateRoutingRoutes(base(RuleConfig{Tenant: "*", Routes: []RouteConfig{{Model: "groq/*", Providers: []string{"nope"}}}})); err == nil {
+		t.Error("wildcard referencing an unknown provider must be rejected")
+	}
+	if err := validateRoutingRoutes(base(RuleConfig{Tenant: "*", Routes: []RouteConfig{{Model: "gpt-4o", Providers: []string{"nope"}}}})); err != nil {
+		t.Errorf("non-wildcard routes are not validated here: %v", err)
+	}
+}

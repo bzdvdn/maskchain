@@ -85,6 +85,14 @@ export function deleteProvider(name: string): Promise<void> {
   return apiFetch(`${ROUTING}/providers/${encodeURIComponent(name)}`, { method: 'DELETE' })
 }
 
+// deleteProviderModel removes a single model from a provider's catalog (drops
+// the provider from the model's global route).
+export function deleteProviderModel(name: string, model: string): Promise<void> {
+  return apiFetch(`${ROUTING}/providers/${encodeURIComponent(name)}/models/${encodeURIComponent(model)}`, {
+    method: 'DELETE',
+  })
+}
+
 export function listRoutes(): Promise<RouteDto[]> {
   return apiFetch(`${ROUTING}/routes`).then((d) => unwrap<RouteDto[]>(d))
 }

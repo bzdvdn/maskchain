@@ -65,11 +65,52 @@ func (f *fakeRegistryRepo) UpsertRoute(_ context.Context, tenant, model string, 
 		f.routes = map[string][]string{}
 	}
 	f.routes[routeKey(tenant, model)] = providers
+	f.upsertRuleRoute(tenant, model, providers)
 	return nil
 }
 
-func (f *fakeRegistryRepo) DeleteRoute(_ context.Context, _, _ string) error {
+func (f *fakeRegistryRepo) DeleteRoute(_ context.Context, tenant, model string) error {
+	key := routeKey(tenant, model)
+	if _, ok := f.routes[key]; !ok {
+		return routingDomain.ErrNotFound
+	}
+	delete(f.routes, key)
+	f.removeRuleRoute(tenant, model)
 	return nil
+}
+
+func (f *fakeRegistryRepo) upsertRuleRoute(tenant, model string, providers []string) {
+	for i := range f.rules {
+		if f.rules[i].Tenant != tenant {
+			continue
+		}
+		for j := range f.rules[i].Routes {
+			if f.rules[i].Routes[j].Model == model {
+				f.rules[i].Routes[j].Providers = providers
+				return
+			}
+		}
+		f.rules[i].Routes = append(f.rules[i].Routes, routingDomain.RouteConfig{Model: model, Providers: providers})
+		return
+	}
+	f.rules = append(f.rules, routingDomain.RuleConfig{Tenant: tenant,
+		Routes: []routingDomain.RouteConfig{{Model: model, Providers: providers}}})
+}
+
+func (f *fakeRegistryRepo) removeRuleRoute(tenant, model string) {
+	for i := range f.rules {
+		if f.rules[i].Tenant != tenant {
+			continue
+		}
+		out := f.rules[i].Routes[:0]
+		for _, rt := range f.rules[i].Routes {
+			if rt.Model != model {
+				out = append(out, rt)
+			}
+		}
+		f.rules[i].Routes = out
+		return
+	}
 }
 
 func (f *fakeRegistryRepo) SeedFromYAML(_ context.Context, providers []routingDomain.ProviderConfig, _ []routingDomain.RuleConfig) (bool, error) {
@@ -352,4 +393,77 @@ func TestRoutingHandlerListProviderModels(t *testing.T) {
 			t.Errorf("expected 404, got %d", w.Code)
 		}
 	})
+}
+
+func deleteProviderModel(t *testing.T, h *RoutingHandler, name, model string) *httptest.ResponseRecorder {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.DELETE("/api/v1/routing/providers/:name/models/:model", h.DeleteProviderModel)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodDelete,
+		"/api/v1/routing/providers/"+name+"/models/"+model, nil))
+	return w
+}
+
+// @sk-test provider-model-registry#T3.3: removing a provider from a shared route keeps the route (AC-008)
+func TestRoutingHandlerDeleteProviderModel(t *testing.T) {
+	repo := &fakeRegistryRepo{
+		routes: map[string][]string{routeKey(routingDomain.GlobalTenant, "m1"): {"openrouter", "openai"}},
+		rules: []routingDomain.RuleConfig{
+			{Tenant: routingDomain.GlobalTenant, Routes: []routingDomain.RouteConfig{
+				{Model: "m1", Providers: []string{"openrouter", "openai"}},
+			}},
+		},
+	}
+	costs := &fakeCostRates{}
+	h := NewRoutingHandler(repo, costs, &fakeTx{}, nil, nil, nil)
+
+	if w := deleteProviderModel(t, h, "openai", "m1"); w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	got := repo.routes[routeKey(routingDomain.GlobalTenant, "m1")]
+	if len(got) != 1 || got[0] != "openrouter" {
+		t.Fatalf("remaining providers = %v, want [openrouter]", got)
+	}
+
+	// Removing the last provider deletes the route entirely.
+	if w := deleteProviderModel(t, h, "openrouter", "m1"); w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if _, ok := repo.routes[routeKey(routingDomain.GlobalTenant, "m1")]; ok {
+		t.Errorf("route should be deleted when no providers remain")
+	}
+
+	if w := deleteProviderModel(t, h, "openai", "missing"); w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for unknown model, got %d", w.Code)
+	}
+}
+
+// @sk-test provider-model-registry#T3.3: wildcard route validation (AC-007)
+func TestRoutingHandlerUpsertRouteWildcardValidation(t *testing.T) {
+	putRoute := func(t *testing.T, h *RoutingHandler, body string) *httptest.ResponseRecorder {
+		t.Helper()
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+		router.PUT("/api/v1/routing/routes", h.UpsertRoute)
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/routing/routes", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		return w
+	}
+
+	repo := &fakeRegistryRepo{providers: []routingDomain.ProviderConfig{{Name: "groq", BaseURL: "http://groq"}}}
+	h := NewRoutingHandler(repo, &fakeCostRates{}, &fakeTx{}, nil, nil, nil)
+
+	if w := putRoute(t, h, `{"tenant":"*","model":"groq/*","providers":["groq"]}`); w.Code != http.StatusOK {
+		t.Errorf("valid wildcard: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if w := putRoute(t, h, `{"tenant":"*","model":"foo*bar","providers":["groq"]}`); w.Code != http.StatusBadRequest {
+		t.Errorf("malformed pattern: expected 400, got %d", w.Code)
+	}
+	if w := putRoute(t, h, `{"tenant":"*","model":"groq/*","providers":["nope"]}`); w.Code != http.StatusBadRequest {
+		t.Errorf("unknown provider: expected 400, got %d", w.Code)
+	}
 }

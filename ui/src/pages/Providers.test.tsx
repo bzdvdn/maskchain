@@ -8,6 +8,7 @@ vi.mock('../api/routing', () => ({
   listModels: vi.fn(),
   listProviderModels: vi.fn(),
   deleteProvider: vi.fn(),
+  deleteProviderModel: vi.fn(),
   upsertProvider: vi.fn(),
   isMaskedKey: (v?: string) => !!v && v.includes('***'),
 }))
@@ -20,12 +21,13 @@ vi.mock('../components/Toast', async (importOriginal) => {
   }
 })
 
-import { listProviders, listModels, listProviderModels, upsertProvider } from '../api/routing'
+import { listProviders, listModels, listProviderModels, upsertProvider, deleteProviderModel } from '../api/routing'
 
 const mockProviders = vi.mocked(listProviders)
 const mockModels = vi.mocked(listModels)
 const mockProviderModels = vi.mocked(listProviderModels)
 const mockUpsert = vi.mocked(upsertProvider)
+const mockDeleteProviderModel = vi.mocked(deleteProviderModel)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -123,5 +125,19 @@ describe('Providers model picker', () => {
 
     await waitFor(() => expect(mockUpsert).toHaveBeenCalledTimes(1))
     expect(mockUpsert.mock.calls[0][0].models).toEqual(['manual-model'])
+  })
+})
+
+// @sk-test provider-model-registry#T3.5: removing a model from a provider calls the catalog endpoint (AC-008)
+describe('Providers model removal', () => {
+  it('removes a model from the provider card', async () => {
+    mockProviders.mockResolvedValue([
+      { name: 'openrouter', api_type: 'openai', base_url: 'https://openrouter.ai/api/v1', api_keys: ['sk-x'], status: 'up' },
+    ])
+    mockDeleteProviderModel.mockResolvedValue(undefined)
+    render(<Providers />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove gpt-4o' }))
+    await waitFor(() => expect(mockDeleteProviderModel).toHaveBeenCalledWith('openrouter', 'gpt-4o'))
   })
 })

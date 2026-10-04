@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -528,18 +529,23 @@ func (r *PostgresRegistryRepository) DeleteRoute(ctx context.Context, tenant, mo
 	return nil
 }
 
+// @sk-task provider-model-registry#T1.2: per-provider idempotent seeding (AC-001, AC-006)
+//
+// SeedFromYAML inserts YAML-declared providers that are not already stored, and
+// materializes each new provider's declared models as global routes. A provider
+// that already exists (yaml- or ui-managed) is never modified, so UI edits and
+// prior YAML seeds survive a restart. Returns true when anything was seeded.
 func (r *PostgresRegistryRepository) SeedFromYAML(ctx context.Context, providers []routingDomain.ProviderConfig, rules []routingDomain.RuleConfig) (bool, error) {
 	q := getQuerier(ctx, r.pool)
 
-	var count int
-	if err := q.QueryRow(ctx, `SELECT count(*) FROM routing_providers`).Scan(&count); err != nil {
-		return false, fmt.Errorf("count providers: %w", err)
+	existing, err := r.providerNames(ctx, q)
+	if err != nil {
+		return false, err
 	}
-	if count > 0 {
-		return false, nil
-	}
+	toInsert, modelRoutes := seedPlan(providers, existing)
 
-	for _, p := range providers {
+	seeded := false
+	for _, p := range toInsert {
 		keys, err := r.sealJSON(p.APIKeys)
 		if err != nil {
 			return false, fmt.Errorf("seed provider %s: seal api_keys: %w", p.Name, err)
@@ -556,15 +562,35 @@ func (r *PostgresRegistryRepository) SeedFromYAML(ctx context.Context, providers
 		if err != nil {
 			return false, fmt.Errorf("seed provider %s: seal aws_secret_access_key: %w", p.Name, err)
 		}
-		_, err = q.Exec(ctx, `
+		tag, err := q.Exec(ctx, `
 			INSERT INTO routing_providers
 				(name, api_type, base_url, health_endpoint, timeout, priority, api_keys, auth_scheme, auth_header, auth_prefix, additional_headers, proxy_url, aws_region, aws_access_key_id, aws_secret_access_key, source)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'yaml')`,
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'yaml')
+			ON CONFLICT (name) DO NOTHING`,
 			p.Name, p.APIType, p.BaseURL, p.HealthEndpoint, p.Timeout, p.Priority, keys,
 			p.AuthScheme, p.AuthHeader, p.AuthPrefix, headers, p.ProxyURL,
 			p.AWSRegion, awsAccess, awsSecret)
 		if err != nil {
 			return false, fmt.Errorf("seed provider %s: %w", p.Name, err)
+		}
+		if tag.RowsAffected() == 0 {
+			// A concurrent writer created it; never mutate it.
+			continue
+		}
+		seeded = true
+
+		for _, model := range modelRoutes[p.Name] {
+			prov, err := json.Marshal([]string{p.Name})
+			if err != nil {
+				return false, fmt.Errorf("seed model %s/%s: marshal providers: %w", p.Name, model, err)
+			}
+			if _, err := q.Exec(ctx, `
+				INSERT INTO routing_model_routes (model, tenant, providers, source)
+				VALUES ($1, $2, $3, 'yaml')
+				ON CONFLICT (model, tenant) DO NOTHING`,
+				model, routingDomain.GlobalTenant, prov); err != nil {
+				return false, fmt.Errorf("seed model %s/%s: %w", p.Name, model, err)
+			}
 		}
 	}
 
@@ -574,14 +600,80 @@ func (r *PostgresRegistryRepository) SeedFromYAML(ctx context.Context, providers
 			if err != nil {
 				return false, fmt.Errorf("marshal providers: %w", err)
 			}
-			_, err = q.Exec(ctx, `
+			tag, err := q.Exec(ctx, `
 				INSERT INTO routing_model_routes (model, tenant, providers, source)
-				VALUES ($1, $2, $3, 'yaml')`,
+				VALUES ($1, $2, $3, 'yaml')
+				ON CONFLICT (model, tenant) DO NOTHING`,
 				rt.Model, rule.Tenant, prov)
 			if err != nil {
 				return false, fmt.Errorf("seed route %s/%s: %w", rule.Tenant, rt.Model, err)
 			}
+			if tag.RowsAffected() > 0 {
+				seeded = true
+			}
 		}
 	}
-	return true, nil
+	return seeded, nil
+}
+
+// providerNames returns the set of provider names currently stored.
+func (r *PostgresRegistryRepository) providerNames(ctx context.Context, q querier) (map[string]struct{}, error) {
+	rows, err := q.Query(ctx, `SELECT name FROM routing_providers`)
+	if err != nil {
+		return nil, fmt.Errorf("list provider names: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[string]struct{})
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		out[name] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// seedPlan selects providers absent from existing and, for each, the global
+// model routes to materialize. Existing providers are never returned, so seeding
+// cannot mutate a provider that is already yaml- or ui-managed.
+func seedPlan(providers []routingDomain.ProviderConfig, existing map[string]struct{}) (insert []routingDomain.ProviderConfig, models map[string][]string) {
+	models = map[string][]string{}
+	for _, p := range providers {
+		if p.Name == "" {
+			continue
+		}
+		if _, ok := existing[p.Name]; ok {
+			continue
+		}
+		insert = append(insert, p)
+		if r := providerModelRoutes(p); len(r) > 0 {
+			models[p.Name] = r
+		}
+	}
+	return insert, models
+}
+
+// providerModelRoutes normalizes a provider's declared models into global routes:
+// trimmed, de-duplicated, and excluding wildcard patterns (patterns are routes,
+// not catalog entries).
+func providerModelRoutes(p routingDomain.ProviderConfig) []string {
+	seen := make(map[string]struct{}, len(p.Models))
+	out := make([]string, 0, len(p.Models))
+	for _, m := range p.Models {
+		m = strings.TrimSpace(m)
+		if m == "" || strings.Contains(m, "*") {
+			continue
+		}
+		if _, ok := seen[m]; ok {
+			continue
+		}
+		seen[m] = struct{}{}
+		out = append(out, m)
+	}
+	return out
 }

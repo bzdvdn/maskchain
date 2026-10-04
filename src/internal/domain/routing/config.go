@@ -20,18 +20,20 @@ const GlobalTenant = "*"
 //
 // ProviderConfig represents a domain entity or configuration.
 type ProviderConfig struct {
-	Name               string
-	BaseURL            string
-	HealthEndpoint     string
-	Timeout            string
-	Priority           int
-	APIType            string
-	APIKeys            []string
-	AuthScheme         string
-	AuthHeader         string
-	AuthPrefix         string
-	AdditionalHeaders  map[string]string
-	ProxyURL           string
+	Name              string
+	BaseURL           string
+	HealthEndpoint    string
+	Timeout           string
+	Priority          int
+	APIType           string
+	APIKeys           []string
+	AuthScheme        string
+	AuthHeader        string
+	AuthPrefix        string
+	AdditionalHeaders map[string]string
+	ProxyURL          string
+	// Models declares the models the provider serves; seeded as global routes.
+	Models             []string
 	AWSRegion          string
 	AWSAccessKeyID     string
 	AWSSecretAccessKey string

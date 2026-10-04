@@ -689,3 +689,100 @@ func TestRouteSelectorOverrideIsolation(t *testing.T) {
 		t.Errorf("alpha override changed with global=anthropic: %s", p.Name)
 	}
 }
+
+// @sk-test provider-model-registry#T2.2: an unlisted model resolves via a wildcard route (AC-003)
+func TestRouteSelectorWildcardFallback(t *testing.T) {
+	reg, _ := NewProviderRegistry(&routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{{Name: "groq", BaseURL: "http://groq"}},
+		Rules: []routing.RuleConfig{
+			{Tenant: "default", Routes: []routing.RouteConfig{
+				{Model: "groq/*", Providers: []string{"groq"}},
+			}},
+		},
+	})
+	sel := NewRouteSelector(reg)
+
+	p, providers, err := sel.Select("some-new-model", "")
+	if err != nil {
+		t.Fatalf("wildcard should resolve, got %v", err)
+	}
+	if p.Name != "groq" || len(providers) != 1 || providers[0] != "groq" {
+		t.Errorf("resolved %v (%v), want groq", p, providers)
+	}
+}
+
+// @sk-test provider-model-registry#T2.2: an exact route wins over a wildcard (AC-004)
+func TestRouteSelectorExactBeatsWildcard(t *testing.T) {
+	reg, _ := NewProviderRegistry(&routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
+			{Name: "openai", BaseURL: "http://openai"},
+			{Name: "groq", BaseURL: "http://groq"},
+		},
+		Rules: []routing.RuleConfig{
+			{Tenant: "default", Routes: []routing.RouteConfig{
+				{Model: "some-new-model", Providers: []string{"openai"}},
+				{Model: "groq/*", Providers: []string{"groq"}},
+			}},
+		},
+	})
+	sel := NewRouteSelector(reg)
+
+	p, _, err := sel.Select("some-new-model", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p.Name != "openai" {
+		t.Errorf("expected exact openai, got %s", p.Name)
+	}
+}
+
+// @sk-test provider-model-registry#T2.2: tenant wildcard beats global wildcard (AC-003)
+func TestRouteSelectorWildcardPrecedence(t *testing.T) {
+	reg, _ := NewProviderRegistry(&routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
+			{Name: "openai", BaseURL: "http://openai"},
+			{Name: "azure", BaseURL: "http://azure"},
+			{Name: "groq", BaseURL: "http://groq"},
+		},
+		Rules: []routing.RuleConfig{
+			{Tenant: routing.GlobalTenant, Routes: []routing.RouteConfig{
+				{Model: "groq/*", Providers: []string{"openai"}},
+			}},
+			{Tenant: "alpha", Routes: []routing.RouteConfig{
+				{Model: "groq/*", Providers: []string{"azure"}},
+			}},
+		},
+	})
+	sel := NewRouteSelector(reg)
+
+	if p, _, _ := sel.Select("m", "alpha"); p.Name != "azure" {
+		t.Errorf("expected tenant wildcard azure, got %s", p.Name)
+	}
+	if p, _, _ := sel.Select("m", "beta"); p.Name != "openai" {
+		t.Errorf("expected global wildcard openai, got %s", p.Name)
+	}
+}
+
+// @sk-test provider-model-registry#T2.2: a longer literal prefix wins among wildcards (AC-003)
+func TestRouteSelectorWildcardPrefixWins(t *testing.T) {
+	reg, _ := NewProviderRegistry(&routing.RoutingConfig{
+		Providers: []routing.ProviderConfig{
+			{Name: "groq", BaseURL: "http://groq"},
+			{Name: "special", BaseURL: "http://special"},
+		},
+		Rules: []routing.RuleConfig{
+			{Tenant: "default", Routes: []routing.RouteConfig{
+				{Model: "groq/*", Providers: []string{"groq"}},
+				{Model: "groq/special/*", Providers: []string{"special"}},
+			}},
+		},
+	})
+	sel := NewRouteSelector(reg)
+
+	if p, _, _ := sel.Select("groq/special/x", ""); p.Name != "special" {
+		t.Errorf("expected longer prefix special, got %s", p.Name)
+	}
+	if p, _, _ := sel.Select("groq/other", ""); p.Name != "groq" {
+		t.Errorf("expected shorter prefix groq, got %s", p.Name)
+	}
+}

@@ -127,6 +127,45 @@ func TestPreserveMaskedSecrets(t *testing.T) {
 	}
 }
 
+// @sk-test provider-model-registry#T1.4: existing providers are never re-seeded (AC-006)
+func TestSeedPlanSkipsExistingProviders(t *testing.T) {
+	existing := map[string]struct{}{"keep": {}}
+	providers := []routingDomain.ProviderConfig{
+		{Name: "keep", Models: []string{"must-not-seed"}},
+		{Name: "new", Models: []string{"m1"}},
+		{Name: "", Models: []string{"ignored"}},
+	}
+
+	insert, models := seedPlan(providers, existing)
+
+	if len(insert) != 1 || insert[0].Name != "new" {
+		t.Fatalf("insert = %+v, want only [new]", insert)
+	}
+	if _, ok := models["keep"]; ok {
+		t.Error("existing provider must not get seeded models")
+	}
+	if got := models["new"]; len(got) != 1 || got[0] != "m1" {
+		t.Errorf("models[new] = %v, want [m1]", got)
+	}
+}
+
+// @sk-test provider-model-registry#T1.4: declared models normalize to catalog routes (AC-001)
+func TestProviderModelRoutesNormalizes(t *testing.T) {
+	got := providerModelRoutes(routingDomain.ProviderConfig{
+		Name:   "groq",
+		Models: []string{" m1 ", "m1", "", "groq/*", "m2"},
+	})
+	want := []string{"m1", "m2"}
+	if len(got) != len(want) {
+		t.Fatalf("routes = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("routes = %v, want %v", got, want)
+		}
+	}
+}
+
 // @sk-test 403-key-at-rest-encryption#T5.1: TestMaskSecretShortAndEmpty (AC-003)
 func TestMaskSecretShortAndEmpty(t *testing.T) {
 	if isMaskedLiteral("short") {

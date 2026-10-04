@@ -229,6 +229,8 @@ func (s *AdminServer) RegisterRoutingHandler(h *admin.RoutingHandler) {
 	group.GET("/providers/:name/models", h.ListProviderModels)
 	group.PUT("/providers", h.UpsertProvider)
 	group.DELETE("/providers/:name", h.DeleteProvider)
+	// @sk-task provider-model-registry#T3.1: remove a provider's model (AC-008)
+	group.DELETE("/providers/:name/models/:model", h.DeleteProviderModel)
 	group.GET("/routes", h.ListRoutes)
 	group.PUT("/routes", h.UpsertRoute)
 	group.DELETE("/routes", h.DeleteRoute)

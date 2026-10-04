@@ -266,3 +266,59 @@ func TestSelfHandlerModelsOpenAI(t *testing.T) {
 		}
 	})
 }
+
+// @sk-test provider-model-registry#T1.4: catalog unions tenant + global routes, excludes patterns (AC-005)
+func TestSelfHandlerModelsUnionIncludesGlobal(t *testing.T) {
+	reg, err := routingSvc.NewProviderRegistry(&routingDomain.RoutingConfig{
+		Providers: []routingDomain.ProviderConfig{{Name: "openai", BaseURL: "http://provider"}},
+		Rules: []routingDomain.RuleConfig{
+			{Tenant: "acme", Routes: []routingDomain.RouteConfig{
+				{Model: "m1", Providers: []string{"openai"}},
+				{Model: "groq/*", Providers: []string{"openai"}},
+			}},
+			{Tenant: routingDomain.GlobalTenant, Routes: []routingDomain.RouteConfig{
+				{Model: "m2", Providers: []string{"openai"}},
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("registry: %v", err)
+	}
+
+	repo := &selfFakeRepo{keys: []*virtualkey.VirtualKey{{
+		ID: "k1", TenantID: "acme", KeyHash: virtualkey.KeyHash("sk-mc_secret"), Enabled: true,
+	}}}
+	engine := selfEngine(t, repo, "acme", "Authorization")
+	h := NewSelfHandler(reg, "1.2.3")
+	engine.GET("/v1/models", h.HandleModelsOpenAI)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	req.Header.Set("Authorization", "Bearer sk-mc_secret")
+	w := httptest.NewRecorder()
+	engine.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var list struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
+		t.Fatalf("decode: %v (%s)", err, w.Body.String())
+	}
+	ids := make([]string, 0, len(list.Data))
+	for _, d := range list.Data {
+		ids = append(ids, d.ID)
+	}
+	sort.Strings(ids)
+	if len(ids) != 2 || ids[0] != "m1" || ids[1] != "m2" {
+		t.Fatalf("ids = %v, want [m1 m2]", ids)
+	}
+	for _, id := range ids {
+		if id == "groq/*" {
+			t.Errorf("wildcard pattern must not appear as a model")
+		}
+	}
+}

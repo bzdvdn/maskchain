@@ -34,6 +34,7 @@ func yamlProvidersToRegistry(cfg *config.RoutingConfig) []routingDomain.Provider
 			AuthPrefix:         p.AuthPrefix,
 			AdditionalHeaders:  p.AdditionalHeaders,
 			ProxyURL:           p.ProxyURL,
+			Models:             p.Models,
 			AWSRegion:          p.AWSRegion,
 			AWSAccessKeyID:     p.AWSAccessKeyID,
 			AWSSecretAccessKey: p.AWSSecretAccessKey,
