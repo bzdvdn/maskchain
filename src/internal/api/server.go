@@ -206,6 +206,39 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 	}
 }
 
+// @sk-task media-endpoints#T3.1: mount media passthrough routes (AC-003, AC-006, AC-007, AC-008)
+//
+// RegisterMedia mounts the image/audio passthrough endpoints with a reduced
+// chain: model access, budget, and (for JSON-response endpoints) usage. No
+// shield, session, conversation, cache, SSE, or export stage runs. The binary
+// speech endpoint omits usage so the audio body is not buffered for parsing.
+func (s *Server) RegisterMedia(h *MediaHandler, modelAccessMw gin.HandlerFunc) {
+	if h == nil {
+		return
+	}
+	base := []gin.HandlerFunc{}
+	if modelAccessMw != nil {
+		base = append(base, modelAccessMw)
+	}
+	if s.budgetMw != nil {
+		base = append(base, s.budgetMw)
+	}
+	withUsage := append([]gin.HandlerFunc{}, base...)
+	if s.usageMiddleware != nil {
+		withUsage = append(withUsage, s.usageMiddleware)
+	}
+	withUsage = append(withUsage, h.HandleMedia)
+	noUsage := append(append([]gin.HandlerFunc{}, base...), h.HandleMedia)
+
+	for _, prefix := range []string{"/api/v1", "/v1"} {
+		group := s.engine.Group(prefix)
+		group.POST("/images/generations", withUsage...)
+		group.POST("/images/edits", withUsage...)
+		group.POST("/audio/transcriptions", withUsage...)
+		group.POST("/audio/speech", noUsage...)
+	}
+}
+
 // @sk-task sessions#T4.1: RegisterSessionMiddleware on gateway Server (AC-010)
 func (s *Server) RegisterSessionMiddleware(mw gin.HandlerFunc) {
 	s.sessionMiddleware = mw

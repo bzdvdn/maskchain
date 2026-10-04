@@ -23,6 +23,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 	"github.com/bzdvdn/maskchain/src/internal/domain/virtualkey"
 	"github.com/bzdvdn/maskchain/src/internal/infra/config"
+	"github.com/bzdvdn/maskchain/src/internal/ports"
 )
 
 // @sk-test 10-gateway-skeleton#T4.1: TestHealthEndpoint (AC-001)
@@ -517,6 +518,76 @@ func TestTextEndpointsBudget429(t *testing.T) {
 		if !strings.Contains(w.Body.String(), "BUDGET_EXCEEDED") {
 			t.Errorf("%s: expected BUDGET_EXCEEDED, got %s", p, w.Body.String())
 		}
+	}
+}
+
+// @sk-test media-endpoints#T3.4: media routes mount on both prefixes with auth (AC-007, AC-008)
+func newMediaServer(t *testing.T, model string, mock *mediaMockClient, budgetMw gin.HandlerFunc) *Server {
+	t.Helper()
+	repo := &selfFakeRepo{keys: []*virtualkey.VirtualKey{{
+		ID: "k1", TenantID: "acme", KeyHash: virtualkey.KeyHash("sk-mc_secret"),
+		AllowedModels: []string{model}, Enabled: true,
+	}}}
+	slug, err := value.NewTenantSlug("acme")
+	if err != nil {
+		t.Fatalf("slug: %v", err)
+	}
+	tenant := entity.NewTenant(slug, "Acme", "Authorization")
+
+	srv := newTestServer()
+	srv.RegisterAuth(middleware.VirtualKeyAuth(repo, middleware.NewTenantProvider([]*entity.Tenant{tenant})))
+	if budgetMw != nil {
+		srv.RegisterBudgetMiddleware(budgetMw)
+	}
+	srv.RegisterMedia(newMediaTestHandler(t, model, mock), middleware.MediaModelAccess())
+	return srv
+}
+
+func postMedia(srv *Server, path, body string, withAuth bool) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	if withAuth {
+		req.Header.Set("Authorization", "Bearer sk-mc_secret")
+	}
+	srv.engine.ServeHTTP(w, req)
+	return w
+}
+
+func TestMediaRoutesParityAndAuth(t *testing.T) {
+	mock := &mediaMockClient{status: http.StatusOK, body: []byte(`{"ok":true}`), headers: map[string]string{"Content-Type": "application/json"}}
+	srv := newMediaServer(t, "img", mock, nil)
+
+	for _, p := range []string{"/api/v1/images/generations", "/v1/images/generations"} {
+		if w := postMedia(srv, p, `{"model":"img"}`, true); w.Code != http.StatusOK {
+			t.Errorf("%s allowed: expected 200, got %d: %s", p, w.Code, w.Body.String())
+		}
+		if w := postMedia(srv, p, `{"model":"img"}`, false); w.Code != http.StatusUnauthorized {
+			t.Errorf("%s without key: expected 401, got %d", p, w.Code)
+		}
+	}
+}
+
+// @sk-test media-endpoints#T3.4: budget stage blocks media with 429 (AC-007)
+func TestMediaRoutesBudget429(t *testing.T) {
+	mock := &mediaMockClient{status: http.StatusOK, body: []byte(`{}`), headers: map[string]string{"Content-Type": "application/json"}}
+	srv := newMediaServer(t, "img", mock, func(c *gin.Context) {
+		middleware.AbortWithError(c, http.StatusTooManyRequests, middleware.ErrorCodeBudgetExceeded, "budget exceeded")
+	})
+
+	w := postMedia(srv, "/v1/images/generations", `{"model":"img"}`, true)
+	if w.Code != http.StatusTooManyRequests || !strings.Contains(w.Body.String(), "BUDGET_EXCEEDED") {
+		t.Fatalf("expected 429 BUDGET_EXCEEDED, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// @sk-test media-endpoints#T3.4: unsupported endpoint returns 400 (AC-009)
+func TestMediaRoutesUnsupported(t *testing.T) {
+	srv := newMediaServer(t, "tts", &mediaMockClient{err: ports.ErrUnsupportedEndpoint}, nil)
+
+	w := postMedia(srv, "/v1/audio/speech", `{"model":"tts"}`, true)
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "UNSUPPORTED_ENDPOINT") {
+		t.Fatalf("expected UNSUPPORTED_ENDPOINT 400, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

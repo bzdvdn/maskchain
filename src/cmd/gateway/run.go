@@ -171,6 +171,8 @@ func run() {
 		srv.RegisterTextShield(kind, middleware.TextInputShieldMiddleware(kind, shieldEngine, cfg.Shield, logger))
 	}
 	srv.RegisterProxyRoute(middleware.ShieldMiddleware(shieldEngine, cfg.Shield, logger, sessionUseCase), routingHandler)
+	// @sk-task media-endpoints#T3.3: wire media passthrough (AC-007)
+	srv.RegisterMedia(api.NewMediaHandler(provDeps.selector, provDeps.fallbackHandler), middleware.MediaModelAccess())
 	logger.Info("proxy routes registered")
 
 	serve(cfg, logger, b, srv)

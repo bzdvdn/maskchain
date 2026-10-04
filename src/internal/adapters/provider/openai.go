@@ -70,7 +70,7 @@ func (c *OpenAIClient) Call(ctx context.Context, req *ports.ProviderRequest) (*p
 		Body:    req.Body,
 		Headers: headers,
 	}
-	providerReq.Headers["Content-Type"] = "application/json"
+	providerReq.Headers["Content-Type"] = contentTypeFor(req)
 
 	resp, err := c.ec.Call(ctx, providerReq)
 	if err != nil {
@@ -105,7 +105,7 @@ func (c *OpenAIClient) Stream(ctx context.Context, req *ports.ProviderRequest) (
 		Body:    req.Body,
 		Headers: headers,
 	}
-	providerReq.Headers["Content-Type"] = "application/json"
+	providerReq.Headers["Content-Type"] = contentTypeFor(req)
 	providerReq.Headers["Accept"] = "text/event-stream"
 
 	ch, err := c.ec.Stream(ctx, providerReq)

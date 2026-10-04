@@ -13,6 +13,7 @@ var ErrUnsupportedEndpoint = errors.New("unsupported provider endpoint")
 // @sk-task 80-tenant-isolation#T3.1: Add Headers field for X-Tenant-ID propagation (AC-007)
 // @sk-task anthropic-messages-endpoint#T1.1: Add Path field for native messages endpoint (AC-003)
 // @sk-task provider-path-fidelity#T1.1: Add RawQuery field for query-string forwarding (AC-008)
+// @sk-task media-endpoints#T1.2: Add ContentType for multipart/binary passthrough (AC-002, AC-003)
 //
 // ProviderRequest represents a domain entity or configuration.
 type ProviderRequest struct {
@@ -22,6 +23,8 @@ type ProviderRequest struct {
 	Headers  map[string]string
 	Path     string
 	RawQuery string
+	// ContentType overrides the outgoing Content-Type; empty means application/json.
+	ContentType string
 }
 
 type ProviderResponse struct {

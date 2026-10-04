@@ -13,11 +13,15 @@ import (
 // (openai, proxy, ollama) can serve. The gateway only mounts these exact
 // routes, so matching is exact rather than suffix-based.
 var openAIShapedEndpoints = map[string]bool{
-	"/v1/chat/completions": true,
-	"/v1/completions":      true,
-	"/v1/embeddings":       true,
-	"/v1/moderations":      true,
-	"/v1/rerank":           true,
+	"/v1/chat/completions":     true,
+	"/v1/completions":          true,
+	"/v1/embeddings":           true,
+	"/v1/moderations":          true,
+	"/v1/rerank":               true,
+	"/v1/images/generations":   true,
+	"/v1/images/edits":         true,
+	"/v1/audio/speech":         true,
+	"/v1/audio/transcriptions": true,
 }
 
 // ResolveUpstreamURL builds the upstream URL for a passthrough provider from the

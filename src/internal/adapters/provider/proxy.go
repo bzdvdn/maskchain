@@ -56,7 +56,7 @@ func (c *ProxyClient) Call(ctx context.Context, req *ports.ProviderRequest) (*po
 	if err != nil {
 		return nil, err
 	}
-	providerReq.Headers["Content-Type"] = "application/json"
+	providerReq.Headers["Content-Type"] = contentTypeFor(req)
 
 	resp, err := c.ec.Call(ctx, providerReq)
 	if err != nil {
@@ -78,7 +78,7 @@ func (c *ProxyClient) Stream(ctx context.Context, req *ports.ProviderRequest) (<
 	if err != nil {
 		return nil, err
 	}
-	providerReq.Headers["Content-Type"] = "application/json"
+	providerReq.Headers["Content-Type"] = contentTypeFor(req)
 	providerReq.Headers["Accept"] = "text/event-stream"
 
 	ch, err := c.ec.Stream(ctx, providerReq)
@@ -87,6 +87,17 @@ func (c *ProxyClient) Stream(ctx context.Context, req *ports.ProviderRequest) (<
 	}
 
 	return ch, nil
+}
+
+// @sk-task media-endpoints#T1.2: honor an explicit Content-Type (multipart/binary) (AC-002, AC-003)
+//
+// contentTypeFor returns the outgoing Content-Type, defaulting to JSON. Media
+// passthrough sets an explicit type (e.g. multipart/form-data with a boundary).
+func contentTypeFor(req *ports.ProviderRequest) string {
+	if req != nil && req.ContentType != "" {
+		return req.ContentType
+	}
+	return "application/json"
 }
 
 func (c *ProxyClient) buildRequest(req *ports.ProviderRequest) (*ports.ProviderRequest, error) {

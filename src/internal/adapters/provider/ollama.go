@@ -56,7 +56,7 @@ func (c *OllamaClient) Call(ctx context.Context, req *ports.ProviderRequest) (*p
 	if err != nil {
 		return nil, err
 	}
-	providerReq.Headers["Content-Type"] = "application/json"
+	providerReq.Headers["Content-Type"] = contentTypeFor(req)
 
 	resp, err := c.ec.Call(ctx, providerReq)
 	if err != nil {
@@ -78,7 +78,7 @@ func (c *OllamaClient) Stream(ctx context.Context, req *ports.ProviderRequest) (
 	if err != nil {
 		return nil, err
 	}
-	providerReq.Headers["Content-Type"] = "application/json"
+	providerReq.Headers["Content-Type"] = contentTypeFor(req)
 	providerReq.Headers["Accept"] = "text/event-stream"
 
 	ch, err := c.ec.Stream(ctx, providerReq)

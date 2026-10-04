@@ -400,6 +400,8 @@ func buildGatewayServer(
 		srv.RegisterTextShield(kind, middleware.TextInputShieldMiddleware(kind, shieldEngine, cfg.Shield, logger))
 	}
 	srv.RegisterProxyRoute(middleware.ShieldMiddleware(shieldEngine, cfg.Shield, logger, sessionUseCase), routingHandler)
+	// @sk-task media-endpoints#T3.3: wire media passthrough (AC-007)
+	srv.RegisterMedia(api.NewMediaHandler(selector, fallbackHandler), middleware.MediaModelAccess())
 	logger.Info("gateway routes registered")
 
 	return srv
