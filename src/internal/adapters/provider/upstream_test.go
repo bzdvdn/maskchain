@@ -56,6 +56,13 @@ func TestResolveUpstreamURL(t *testing.T) {
 			want:    "https://api.cohere.com/v1/rerank",
 		},
 		{
+			name:    "openai responses",
+			apiType: "openai",
+			baseURL: "https://api.openai.com",
+			path:    "/v1/responses",
+			want:    "https://api.openai.com/v1/responses",
+		},
+		{
 			name:    "openai image generations",
 			apiType: "openai",
 			baseURL: "https://api.openai.com",

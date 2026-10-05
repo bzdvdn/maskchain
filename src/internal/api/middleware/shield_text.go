@@ -27,12 +27,14 @@ import (
 //
 // maskTexts applies dictionary masking followed by the tenant PII scan to a set
 // of text fields, returning the rewritten texts, the number of dictionary
-// placeholders, and the scan response. It is the shared core of the non-chat
-// input shields (embeddings, moderations, rerank, count_tokens). Masking is
-// one-way: callers never unmask provider output.
-func maskTexts(ctx context.Context, engine Scanner, tenant *entity.Tenant, texts []string) ([]string, int, *appshield.ScanResponse, error) {
+// placeholders, the placeholder→original mapping (for reversible unmask), and
+// the scan response. It is the shared core of the input shields (embeddings,
+// moderations, rerank, count_tokens, responses). Callers that only mask forward
+// ignore the mapping; callers that unmask the response use it.
+func maskTexts(ctx context.Context, engine Scanner, tenant *entity.Tenant, texts []string) ([]string, int, map[string]string, *appshield.ScanResponse, error) {
 	out := make([]string, len(texts))
 	copy(out, texts)
+	mapping := map[string]string{}
 
 	piiCfg := tenant.PIIConfig()
 
@@ -63,12 +65,13 @@ func maskTexts(ctx context.Context, engine Scanner, tenant *entity.Tenant, texts
 		for _, r := range kept {
 			ph := fmt.Sprintf("[MASK.%d]", phCounter)
 			phCounter++
+			mapping[ph] = r.Fragment
 			out[i] = out[i][:r.StartPos] + ph + out[i][r.StartPos+len(r.Fragment):]
 		}
 	}
 
 	if engine == nil || !piiCfg.Enabled || len(piiCfg.Rules) == 0 {
-		return out, phCounter, nil, nil
+		return out, phCounter, mapping, nil, nil
 	}
 
 	resp, err := engine.Scan(ctx, appshield.ScanRequest{
@@ -76,16 +79,17 @@ func maskTexts(ctx context.Context, engine Scanner, tenant *entity.Tenant, texts
 		Rules: piiCfg.Rules,
 	})
 	if err != nil {
-		return out, phCounter, nil, err
+		return out, phCounter, mapping, nil, err
 	}
 	if resp != nil && len(resp.Replacements) > 0 {
 		for i := range out {
 			for ph, original := range resp.Replacements {
 				out[i] = strings.ReplaceAll(out[i], original, ph)
+				mapping[ph] = original
 			}
 		}
 	}
-	return out, phCounter, resp, nil
+	return out, phCounter, mapping, resp, nil
 }
 
 // @sk-task openai-endpoint-coverage#T2.2: generic non-chat input shield (AC-003, AC-004, AC-005)
@@ -151,7 +155,7 @@ func TextInputShieldMiddleware(kind InputKind, engine Scanner, cfg *config.Shiel
 		piiCfg := tenant.PIIConfig()
 		start := time.Now()
 
-		masked, dictMasked, resp, scanErr := maskTexts(c.Request.Context(), engine, tenant, fields.Texts)
+		masked, dictMasked, _, resp, scanErr := maskTexts(c.Request.Context(), engine, tenant, fields.Texts)
 		if scanErr != nil {
 			defaultAction := piiCfg.DefaultAction
 			if defaultAction == "" {

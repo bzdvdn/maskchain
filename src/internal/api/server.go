@@ -37,6 +37,7 @@ type Server struct {
 	cacheMw           gin.HandlerFunc
 	embeddingsShield  gin.HandlerFunc
 	textShields       map[middleware.InputKind]gin.HandlerFunc
+	responsesShield   gin.HandlerFunc
 	exportMw          gin.HandlerFunc
 }
 
@@ -179,6 +180,26 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 		return c
 	}
 
+	// @sk-task responses-api#T3.1: Responses uses the reduced chain with its
+	// reversible shield but no session/conversation/cache/SSE stages.
+	responsesChain := []gin.HandlerFunc{}
+	if s.modelAccessMw != nil {
+		responsesChain = append(responsesChain, s.modelAccessMw)
+	}
+	if s.responsesShield != nil {
+		responsesChain = append(responsesChain, s.responsesShield)
+	}
+	if s.usageMiddleware != nil {
+		responsesChain = append(responsesChain, s.usageMiddleware)
+	}
+	if s.budgetMw != nil {
+		responsesChain = append(responsesChain, s.budgetMw)
+	}
+	if s.exportMw != nil {
+		responsesChain = append(responsesChain, s.exportMw)
+	}
+	responsesChain = append(responsesChain, chatHandler)
+
 	// @sk-task usage-accounting-integrity#T3.1+T3.2: /completions shares the chat chain
 	//
 	// The routing handler derives the upstream path from the request path, so
@@ -202,6 +223,10 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 		}
 		if mw := s.textShields[middleware.InputCountTokens]; mw != nil {
 			group.POST("/messages/count_tokens", textChain(mw)...)
+		}
+		// @sk-task responses-api#T3.1: Responses endpoint (AC-001, AC-008)
+		if s.responsesShield != nil {
+			group.POST("/responses", responsesChain...)
 		}
 	}
 }
@@ -288,6 +313,15 @@ func (s *Server) RegisterTextShield(kind middleware.InputKind, mw gin.HandlerFun
 		s.textShields = make(map[middleware.InputKind]gin.HandlerFunc)
 	}
 	s.textShields[kind] = mw
+}
+
+// @sk-task responses-api#T3.1: register the Responses shield (AC-001)
+//
+// RegisterResponsesShield sets the shield used for POST /responses. The route
+// is mounted only when this is set, so Responses stays disabled until the
+// binary wires it.
+func (s *Server) RegisterResponsesShield(mw gin.HandlerFunc) {
+	s.responsesShield = mw
 }
 
 // @sk-task log-export#T2.4: register the log export capture middleware (AC-001)

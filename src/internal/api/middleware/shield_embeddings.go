@@ -85,7 +85,7 @@ func EmbeddingsShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *s
 		start := time.Now()
 
 		// @sk-task openai-endpoint-coverage#T2.1: shared dictionary+PII masking core (AC-002)
-		masked, phCounter, resp, scanErr := maskTexts(c.Request.Context(), engine, tenant, texts)
+		masked, phCounter, _, resp, scanErr := maskTexts(c.Request.Context(), engine, tenant, texts)
 		if scanErr != nil {
 			defaultAction := piiCfg.DefaultAction
 			if defaultAction == "" {

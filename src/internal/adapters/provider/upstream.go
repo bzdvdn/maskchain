@@ -18,6 +18,7 @@ var openAIShapedEndpoints = map[string]bool{
 	"/v1/embeddings":           true,
 	"/v1/moderations":          true,
 	"/v1/rerank":               true,
+	"/v1/responses":            true,
 	"/v1/images/generations":   true,
 	"/v1/images/edits":         true,
 	"/v1/audio/speech":         true,

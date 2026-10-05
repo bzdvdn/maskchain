@@ -83,3 +83,15 @@ func TestSSEUsageParserPartialLines(t *testing.T) {
 		t.Errorf("got %+v, want 10/5", u)
 	}
 }
+
+// @sk-test responses-api#T3.4: Responses usage (input_tokens/output_tokens) is extracted (AC-007)
+func TestExtractJSONUsageResponses(t *testing.T) {
+	body := []byte(`{"id":"resp_1","object":"response","usage":{"input_tokens":42,"output_tokens":17,"total_tokens":59}}`)
+	u, ok := extractJSONUsage(body)
+	if !ok {
+		t.Fatal("expected usage to be found")
+	}
+	if u.PromptTokens != 42 || u.CompletionTokens != 17 {
+		t.Errorf("got %+v, want 42/17", u)
+	}
+}

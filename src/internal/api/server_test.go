@@ -19,6 +19,8 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/domain/analytics"
 	domainlogexport "github.com/bzdvdn/maskchain/src/internal/domain/logexport"
+	routingDomain "github.com/bzdvdn/maskchain/src/internal/domain/routing"
+	routingSvc "github.com/bzdvdn/maskchain/src/internal/domain/routing/service"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/entity"
 	"github.com/bzdvdn/maskchain/src/internal/domain/shield/value"
 	"github.com/bzdvdn/maskchain/src/internal/domain/virtualkey"
@@ -586,6 +588,86 @@ func TestMediaRoutesUnsupported(t *testing.T) {
 	srv := newMediaServer(t, "tts", &mediaMockClient{err: ports.ErrUnsupportedEndpoint}, nil)
 
 	w := postMedia(srv, "/v1/audio/speech", `{"model":"tts"}`, true)
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "UNSUPPORTED_ENDPOINT") {
+		t.Fatalf("expected UNSUPPORTED_ENDPOINT 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// @sk-test responses-api#T3.3: Responses mounts on both prefixes with auth/model-access (AC-001, AC-002, AC-008)
+func newResponsesServer(t *testing.T, routingHandler *RoutingProxyHandler, budgetMw gin.HandlerFunc) *Server {
+	t.Helper()
+	repo := &selfFakeRepo{keys: []*virtualkey.VirtualKey{{
+		ID: "k1", TenantID: "acme", KeyHash: virtualkey.KeyHash("sk-mc_secret"),
+		AllowedModels: []string{"m"}, Enabled: true,
+	}}}
+	slug, err := value.NewTenantSlug("acme")
+	if err != nil {
+		t.Fatalf("slug: %v", err)
+	}
+	tenant := entity.NewTenant(slug, "Acme", "Authorization")
+
+	srv := newTestServer()
+	srv.RegisterAuth(middleware.VirtualKeyAuth(repo, middleware.NewTenantProvider([]*entity.Tenant{tenant})))
+	srv.RegisterModelAccess(middleware.ModelAccess())
+	if budgetMw != nil {
+		srv.RegisterBudgetMiddleware(budgetMw)
+	}
+	srv.RegisterResponsesShield(func(c *gin.Context) { c.Next() })
+	srv.RegisterProxyRoute(func(c *gin.Context) { c.Next() }, routingHandler)
+	return srv
+}
+
+func postResponsesReq(srv *Server, path, body string, withAuth bool) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	if withAuth {
+		req.Header.Set("Authorization", "Bearer sk-mc_secret")
+	}
+	srv.engine.ServeHTTP(w, req)
+	return w
+}
+
+func TestResponsesRouteParityAndAuth(t *testing.T) {
+	srv := newResponsesServer(t, nil, nil)
+	for _, p := range []string{"/api/v1/responses", "/v1/responses"} {
+		if w := postResponsesReq(srv, p, `{"model":"m","input":"hi"}`, true); w.Code != http.StatusOK {
+			t.Errorf("%s allowed: expected 200, got %d: %s", p, w.Code, w.Body.String())
+		}
+		if w := postResponsesReq(srv, p, `{"model":"m","input":"hi"}`, false); w.Code != http.StatusUnauthorized {
+			t.Errorf("%s without key: expected 401, got %d", p, w.Code)
+		}
+		if w := postResponsesReq(srv, p, `{"model":"other","input":"hi"}`, true); w.Code != http.StatusForbidden {
+			t.Errorf("%s disallowed model: expected 403, got %d", p, w.Code)
+		}
+	}
+}
+
+// @sk-test responses-api#T3.3: budget stage blocks Responses with 429 (AC-002)
+func TestResponsesBudget429(t *testing.T) {
+	srv := newResponsesServer(t, nil, func(c *gin.Context) {
+		middleware.AbortWithError(c, http.StatusTooManyRequests, middleware.ErrorCodeBudgetExceeded, "budget exceeded")
+	})
+	w := postResponsesReq(srv, "/v1/responses", `{"model":"m","input":"hi"}`, true)
+	if w.Code != http.StatusTooManyRequests || !strings.Contains(w.Body.String(), "BUDGET_EXCEEDED") {
+		t.Fatalf("expected 429 BUDGET_EXCEEDED, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// @sk-test responses-api#T3.3: unsupported Responses shape returns 400 (AC-008)
+func TestResponsesUnsupported(t *testing.T) {
+	reg, _ := routingSvc.NewProviderRegistry(&routingDomain.RoutingConfig{
+		Providers: []routingDomain.ProviderConfig{{Name: "openai", BaseURL: "http://openai"}},
+		Rules: []routingDomain.RuleConfig{{Tenant: routingDomain.GlobalTenant, Routes: []routingDomain.RouteConfig{
+			{Model: "m", Providers: []string{"openai"}},
+		}}},
+	})
+	sel := routingSvc.NewRouteSelector(reg)
+	mock := &mockPortClient{err: ports.ErrUnsupportedEndpoint}
+	fb := routingSvc.NewFallbackHandler(map[string]ports.ProviderClient{"openai": mock})
+	srv := newResponsesServer(t, NewRoutingProxyHandler(sel, fb), nil)
+
+	w := postResponsesReq(srv, "/v1/responses", `{"model":"m","input":"hi"}`, true)
 	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "UNSUPPORTED_ENDPOINT") {
 		t.Fatalf("expected UNSUPPORTED_ENDPOINT 400, got %d: %s", w.Code, w.Body.String())
 	}

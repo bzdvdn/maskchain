@@ -399,6 +399,8 @@ func buildGatewayServer(
 	for _, kind := range []middleware.InputKind{middleware.InputModerations, middleware.InputRerank, middleware.InputCountTokens} {
 		srv.RegisterTextShield(kind, middleware.TextInputShieldMiddleware(kind, shieldEngine, cfg.Shield, logger))
 	}
+	// @sk-task responses-api#T3.2: wire the Responses shield (AC-001)
+	srv.RegisterResponsesShield(middleware.ResponsesShieldMiddleware(shieldEngine, cfg.Shield, logger))
 	srv.RegisterProxyRoute(middleware.ShieldMiddleware(shieldEngine, cfg.Shield, logger, sessionUseCase), routingHandler)
 	// @sk-task media-endpoints#T3.3: wire media passthrough (AC-007)
 	srv.RegisterMedia(api.NewMediaHandler(selector, fallbackHandler), middleware.MediaModelAccess())

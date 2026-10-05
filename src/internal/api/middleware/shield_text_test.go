@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -237,5 +238,23 @@ func TestTextInputShieldRejectsUnsupportedBody(t *testing.T) {
 	}
 	if capture.called {
 		t.Error("handler must not be called for an unsupported body")
+	}
+}
+
+// @sk-test responses-api#T1.3: maskTexts returns a reversible placeholder→original mapping (AC-004)
+func TestMaskTextsReturnsMapping(t *testing.T) {
+	eng := &mockEngine{resp: &appshield.ScanResponse{
+		ScanResult:   entity.NewScanResult(value.ScanStatusSuspicious),
+		Replacements: map[string]string{"[[pii.0]]": "a@b.com"},
+	}}
+	_, _, mapping, _, err := maskTexts(context.Background(), eng, embeddingsTenant(t), []string{"SecretProject and a@b.com"})
+	if err != nil {
+		t.Fatalf("maskTexts: %v", err)
+	}
+	if mapping["[MASK.0]"] != "SecretProject" {
+		t.Errorf("dict mapping missing: %v", mapping)
+	}
+	if mapping["[[pii.0]]"] != "a@b.com" {
+		t.Errorf("pii mapping missing: %v", mapping)
 	}
 }
