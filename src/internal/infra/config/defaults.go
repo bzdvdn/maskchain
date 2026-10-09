@@ -171,5 +171,8 @@ func DefaultConfig() *Config {
 			DashboardPollInterval: defaultDashboardPollInterval,
 			GatewayURL:            defaultAdminGatewayURL,
 		},
+		// @sk-task mcp-a2a-gateway#T1.1: agent upstream defaults (disabled)
+		MCP: &MCPConfig{Timeout: "60s"},
+		A2A: &A2AConfig{Timeout: "60s"},
 	}
 }

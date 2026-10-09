@@ -406,6 +406,8 @@ func buildGatewayServer(
 	srv.RegisterProxyRoute(middleware.ShieldMiddleware(shieldEngine, cfg.Shield, logger, sessionUseCase), routingHandler)
 	// @sk-task media-endpoints#T3.3: wire media passthrough (AC-007)
 	srv.RegisterMedia(api.NewMediaHandler(selector, fallbackHandler), middleware.MediaModelAccess())
+	// @sk-task mcp-a2a-gateway#T3.2: wire the agent protocol upstreams (AC-001)
+	wireAgentGateway(srv, cfg, shieldEngine, logger)
 	logger.Info("gateway routes registered")
 
 	return srv
@@ -466,4 +468,34 @@ func initDetectors(log *slog.Logger) *detector.DetectorRegistry {
 	}
 
 	return registry
+}
+
+// @sk-task mcp-a2a-gateway#T3.2: build and register MCP/A2A upstreams (AC-001)
+func wireAgentGateway(srv *api.Server, cfg *config.Config, shieldEngine *appshield.ShieldEngine, logger *slog.Logger) {
+	policies := map[string]middleware.MCPToolPolicy{}
+	for slug, tc := range cfg.Tenants {
+		if tc == nil {
+			continue
+		}
+		policies[slug] = middleware.MCPToolPolicy{Allowed: tc.MCPAllowedTools, Blocked: tc.MCPBlockedTools}
+	}
+	if cfg.MCP != nil && cfg.MCP.Enabled {
+		h, err := api.NewAgentHandler(cfg.MCP.UpstreamURL, cfg.MCP.APIKey, cfg.MCP.AuthHeader, cfg.MCP.AuthPrefix, "", cfg.MCP.Timeout, cfg.Egress)
+		if err != nil {
+			logger.Error("failed to build MCP handler", slog.String("error", err.Error()))
+		} else if h != nil {
+			srv.RegisterAgentShield(middleware.AgentMCP, middleware.AgentShieldMiddleware(middleware.AgentMCP, shieldEngine, cfg.Shield, cfg.MCP.AllowedTools, cfg.MCP.BlockedTools, policies, logger))
+			srv.RegisterAgentHandler(middleware.AgentMCP, h)
+		}
+	}
+	if cfg.A2A != nil && cfg.A2A.Enabled {
+		h, err := api.NewAgentHandler(cfg.A2A.UpstreamURL, cfg.A2A.APIKey, cfg.A2A.AuthHeader, cfg.A2A.AuthPrefix, cfg.A2A.AgentCardURL, cfg.A2A.Timeout, cfg.Egress)
+		if err != nil {
+			logger.Error("failed to build A2A handler", slog.String("error", err.Error()))
+		} else if h != nil {
+			srv.RegisterAgentShield(middleware.AgentA2A, middleware.AgentShieldMiddleware(middleware.AgentA2A, shieldEngine, cfg.Shield, nil, nil, policies, logger))
+			srv.RegisterAgentHandler(middleware.AgentA2A, h)
+		}
+	}
+	srv.RegisterAgentRoutes()
 }

@@ -126,6 +126,17 @@ func validateRoutingWeightAndAliases(cfg *Config) error {
 	return nil
 }
 
+// @sk-task mcp-a2a-gateway#T1.1: validate agent upstream configuration (AC-001, AC-006)
+func validateAgentConfigs(cfg *Config) error {
+	if cfg.MCP != nil && cfg.MCP.Enabled && cfg.MCP.UpstreamURL == "" {
+		return fmt.Errorf("mcp.upstream_url: required when mcp.enabled")
+	}
+	if cfg.A2A != nil && cfg.A2A.Enabled && cfg.A2A.UpstreamURL == "" {
+		return fmt.Errorf("a2a.upstream_url: required when a2a.enabled")
+	}
+	return nil
+}
+
 // validateCompliance validates the compliance preset configuration.
 func validateCompliance(cfg *Config) error {
 	c := cfg.Compliance
@@ -212,6 +223,9 @@ func validateConfig(cfg *Config, v *viper.Viper) error {
 		return err
 	}
 	if err := validateRoutingWeightAndAliases(cfg); err != nil {
+		return err
+	}
+	if err := validateAgentConfigs(cfg); err != nil {
 		return err
 	}
 	val := reflect.ValueOf(cfg).Elem()

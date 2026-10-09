@@ -154,3 +154,18 @@ func TestResponsesHandlerNoRoute(t *testing.T) {
 		t.Fatalf("expected NO_ROUTE 400, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+// @sk-test mcp-a2a-gateway#T1.3: recursive unmask restores nested strings (AC-003, AC-006)
+func TestUnmaskJSONRecursive(t *testing.T) {
+	raw := []byte(`{"result":{"content":[{"type":"text","text":"hi [MASK.0]"}],"meta":[1,true,"x [MASK.0]"]}}`)
+	out := unmaskJSONRecursive(map[string]string{"[MASK.0]": "secret"}, raw)
+	if !strings.Contains(string(out), "hi secret") || !strings.Contains(string(out), "x secret") {
+		t.Fatalf("nested text not unmasked: %s", out)
+	}
+	if strings.Contains(string(out), "[MASK.0]") {
+		t.Fatalf("placeholder leaked: %s", out)
+	}
+	if unmaskJSONRecursive(nil, raw) == nil || !strings.Contains(string(unmaskJSONRecursive(map[string]string{}, raw)), "[MASK.0]") {
+		t.Error("empty mapping must pass through")
+	}
+}

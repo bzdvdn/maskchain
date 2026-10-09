@@ -244,6 +244,66 @@ func longestHeldSuffix(s string, mapping map[string]string) string {
 	return best
 }
 
+// @sk-task mcp-a2a-gateway#T1.2: shared recursive unmask for JSON-RPC agent payloads
+//
+// recursiveUnmask replaces placeholders in every string value of a decoded JSON
+// value (maps, slices, strings) and returns the updated value.
+func recursiveUnmask(unmask func(string) string, v any) any {
+	switch t := v.(type) {
+	case string:
+		return unmask(t)
+	case []any:
+		for i := range t {
+			t[i] = recursiveUnmask(unmask, t[i])
+		}
+		return t
+	case map[string]any:
+		for k := range t {
+			t[k] = recursiveUnmask(unmask, t[k])
+		}
+		return t
+	default:
+		return v
+	}
+}
+
+// unmaskJSONRecursive unmasks all string values of a raw JSON document, returning
+// the original bytes when the payload is not valid JSON.
+func unmaskJSONRecursive(mapping map[string]string, raw []byte) []byte {
+	if len(mapping) == 0 {
+		return raw
+	}
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return raw
+	}
+	replace := func(s string) string {
+		for ph, original := range mapping {
+			s = strings.ReplaceAll(s, ph, original)
+		}
+		return s
+	}
+	out, err := json.Marshal(recursiveUnmask(replace, v))
+	if err != nil {
+		return raw
+	}
+	return out
+}
+
+// processData unmasks a streamed JSON payload recursively with the carry buffer
+// and returns the bytes to emit; non-JSON is returned unchanged.
+func (u *streamUnmasker) processData(data []byte) []byte {
+	var v any
+	if err := json.Unmarshal(data, &v); err != nil {
+		return data
+	}
+	out, err := json.Marshal(recursiveUnmask(u.unmaskFragment, v))
+	if err != nil {
+		return data
+	}
+	return out
+}
+
 func sseFrame(event string, data []byte) string {
 	if event == "" {
 		return "data: " + string(data) + "\n\n"

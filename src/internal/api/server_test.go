@@ -749,6 +749,71 @@ func TestResponsesStreamBudget429(t *testing.T) {
 	}
 }
 
+// @sk-test mcp-a2a-gateway#T3.3: agent routes mount behind auth and budget (AC-001, AC-008)
+func newAgentServer(t *testing.T, budgetMw gin.HandlerFunc) *Server {
+	t.Helper()
+	repo := &selfFakeRepo{keys: []*virtualkey.VirtualKey{{
+		ID: "k1", TenantID: "acme", KeyHash: virtualkey.KeyHash("sk-mc_secret"), Enabled: true,
+	}}}
+	slug, err := value.NewTenantSlug("acme")
+	if err != nil {
+		t.Fatalf("slug: %v", err)
+	}
+	tenant := entity.NewTenant(slug, "Acme", "Authorization")
+
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{}}`))
+	}))
+	t.Cleanup(up.Close)
+	h, err := NewAgentHandler(up.URL, "", "Authorization", "", "", "5s", nil)
+	if err != nil || h == nil {
+		t.Fatalf("NewAgentHandler: %v", err)
+	}
+
+	srv := newTestServer()
+	srv.RegisterAuth(middleware.VirtualKeyAuth(repo, middleware.NewTenantProvider([]*entity.Tenant{tenant})))
+	if budgetMw != nil {
+		srv.RegisterBudgetMiddleware(budgetMw)
+	}
+	srv.RegisterAgentShield(middleware.AgentMCP, func(c *gin.Context) { c.Next() })
+	srv.RegisterAgentHandler(middleware.AgentMCP, h)
+	srv.RegisterAgentRoutes()
+	return srv
+}
+
+func postAgentReq(srv *Server, path, body string, withAuth bool) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	if withAuth {
+		req.Header.Set("Authorization", "Bearer sk-mc_secret")
+	}
+	srv.engine.ServeHTTP(w, req)
+	return w
+}
+
+func TestAgentRoutesMountAndGate(t *testing.T) {
+	srv := newAgentServer(t, nil)
+	body := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
+	if w := postAgentReq(srv, "/mcp", body, true); w.Code != http.StatusOK {
+		t.Errorf("/mcp with key: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if w := postAgentReq(srv, "/mcp", body, false); w.Code != http.StatusUnauthorized {
+		t.Errorf("/mcp without key: expected 401, got %d", w.Code)
+	}
+}
+
+func TestAgentRoutesBudget429(t *testing.T) {
+	srv := newAgentServer(t, func(c *gin.Context) {
+		middleware.AbortWithError(c, http.StatusTooManyRequests, middleware.ErrorCodeBudgetExceeded, "budget exceeded")
+	})
+	w := postAgentReq(srv, "/mcp", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, true)
+	if w.Code != http.StatusTooManyRequests || !strings.Contains(w.Body.String(), "BUDGET_EXCEEDED") {
+		t.Fatalf("expected 429 BUDGET_EXCEEDED, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func newTestServer() *Server {
 	gin.SetMode(gin.TestMode)
 	cfg := &config.ServerConfig{

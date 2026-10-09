@@ -529,3 +529,31 @@ func TestValidateRoutingWeightAndAliases(t *testing.T) {
 		t.Errorf("valid config rejected: %v", err)
 	}
 }
+
+// @sk-test mcp-a2a-gateway#T1.3: MCP/A2A sections and tenant tool policy parse (AC-004, AC-006, AC-007)
+func TestConfigAgentSections(t *testing.T) {
+	t.Setenv("MASKCHAIN_KEYS_KEY", base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)))
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	content := []byte("log:\n  level: debug\ndatabase:\n  dsn: postgres://localhost:5432/db\nmcp:\n  enabled: true\n  upstream_url: http://mcp.internal/mcp\n  api_key: k\n  allowed_tools: [search]\n  blocked_tools: [rm]\na2a:\n  enabled: true\n  upstream_url: http://a2a.internal\ntenants:\n  acme:\n    auth_header: Authorization\n    api_keys: [sk-x]\n    mcp_allowed_tools: [search]\n    mcp_blocked_tools: [shell]\n")
+	if err := os.WriteFile(cfgPath, content, 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := ParseAndLoadConfig([]string{"--config=" + cfgPath})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.MCP == nil || !cfg.MCP.Enabled || cfg.MCP.UpstreamURL != "http://mcp.internal/mcp" {
+		t.Errorf("mcp = %+v", cfg.MCP)
+	}
+	if len(cfg.MCP.AllowedTools) != 1 || cfg.MCP.AllowedTools[0] != "search" {
+		t.Errorf("mcp.allowed_tools = %v", cfg.MCP.AllowedTools)
+	}
+	if cfg.A2A == nil || !cfg.A2A.Enabled || cfg.A2A.UpstreamURL != "http://a2a.internal" {
+		t.Errorf("a2a = %+v", cfg.A2A)
+	}
+	acme := cfg.Tenants["acme"]
+	if acme == nil || len(acme.MCPAllowedTools) != 1 || acme.MCPAllowedTools[0] != "search" || len(acme.MCPBlockedTools) != 1 {
+		t.Errorf("tenant mcp policy = %+v", acme)
+	}
+}

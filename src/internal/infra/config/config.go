@@ -197,6 +197,36 @@ type TenantConfig struct {
 	AuthScheme string            `mapstructure:"auth_scheme" yaml:"auth_scheme"`
 	APIKeys    []string          `mapstructure:"api_keys" yaml:"api_keys" validate:"required"`
 	PIIConfig  *entity.PIIConfig `mapstructure:"pii_config" yaml:"pii_config"`
+	// @sk-task mcp-a2a-gateway#T1.1: per-tenant MCP tool policy (AC-004)
+	MCPAllowedTools []string `mapstructure:"mcp_allowed_tools" yaml:"mcp_allowed_tools"`
+	MCPBlockedTools []string `mapstructure:"mcp_blocked_tools" yaml:"mcp_blocked_tools"`
+}
+
+// @sk-task mcp-a2a-gateway#T1.1: MCP upstream configuration (AC-001, AC-004)
+//
+// MCPConfig configures the upstream MCP server exposed at POST /mcp.
+type MCPConfig struct {
+	Enabled      bool     `mapstructure:"enabled" yaml:"enabled"`
+	UpstreamURL  string   `mapstructure:"upstream_url" yaml:"upstream_url"`
+	APIKey       string   `mapstructure:"api_key" yaml:"api_key"`
+	AuthHeader   string   `mapstructure:"auth_header" yaml:"auth_header"`
+	AuthPrefix   string   `mapstructure:"auth_prefix" yaml:"auth_prefix"`
+	Timeout      string   `mapstructure:"timeout" yaml:"timeout"`
+	AllowedTools []string `mapstructure:"allowed_tools" yaml:"allowed_tools"`
+	BlockedTools []string `mapstructure:"blocked_tools" yaml:"blocked_tools"`
+}
+
+// @sk-task mcp-a2a-gateway#T1.1: A2A upstream configuration (AC-006, AC-007)
+//
+// A2AConfig configures the upstream A2A agent exposed at POST /a2a.
+type A2AConfig struct {
+	Enabled      bool   `mapstructure:"enabled" yaml:"enabled"`
+	UpstreamURL  string `mapstructure:"upstream_url" yaml:"upstream_url"`
+	AgentCardURL string `mapstructure:"agent_card_url" yaml:"agent_card_url"`
+	APIKey       string `mapstructure:"api_key" yaml:"api_key"`
+	AuthHeader   string `mapstructure:"auth_header" yaml:"auth_header"`
+	AuthPrefix   string `mapstructure:"auth_prefix" yaml:"auth_prefix"`
+	Timeout      string `mapstructure:"timeout" yaml:"timeout"`
 }
 
 // @sk-task rate-limiting-budgets#T1.1: Add RateLimitConfig with defaults (AC-006)
@@ -442,6 +472,8 @@ type Config struct {
 	LogExport       *LogExportConfig         `mapstructure:"log_export" yaml:"log_export"`
 	Tenants         map[string]*TenantConfig `mapstructure:"tenants" yaml:"tenants"`
 	Admin           *AdminConfig             `mapstructure:"admin" yaml:"admin"`
+	MCP             *MCPConfig               `mapstructure:"mcp" yaml:"mcp"`
+	A2A             *A2AConfig               `mapstructure:"a2a" yaml:"a2a"`
 }
 
 // LoadConfigFromDir reads all *.yaml files from dir, deep-merges them in

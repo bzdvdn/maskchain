@@ -39,6 +39,9 @@ type Server struct {
 	textShields       map[middleware.InputKind]gin.HandlerFunc
 	responsesShield   gin.HandlerFunc
 	responsesHandler  *ResponsesHandler
+	agentShields      map[middleware.AgentKind]gin.HandlerFunc
+	mcpHandler        *AgentHandler
+	a2aHandler        *AgentHandler
 	exportMw          gin.HandlerFunc
 }
 
@@ -336,6 +339,56 @@ func (s *Server) RegisterResponsesShield(mw gin.HandlerFunc) {
 // unset, the chat handler is used (non-streaming only).
 func (s *Server) RegisterResponsesHandler(h *ResponsesHandler) {
 	s.responsesHandler = h
+}
+
+// @sk-task mcp-a2a-gateway#T3.1: register the agent shield and handler (AC-001, AC-008)
+func (s *Server) RegisterAgentShield(kind middleware.AgentKind, mw gin.HandlerFunc) {
+	if s.agentShields == nil {
+		s.agentShields = make(map[middleware.AgentKind]gin.HandlerFunc)
+	}
+	s.agentShields[kind] = mw
+}
+
+func (s *Server) RegisterAgentHandler(kind middleware.AgentKind, h *AgentHandler) {
+	switch kind {
+	case middleware.AgentMCP:
+		s.mcpHandler = h
+	case middleware.AgentA2A:
+		s.a2aHandler = h
+	}
+}
+
+// @sk-task mcp-a2a-gateway#T3.1: mount agent endpoints (AC-001, AC-008)
+//
+// RegisterAgentRoutes mounts POST /mcp(+"/"), POST /a2a and GET
+// /.well-known/agent.json for the configured upstreams, using the reduced chain
+// auth → budget → agentShield → handler. Call it after RegisterBudgetMiddleware.
+func (s *Server) RegisterAgentRoutes() {
+	mount := func(path string, kind middleware.AgentKind, handler gin.HandlerFunc) {
+		chain := []gin.HandlerFunc{}
+		if s.budgetMw != nil {
+			chain = append(chain, s.budgetMw)
+		}
+		if mw := s.agentShields[kind]; mw != nil {
+			chain = append(chain, mw)
+		}
+		chain = append(chain, handler)
+		s.engine.POST(path, chain...)
+	}
+
+	if s.mcpHandler != nil {
+		mount("/mcp", middleware.AgentMCP, s.mcpHandler.Handle)
+		mount("/mcp/", middleware.AgentMCP, s.mcpHandler.Handle)
+	}
+	if s.a2aHandler != nil {
+		mount("/a2a", middleware.AgentA2A, s.a2aHandler.Handle)
+		cardChain := []gin.HandlerFunc{}
+		if s.budgetMw != nil {
+			cardChain = append(cardChain, s.budgetMw)
+		}
+		cardChain = append(cardChain, s.a2aHandler.HandleAgentCard)
+		s.engine.GET("/.well-known/agent.json", cardChain...)
+	}
 }
 
 // @sk-task log-export#T2.4: register the log export capture middleware (AC-001)
