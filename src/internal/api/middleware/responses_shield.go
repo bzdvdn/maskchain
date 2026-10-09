@@ -17,12 +17,26 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/infra/metrics"
 )
 
+// @sk-task responses-streaming#T1.1: mask mapping shared with the streaming relay
+const responsesMaskKey = "responses_mask_mapping"
+
+// ResponsesMaskFromContext returns the placeholder→original mapping stored by
+// ResponsesShieldMiddleware, or nil when none was produced.
+func ResponsesMaskFromContext(c *gin.Context) map[string]string {
+	if v, ok := c.Get(responsesMaskKey); ok {
+		if m, ok := v.(map[string]string); ok {
+			return m
+		}
+	}
+	return nil
+}
+
 // @sk-task responses-api#T2.1: reversible shield for the Responses API (AC-003, AC-004, AC-005, AC-006)
 //
 // ResponsesShieldMiddleware masks the text of an OpenAI Responses request
-// (`instructions` and `input`) with the tenant's policy and installs the chat
-// unmask writer so the provider's `output_text`/content text is restored to the
-// client. Streaming Responses are rejected in this MVP.
+// (`instructions` and `input`) with the tenant's policy. For non-stream requests
+// it installs the buffered unmask writer; for streaming requests it exposes the
+// mapping to the streaming relay through the request context.
 func ResponsesShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.Method != http.MethodPost {
@@ -50,15 +64,12 @@ func ResponsesShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *sl
 			return
 		}
 
-		// @sk-task responses-api#T2.1: stream:true is not supported yet (AC-006)
+		// @sk-task responses-streaming#T1.1: streaming is supported; the mapping
+		// is shared with the streaming relay via the request context.
 		var meta struct {
 			Stream bool `json:"stream"`
 		}
-		if json.Unmarshal(body, &meta) == nil && meta.Stream {
-			c.Header("X-Shield-Status", "error")
-			AbortWithError(c, http.StatusBadRequest, "STREAMING_UNSUPPORTED", "streaming responses are not supported yet")
-			return
-		}
+		_ = json.Unmarshal(body, &meta)
 
 		tenant, ok := TenantFromContext(c)
 		if !ok {
@@ -103,10 +114,13 @@ func ResponsesShieldMiddleware(engine Scanner, cfg *config.ShieldConfig, log *sl
 		}
 
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(apply(masked)))
-		// Restore masked placeholders in the provider response. The writer
-		// buffers writes and flushes (with the mapping applied) on return.
-		if w := wrapUnmaskWriter(c, mapping); w != nil {
-			defer w.flush()
+		// Share the mapping with the streaming relay; for non-stream requests
+		// also install the buffered writer that restores placeholders on flush.
+		c.Set(responsesMaskKey, mapping)
+		if !meta.Stream {
+			if w := wrapUnmaskWriter(c, mapping); w != nil {
+				defer w.flush()
+			}
 		}
 
 		duration := time.Since(start)

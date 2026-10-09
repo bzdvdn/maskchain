@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -670,6 +671,81 @@ func TestResponsesUnsupported(t *testing.T) {
 	w := postResponsesReq(srv, "/v1/responses", `{"model":"m","input":"hi"}`, true)
 	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "UNSUPPORTED_ENDPOINT") {
 		t.Fatalf("expected UNSUPPORTED_ENDPOINT 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// @sk-test responses-streaming#T3.3: streaming responses pass the gate and mount on both prefixes (AC-001, AC-006, AC-008)
+func newResponsesStreamServer(t *testing.T, budgetMw gin.HandlerFunc) *Server {
+	t.Helper()
+	repo := &selfFakeRepo{keys: []*virtualkey.VirtualKey{{
+		ID: "k1", TenantID: "acme", KeyHash: virtualkey.KeyHash("sk-mc_secret"),
+		AllowedModels: []string{"m"}, Enabled: true,
+	}}}
+	slug, err := value.NewTenantSlug("acme")
+	if err != nil {
+		t.Fatalf("slug: %v", err)
+	}
+	tenant := entity.NewTenant(slug, "Acme", "Authorization")
+
+	ch := make(chan ports.ProviderChunk, 1)
+	ch <- ports.ProviderChunk{Data: []byte(`{"type":"response.completed"}`)}
+	close(ch)
+
+	srv := newTestServer()
+	srv.RegisterAuth(middleware.VirtualKeyAuth(repo, middleware.NewTenantProvider([]*entity.Tenant{tenant})))
+	srv.RegisterModelAccess(middleware.ModelAccess())
+	if budgetMw != nil {
+		srv.RegisterBudgetMiddleware(budgetMw)
+	}
+	srv.RegisterResponsesShield(func(c *gin.Context) { c.Next() })
+	srv.RegisterResponsesHandler(newResponsesTestHandler(t, &mockPortClient{streamCh: ch}))
+	srv.RegisterProxyRoute(func(c *gin.Context) { c.Next() }, nil)
+	return srv
+}
+
+func TestResponsesStreamRouteParity(t *testing.T) {
+	srv := newResponsesStreamServer(t, nil)
+	ts := httptest.NewServer(srv.engine)
+	defer ts.Close()
+
+	for _, p := range []string{"/api/v1/responses", "/v1/responses"} {
+		req, _ := http.NewRequest(http.MethodPost, ts.URL+p, strings.NewReader(`{"model":"m","input":"hi","stream":true}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer sk-mc_secret")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("%s: %v", p, err)
+		}
+		_, _ = io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("%s stream: expected 200, got %d", p, resp.StatusCode)
+		}
+		if ct := resp.Header.Get("Content-Type"); ct != "text/event-stream" {
+			t.Errorf("%s stream: Content-Type = %q", p, ct)
+		}
+	}
+}
+
+// @sk-test responses-streaming#T3.3: auth and model access gate the stream (AC-006)
+func TestResponsesStreamGate(t *testing.T) {
+	srv := newResponsesStreamServer(t, nil)
+	if w := postResponsesReq(srv, "/v1/responses", `{"model":"m","input":"hi","stream":true}`, false); w.Code != http.StatusUnauthorized {
+		t.Errorf("without key: expected 401, got %d", w.Code)
+	}
+	if w := postResponsesReq(srv, "/v1/responses", `{"model":"other","input":"hi","stream":true}`, true); w.Code != http.StatusForbidden {
+		t.Errorf("disallowed model: expected 403, got %d", w.Code)
+	}
+}
+
+// @sk-test responses-streaming#T3.3: budget blocks the stream with 429 (AC-006)
+func TestResponsesStreamBudget429(t *testing.T) {
+	srv := newResponsesStreamServer(t, func(c *gin.Context) {
+		middleware.AbortWithError(c, http.StatusTooManyRequests, middleware.ErrorCodeBudgetExceeded, "budget exceeded")
+	})
+	w := postResponsesReq(srv, "/v1/responses", `{"model":"m","input":"hi","stream":true}`, true)
+	if w.Code != http.StatusTooManyRequests || !strings.Contains(w.Body.String(), "BUDGET_EXCEEDED") {
+		t.Fatalf("expected 429 BUDGET_EXCEEDED, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

@@ -183,6 +183,10 @@ func (p *sseUsageParser) parsePayload(payload string) {
 		Message *struct {
 			Usage *usageFields `json:"usage"`
 		} `json:"message"`
+		// @sk-task responses-streaming#T3.4: Responses nests usage under "response".
+		Response *struct {
+			Usage *usageFields `json:"usage"`
+		} `json:"response"`
 	}
 	if err := json.Unmarshal([]byte(payload), &env); err != nil {
 		return
@@ -194,6 +198,11 @@ func (p *sseUsageParser) parsePayload(payload string) {
 	}
 	if env.Message != nil && env.Message.Usage != nil {
 		if u := env.Message.Usage.toInfo(); !u.empty() {
+			p.merge(u)
+		}
+	}
+	if env.Response != nil && env.Response.Usage != nil {
+		if u := env.Response.Usage.toInfo(); !u.empty() {
 			p.merge(u)
 		}
 	}

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -80,18 +81,24 @@ func TestResponsesShieldUnmasksResponse(t *testing.T) {
 	}
 }
 
-// @sk-test responses-api#T2.2: stream:true is rejected with zero downstream calls (AC-006)
-func TestResponsesShieldRejectsStream(t *testing.T) {
-	engine, capture := responsesShieldEngine(t, embeddingsTenant(t), nil, nil)
-	w := postResponses(engine, `{"model":"m","input":"hi","stream":true}`)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+// @sk-test responses-streaming#T1.2: streaming is accepted and the mapping is exposed (AC-002, AC-003)
+func TestResponsesShieldAcceptsStreamAndExposesMapping(t *testing.T) {
+	var gotMapping map[string]string
+	handler := func(c *gin.Context) {
+		gotMapping = ResponsesMaskFromContext(c)
+		c.Status(http.StatusOK)
 	}
-	if !strings.Contains(w.Body.String(), "STREAMING_UNSUPPORTED") {
-		t.Errorf("expected STREAMING_UNSUPPORTED, got %s", w.Body.String())
+	engine, capture := responsesShieldEngine(t, embeddingsTenant(t), nil, handler)
+
+	w := postResponses(engine, `{"model":"m","input":"about SecretProject","stream":true}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	if capture.called {
-		t.Error("downstream must not run for a rejected stream request")
+	if gotMapping["[MASK.0]"] != "SecretProject" {
+		t.Errorf("mapping not exposed to the handler: %v", gotMapping)
+	}
+	if !bytes.Contains(capture.body, []byte("[MASK.0]")) || bytes.Contains(capture.body, []byte("SecretProject")) {
+		t.Errorf("streaming request was not masked: %s", capture.body)
 	}
 }
 

@@ -38,6 +38,7 @@ type Server struct {
 	embeddingsShield  gin.HandlerFunc
 	textShields       map[middleware.InputKind]gin.HandlerFunc
 	responsesShield   gin.HandlerFunc
+	responsesHandler  *ResponsesHandler
 	exportMw          gin.HandlerFunc
 }
 
@@ -198,7 +199,12 @@ func (s *Server) RegisterProxyRoute(shieldMiddleware gin.HandlerFunc, routingHan
 	if s.exportMw != nil {
 		responsesChain = append(responsesChain, s.exportMw)
 	}
-	responsesChain = append(responsesChain, chatHandler)
+	// @sk-task responses-streaming#T3.1: use the Responses handler when wired
+	responsesTerminal := chatHandler
+	if s.responsesHandler != nil {
+		responsesTerminal = s.responsesHandler.HandleResponses
+	}
+	responsesChain = append(responsesChain, responsesTerminal)
 
 	// @sk-task usage-accounting-integrity#T3.1+T3.2: /completions shares the chat chain
 	//
@@ -322,6 +328,14 @@ func (s *Server) RegisterTextShield(kind middleware.InputKind, mw gin.HandlerFun
 // binary wires it.
 func (s *Server) RegisterResponsesShield(mw gin.HandlerFunc) {
 	s.responsesShield = mw
+}
+
+// @sk-task responses-streaming#T3.1: register the Responses handler (AC-001)
+//
+// RegisterResponsesHandler sets the terminal handler for POST /responses. When
+// unset, the chat handler is used (non-streaming only).
+func (s *Server) RegisterResponsesHandler(h *ResponsesHandler) {
+	s.responsesHandler = h
 }
 
 // @sk-task log-export#T2.4: register the log export capture middleware (AC-001)

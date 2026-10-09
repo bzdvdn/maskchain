@@ -401,6 +401,8 @@ func buildGatewayServer(
 	}
 	// @sk-task responses-api#T3.2: wire the Responses shield (AC-001)
 	srv.RegisterResponsesShield(middleware.ResponsesShieldMiddleware(shieldEngine, cfg.Shield, logger))
+	// @sk-task responses-streaming#T3.2: wire the Responses handler (AC-001)
+	srv.RegisterResponsesHandler(api.NewResponsesHandler(selector, fallbackHandler))
 	srv.RegisterProxyRoute(middleware.ShieldMiddleware(shieldEngine, cfg.Shield, logger, sessionUseCase), routingHandler)
 	// @sk-task media-endpoints#T3.3: wire media passthrough (AC-007)
 	srv.RegisterMedia(api.NewMediaHandler(selector, fallbackHandler), middleware.MediaModelAccess())

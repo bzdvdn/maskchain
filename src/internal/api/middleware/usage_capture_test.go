@@ -95,3 +95,17 @@ func TestExtractJSONUsageResponses(t *testing.T) {
 		t.Errorf("got %+v, want 42/17", u)
 	}
 }
+
+// @sk-test responses-streaming#T3.4: Responses streaming usage is read from the nested completed event (AC-007)
+func TestSSEUsageParserResponses(t *testing.T) {
+	p := newSSEUsageParser()
+	p.feed([]byte("event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}\n\n"))
+	p.feed([]byte("event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":30,\"output_tokens\":12}}}\n\n"))
+	u, ok := p.usage()
+	if !ok {
+		t.Fatal("expected Responses streaming usage")
+	}
+	if u.PromptTokens != 30 || u.CompletionTokens != 12 {
+		t.Errorf("got %+v, want 30/12", u)
+	}
+}
