@@ -16,16 +16,21 @@
 - `src/pkg/` — shared utilities (future)
 - `ui/` — Vite + React + TypeScript operator console (LiteLLM-class UI v2)
   - `ui/embed.go` — Go embed для встраивания статики в admin (не gateway)
-  - `ui/src/components/Layout.tsx` — sidebar IA (Overview/Traffic/Governance/Operations/System), header with contextual actions + workspace switcher
+  - `ui/src/components/Layout.tsx` — sidebar IA (Overview/Traffic/Governance/Routing/Operations/System), header with contextual actions, workspace switcher, live-health pill + critical attention badge
+  - `ui/src/components/AttentionProvider.tsx` — app-level attention context (shared by header badge + dashboard inbox)
   - `ui/src/components/ui/` — v2 primitives: Card, PageHeader, Status (dot/pill), Segmented, ChipTag/ChipInput, Switch, ProgressBar, Spinner, EmptyState + `v2.css`
   - `ui/src/utils/format.ts` — locale-neutral relativeTime/absDate/money/fmtTokens
+  - `ui/src/utils/routingStrategy.ts` — pure route strategy (single/priority/weighted/fallback + weight distribution)
   - `ui/src/styles/` — design tokens v2 (tokens.css), base.css, components.css
-  - `ui/src/pages/Dashboard.tsx` — Operations HQ (KPI+delta, trend toggle, Needs-attention, onboarding)
+  - `ui/src/pages/Dashboard.tsx` — Operations HQ (KPI+delta, trend toggle, actionable Needs-attention inbox, onboarding)
   - `ui/src/pages/Analytics.tsx` — persisted range, compare, day/model/tenant tabs
   - `ui/src/pages/Keys.tsx` — endpoint quickstart, create-key drawer, spend/budget, revocation
-  - `ui/src/pages/Routing.tsx` — provider health cards + rules/rates tables
+  - `ui/src/pages/Routing.tsx` — tenant overrides table with computed strategy + weight editor, aliases, inherited defaults
+  - `ui/src/pages/Providers.tsx` — provider cards (health/latency/models), weight/priority, models endpoint
+  - `ui/src/pages/Models.tsx` — model catalog (cost + default providers)
   - `ui/src/pages/Playground.tsx` — test console (prompt through shield/routing/budgets)
   - `ui/src/pages/Compliance.tsx` — compliance packs apply/audit console
+  - `ui/src/hooks/useAttention.ts` — attention items + ack/snooze persistence (localStorage)
   - `ui/src/hooks/useWorkspace.ts` — global tenant-scope switcher hook
   - `ui/src/pages/Tenants/TenantDetail.tsx` — Overview/Policies/Compliance/Activity tabs + deviation banner
   - `ui/src/pages/Settings.tsx` — live system status from `/api/v1/admin/status`
@@ -40,20 +45,23 @@
 - `src/internal/domain/` — core business logic: Content Shield, tenants, policies, routing
   - `src/internal/domain/shield/mask/` — mask entry entity, storage interface, use case, UUIDv7
   - `src/internal/domain/shield/detector/` — detector interface, registry, composite detector
-  - `src/internal/domain/routing/` — routing domain entities (Provider, Route, RoutingRule, HealthStatus)
-  - `src/internal/domain/routing/service/` — routing services (ProviderRegistry, RouteSelector, FallbackHandler, HealthChecker)
+  - `src/internal/domain/routing/` — routing domain entities (Provider with weight, Route, RoutingRule, Alias, HealthStatus)
+  - `src/internal/domain/routing/service/` — ProviderRegistry (aliases + weights), RouteSelector (alias resolve + priority-tier weighted pick), FallbackHandler, HealthChecker
 - `src/internal/app/` — use case orchestration
   - `src/internal/app/usecase/shield/` — ShieldEngine, ScanUseCase, ScanPipelineFactory, ApplyPolicyUseCase
 - `src/internal/ports/` — inbound (REST, gRPC) and outbound (repository, provider) interfaces
   - `src/internal/ports/provider.go` — ProviderClient port interface (outbound, LLM provider abstraction), ProviderChunk type, Stream() method
 - `src/internal/adapters/` — repository impl (PostgreSQL), provider clients (OpenAI, Anthropic, etc.)
   - `src/internal/adapters/repository/mask/` — Postgres, Valkey, Cached mask repos
-  - `src/internal/adapters/provider/` — provider adapter stubs (OpenAI, Anthropic, etc.)
+  - `src/internal/adapters/provider/` — passthrough provider adapters (OpenAI, Anthropic, Ollama, generic proxy, Gemini, Bedrock) + `upstream.go` (`ResolveUpstreamURL`, path allowlist, `/v1` de-dup)
   - `src/internal/adapters/egress/` — egress HTTP/HTTPS client with per-provider proxy dialer (HTTP/SOCKS5), SSE streaming, retry, connection pooling (implements ProviderClient with Call + Stream)
 - `src/internal/api/` — HTTP handlers, middleware, request/response types
   - `src/internal/api/mask_handler.go` — POST /api/v1/shield/mask and /unmask handlers
   - `src/internal/api/provider_handler.go` — RoutingProxyHandler (proxy to LLM providers), legacy stubs
-  - `src/internal/api/server.go` — gateway router setup, RegisterProxyRoute accepts RoutingProxyHandler
+  - `src/internal/api/media_handler.go` — MediaHandler (byte-preserving images/audio passthrough + binary responses)
+  - `src/internal/api/responses_handler.go` — ResponsesHandler (non-stream + streaming Responses, carry-buffer unmask)
+  - `src/internal/api/agent_handler.go` — AgentHandler (MCP `/mcp`, A2A `/a2a` + agent card relay via egress)
+  - `src/internal/api/server.go` — gateway router setup (chat/completions/messages/embeddings/moderations/rerank/responses/images/audio/mcp/a2a)
   - `src/internal/api/health/` — health check endpoints (liveness/readiness probes), service status aggregation
 - `src/internal/api/self_handler.go` — data-plane self-service: `GET /api/v1/models`, `GET /api/v1/me`
 - `src/internal/api/admin.go` — admin router setup (AdminServer), static files, incident/tenant handlers
@@ -64,12 +72,18 @@
   - `src/internal/api/dto/` — request/response DTOs (IncidentResponse, TenantResponse, PaginatedResponse, budget/virtual_key DTOs)
 - `src/internal/api/middleware/budget.go` — BudgetMiddleware (hard-limit 429 before request, spend increment + RecordSpend + alerts after non-streaming response)
 - `src/internal/api/middleware/cache.go` — SemanticCacheMiddleware (post-shield masked prompt embedding, Valkey hit serve / miss store, budget-guard writes, streaming+disabled passthrough)
-- `src/internal/infra/config/` — cobra/viper config loading, validation, defaults (RoutingConfig, ProviderConfig with ProxyURL, RouteConfig, RuleConfig), serialize/diff/watcher
+- `src/internal/api/middleware/shield_text.go` — shared dictionary+PII masking core (`maskTexts`) + `TextInputShieldMiddleware` (moderations/rerank/count_tokens)
+- `src/internal/api/middleware/shield_embeddings.go` — embeddings input shield (one-way masking)
+- `src/internal/api/middleware/media_model_access.go` — `MediaModelAccess` + `ExtractModel` (JSON/multipart model extraction)
+- `src/internal/api/middleware/responses_shield.go` — reversible Responses shield (instructions/input mask, unmask mapping)
+- `src/internal/api/middleware/agent_shield.go` — MCP/A2A shield (tool args/message mask, tenant tool allow/block)
+- `src/internal/api/middleware/usage_capture.go` — usage extraction (OpenAI/Anthropic/Responses shapes, SSE parser)
+- `src/internal/infra/config/` — cobra/viper config loading, validation, defaults (RoutingConfig incl. aliases/weights/models_endpoint, ProviderConfig, mcp/a2a sections), serialize/diff/watcher
 - `src/internal/infra/crypto/` — AES-256-GCM Encryptor/Decryptor for conversation logging (key from `MASKCHAIN_CONVERSATION_KEY` ENV)
 - `src/internal/infra/telemetry/` — OTel SDK init, TracerProvider, MeterProvider, OTLP exporters
 - `src/internal/infra/metrics/` — Prometheus metric definitions (HTTP, shield), /metrics handler
 - `src/internal/infra/logging/` — slog adapter with OTel trace_id/span_id enrichment
-- `src/internal/adapters/repository/postgres/migrations/` — SQL migrations (dictionary_entries, incidents, tenants, mask_entries, sessions, analytics, admin_sessions, audit_log, conversation_logs, routing_registry, virtual_keys, budgets)
+- `src/internal/adapters/repository/postgres/migrations/` — SQL migrations (dictionary_entries, incidents, tenants, mask_entries, sessions, analytics, admin_sessions, audit_log, conversation_logs, routing_registry, virtual_keys, budgets, routing_aliases + provider weight/models_endpoint)
 - `src/internal/adapters/repository/conversation/` — PgConversationStore (encrypted conversation_logs persistence; conversation logging pipeline)
 - `src/internal/adapters/repository/budget/` — ValkeySpendCounter (INCRBYFLOAT budget spend counter, budget-enforcement)
 - `src/internal/adapters/repository/cache/` — ValkeyCacheStore (GET/SET with TTL, write size guard, semantic-cache persistence)
@@ -102,9 +116,16 @@
 - Compliance packs changes — `src/internal/domain/compliance/` + `src/internal/app/compliance/` + `src/cmd/internal/bootstrap/compliance.go` + `src/internal/api/handler/admin/compliance_handler.go` + `compliance.*` in `src/internal/infra/config/` + `ui/src/pages/Tenants/` + `ui/src/api/tenants.ts` + `compliance:` example in `deployments/`
 - Budget/spend changes — `src/internal/domain/budget/` + `src/internal/adapters/repository/budget/` + `src/internal/app/budget/` + `src/internal/api/middleware/budget.go`
 - New API endpoint — `src/internal/api/` + `src/internal/ports/` (inbound interface)
+- Passthrough endpoint / path allowlist — `src/internal/adapters/provider/upstream.go` + `src/internal/api/server.go` (route mounts) + masks in `src/internal/api/middleware/`
+- Media (images/audio) changes — `src/internal/api/media_handler.go` + `src/internal/api/middleware/media_model_access.go` + `src/internal/api/server.go` (RegisterMedia)
+- Responses API changes — `src/internal/api/responses_handler.go` + `src/internal/api/middleware/responses_shield.go` + `src/internal/api/server.go` (RegisterResponsesShield/Handler)
+- MCP/A2A changes — `src/internal/api/agent_handler.go` + `src/internal/api/middleware/agent_shield.go` + `mcp:`/`a2a:` in `src/internal/infra/config/` + wiring in `src/cmd/*`
+- Aliases / weighted routing — `src/internal/domain/routing/` (alias.go, service/registry.go, service/selector.go) + `routing.aliases`/provider `weight` in config + `ui/src/pages/Routing.tsx` + `ui/src/utils/routingStrategy.ts`
+- Provider registry / model catalog — `src/internal/adapters/repository/postgres/routing_registry.go` + `SeedFromYAML` + `models_endpoint` + admin `routing_handler.go` + `ui/src/pages/Providers.tsx`/`Models.tsx`
 - Health check changes — `src/internal/api/health/`
 - Egress/proxy changes — `src/internal/adapters/egress/` (proxy dialer, pool, retry, CB)
 - Routing domain changes — `src/internal/domain/routing/` + `src/internal/domain/routing/service/`
+- Attention inbox / header badge — `ui/src/hooks/useAttention.ts` + `ui/src/components/AttentionProvider.tsx` + `ui/src/pages/Dashboard.tsx` + `ui/src/components/Layout.tsx`
 - New provider adapter — `src/internal/adapters/provider/` + `src/internal/ports/provider.go`
 - Configuration changes — `src/internal/infra/config/`
 - Observability/telemetry changes — `src/internal/infra/telemetry/`, `src/internal/infra/metrics/`, `src/internal/infra/logging/`
@@ -113,6 +134,9 @@
 - Admin binary changes — `src/cmd/admin/` + `src/internal/api/admin.go`
 - Build/CI changes — `Makefile`, `Dockerfile*`, `.golangci.yml`, `.github/workflows/ci.yml`, `.github/dependabot.yml`
 - Deployment changes — `deployments/docker-compose/`, `deployments/helm/maskchain/`, `deployments/migrations/`
+
+## Modules & Context
+- `ui/` — operator console (SPA, design system, API clients, attention inbox); details in `ui/CONTEXT.md`
 
 ## Excluded
 - `.speckeep/**` — excluded from indexing (agent workflow config)

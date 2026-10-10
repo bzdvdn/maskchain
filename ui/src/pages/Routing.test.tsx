@@ -30,13 +30,14 @@ vi.mock('../components/Toast', async (importOriginal) => {
   }
 })
 
-import { listProviders, listRoutes, listModels, listAliases, upsertAlias } from '../api/routing'
+import { listProviders, listRoutes, listModels, listAliases, upsertAlias, upsertProvider } from '../api/routing'
 
 const mockProviders = vi.mocked(listProviders)
 const mockRoutes = vi.mocked(listRoutes)
 const mockModels = vi.mocked(listModels)
 const mockAliases = vi.mocked(listAliases)
 const mockUpsertAlias = vi.mocked(upsertAlias)
+const mockUpsertProvider = vi.mocked(upsertProvider)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -87,5 +88,31 @@ describe('Routing aliases', () => {
 
     await waitFor(() => expect(mockUpsertAlias).toHaveBeenCalledTimes(1))
     expect(mockUpsertAlias.mock.calls[0][0]).toMatchObject({ alias: 'alias-model', target: 'target-model' })
+  })
+})
+
+// @sk-test operator-console-v2-1#T3.4: strategy view + inline weight edit (AC-006, AC-007)
+describe('Routing strategy', () => {
+  it('shows a weighted badge and distribution, and saves a weight edit', async () => {
+    mockProviders.mockResolvedValue([
+      { name: 'openai', api_type: 'openai', base_url: 'https://api.openai.com', priority: 0, weight: 3, status: 'up' },
+      { name: 'anthropic', api_type: 'anthropic', base_url: 'https://api.anthropic.com', priority: 0, weight: 1, status: 'up' },
+    ])
+    mockRoutes.mockResolvedValue([{ tenant: 'acme', model: 'gpt-4o', providers: ['openai', 'anthropic'] }])
+    mockUpsertProvider.mockResolvedValue({ name: 'openai', api_type: 'openai', base_url: 'https://api.openai.com' })
+
+    render(<MemoryRouter><Routing /></MemoryRouter>)
+
+    expect(await screen.findByText('weighted')).toBeTruthy()
+    expect(screen.getByText('openai 75%')).toBeTruthy()
+    expect(screen.getByText('anthropic 25%')).toBeTruthy()
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Edit weights' })[0])
+    const openaiInput = screen.getByText(/openai · priority 0/).parentElement?.querySelector('input') as HTMLInputElement
+    fireEvent.change(openaiInput, { target: { value: '1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(mockUpsertProvider).toHaveBeenCalledTimes(1))
+    expect(mockUpsertProvider.mock.calls[0][0]).toMatchObject({ name: 'openai', weight: 1 })
   })
 })

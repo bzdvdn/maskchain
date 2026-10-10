@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Login } from './pages/Login'
 import { Layout } from './components/Layout'
+import { AttentionProvider } from './components/AttentionProvider'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { Spinner } from './components/ui'
 import { getAdminToken, setAdminToken } from './api/admin'
@@ -82,7 +83,8 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <Layout onLogout={handleLogout}>
+      <AttentionProvider>
+        <Layout onLogout={handleLogout}>
         <Routes>
           <Route path="/" element={<PageBoundary><Dashboard /></PageBoundary>} />
           <Route path="/tenants" element={<PageBoundary><TenantList /></PageBoundary>} />
@@ -105,6 +107,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>
+      </AttentionProvider>
     </ErrorBoundary>
   )
 }

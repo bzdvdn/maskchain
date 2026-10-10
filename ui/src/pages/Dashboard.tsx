@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BarChart3, KeyRound, Shield, Users, Wallet, Zap, AlertTriangle, Plus } from 'lucide-react'
 import { TimeRangePicker, useRange, defaultRange, type RangeValue } from '../components/TimeRangePicker'
-import { AsyncSection, Segmented, StatusPill, Button, type StatusTone } from '../components/ui'
+import { AsyncSection, Segmented, StatusPill, Button } from '../components/ui'
 import { TimeSeriesChart, type ChartMetric } from '../components/TimeSeriesChart'
 import { relativeTime, money, fmtTokens, groupNum, rangeLabel, rangeSpanMs } from '../utils/format'
 import {
@@ -11,12 +11,11 @@ import {
   getAnalyticsSeries,
   type SeriesPoint,
 } from '../api/analytics'
-import { listBudgets, listBudgetsByTenant } from '../api/budgets'
-import { listProviders } from '../api/routing'
-import { listKeys } from '../api/keys'
 import { listConversations } from '../api/conversations'
 import { useGatewayBase } from '../hooks/useGatewayBase'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
+import { SNOOZE_OPTIONS } from '../hooks/useAttention'
+import { useAttentionState } from '../components/AttentionProvider'
 
 type Metric = ChartMetric
 
@@ -30,13 +29,6 @@ const METRIC_LABEL: Record<Metric, string> = {
   tokens: 'Tokens',
   cost: 'Cost',
   requests: 'Requests',
-}
-
-interface AttentionItem {
-  tone: StatusTone
-  title: string
-  detail: string
-  to?: string
 }
 
 function shiftWindow(from: string, to: string): { from: string; to: string } {
@@ -96,10 +88,12 @@ export function Dashboard() {
   const [prevTotals, setPrevTotals] = useState({ total_output_tokens: 0, total_input_tokens: 0, total_cost: 0 })
   const [prevRequests, setPrevRequests] = useState(0)
   const [passRate, setPassRate] = useState(0)
-  const [attention, setAttention] = useState<AttentionItem[]>([])
   const [activity, setActivity] = useState<{ id: string; tenant_id: string; model: string; status: string; created_at: string }[]>([])
   const [error, setError] = useState('')
   const [loaded, setLoaded] = useState(false)
+
+  // @sk-task operator-console-v2-1#T2.1: shared attention inbox (AC-001, AC-002)
+  const { items: attention, reload: reloadAttention, ack, snooze } = useAttentionState()
 
   useEffect(() => {
     const onWorkspace = (e: Event) => setWorkspace((e as CustomEvent<string>).detail)
@@ -144,53 +138,6 @@ export function Dashboard() {
     }
   }, [from, to, workspace])
 
-  const loadAttention = useCallback(async () => {
-    const items: AttentionItem[] = []
-    try {
-      const budgets = workspace ? await listBudgetsByTenant(workspace) : await listBudgets()
-      const list = budgets?.data ?? budgets ?? []
-      for (const b of list) {
-        if (!b.hard_limit) continue
-        const pct = (b.spent / b.hard_limit) * 100
-        if (pct >= 100) {
-          items.push({ tone: 'red', title: 'Budget exhausted', detail: `${b.tenant_id} hit ${money(b.hard_limit)} / ${b.type}`, to: '/budgets' })
-        } else if (pct >= 70) {
-          items.push({ tone: 'amber', title: `Budget at ${Math.round(pct)}%`, detail: `${b.tenant_id} — ${money(b.spent)} of ${money(b.hard_limit)}`, to: '/budgets' })
-        }
-      }
-    } catch {
-      /* attention panel degrades gracefully */
-    }
-    try {
-      const providers = await listProviders()
-      for (const p of Array.isArray(providers) ? providers : []) {
-        if (p.status === 'down') items.push({ tone: 'red', title: 'Provider down', detail: `${p.name} unreachable`, to: '/routing' })
-        else if (p.status === 'degraded') items.push({ tone: 'amber', title: 'Provider degraded', detail: p.name, to: '/routing' })
-      }
-    } catch {
-      /* ignore */
-    }
-    try {
-      const keys = await listKeys()
-      const rows = Array.isArray(keys?.data) ? keys.data : Array.isArray(keys) ? keys : []
-      const expiring = rows.filter((k) => k.expires_at && new Date(k.expires_at).getTime() - Date.now() < 7 * 86400_000 && new Date(k.expires_at).getTime() > Date.now())
-      if (expiring.length > 0) {
-        items.push({ tone: 'blue', title: 'Keys expiring', detail: `${expiring.length} virtual key${expiring.length > 1 ? 's' : ''} expire within 7 days`, to: '/keys' })
-      }
-    } catch {
-      /* ignore */
-    }
-    try {
-      const conv = await listConversations(1, 100)
-      const convRows = Array.isArray(conv.items) ? conv.items : []
-      const blocked = convRows.filter((c) => c.status === 'blocked').length
-      if (blocked > 0) items.push({ tone: 'amber', title: 'Requests blocked', detail: `${blocked} messages blocked · last 100`, to: '/conversations' })
-    } catch {
-      /* ignore */
-    }
-    setAttention(items.slice(0, 5))
-  }, [workspace])
-
   const loadActivity = useCallback(async () => {
     try {
       const conv = await listConversations(1, 100)
@@ -203,9 +150,8 @@ export function Dashboard() {
 
   useEffect(() => {
     loadKpis()
-    loadAttention()
     loadActivity()
-  }, [loadKpis, loadAttention, loadActivity])
+  }, [loadKpis, loadActivity])
 
   useEffect(() => {
     loadSeries()
@@ -214,7 +160,7 @@ export function Dashboard() {
   useAutoRefresh(() => {
     loadKpis()
     loadSeries()
-    loadAttention()
+    void reloadAttention()
     loadActivity()
   }, 30)
 
@@ -232,6 +178,17 @@ export function Dashboard() {
       active = false
     }
   }, [workspace])
+
+  // @sk-task operator-console-v2-1#T2.1: run an item action then refresh the inbox (AC-002)
+  const runAttentionAction = async (a: { action?: () => Promise<void> }) => {
+    try {
+      await a.action?.()
+    } catch {
+      /* surfaced by the toast on the target page */
+    } finally {
+      await reloadAttention()
+    }
+  }
 
   const tokensTotal = totals.total_input_tokens + totals.total_output_tokens
   const tokensDelta = deltaPct(tokensTotal, prevTotals.total_input_tokens + prevTotals.total_output_tokens)
@@ -327,14 +284,21 @@ export function Dashboard() {
             <div className="empty-state u-center">All systems nominal.</div>
           ) : (
             <ul className="attn-list">
-              {attention.map((a, i) => (
-                <li key={`${a.title}-${i}`} className="attn-row">
-                  <StatusPill tone={a.tone}>{a.tone === 'red' ? 'critical' : a.tone}</StatusPill>
+              {attention.map((a) => (
+                <li key={a.key} className="attn-row">
+                  <StatusPill tone={a.tone}>{a.critical ? 'critical' : a.tone}</StatusPill>
                   <div className="u-grow">
                     <div className="attn-title">{a.title}</div>
                     <div className="attn-detail u-muted">{a.detail}</div>
                   </div>
-                  {a.to && <Link className="btn-link attn-open" to={a.to}>Open →</Link>}
+                  <div className="attn-actions">
+                    {a.action && (
+                      <Button size="small" onClick={() => runAttentionAction(a)}>{a.actionLabel ?? 'Fix'}</Button>
+                    )}
+                    {a.to && <Link className="btn-link attn-open" to={a.to}>Open →</Link>}
+                    <button type="button" className="btn-link link-sm" onClick={() => ack(a.key)} title="Acknowledge">Ack</button>
+                    <button type="button" className="btn-link link-sm" onClick={() => snooze(a.key, SNOOZE_OPTIONS[1].ms)} title="Snooze 24h">Snooze</button>
+                  </div>
                 </li>
               ))}
             </ul>

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useAsyncData } from '../hooks/useAsyncData'
 import { useWorkspace } from '../hooks/useWorkspace'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
-import { AsyncSection, Button, Modal, StatusPill } from '../components/ui'
+import { AsyncSection, Button, Modal, StatusPill, type StatusTone } from '../components/ui'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { useToast } from '../components/Toast'
 import { Link } from 'react-router-dom'
@@ -15,11 +15,14 @@ import {
   listProviders,
   listRoutes,
   upsertAlias,
+  upsertProvider,
   upsertRoute,
   type AliasDto,
   type ModelAggregate,
+  type ProviderDto,
   type RouteDto,
 } from '../api/routing'
+import { computeRouteStrategy, type RouteStrategy } from '../utils/routingStrategy'
 
 // @sk-task routing-ia#T3.2: Routing page — per-tenant overrides (AC-007)
 export function Routing() {
@@ -27,6 +30,7 @@ export function Routing() {
   const [routes, setRoutes] = useState<RouteDto[]>([])
   const [models, setModels] = useState<ModelAggregate[]>([])
   const [providers, setProviders] = useState<string[]>([])
+  const [providerDtos, setProviderDtos] = useState<ProviderDto[]>([])
   const [aliases, setAliases] = useState<AliasDto[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<unknown>(null)
@@ -34,6 +38,7 @@ export function Routing() {
   const [deleting, setDeleting] = useState<RouteDto | null>(null)
   const [aliasEditing, setAliasEditing] = useState<AliasDto | null>(null)
   const [aliasDeleting, setAliasDeleting] = useState<AliasDto | null>(null)
+  const [weightEditing, setWeightEditing] = useState<RouteDto | null>(null)
   const [busy, setBusy] = useState(false)
 
   const reload = async () => {
@@ -43,6 +48,7 @@ export function Routing() {
       const [r, m, p, a] = await Promise.all([listRoutes(), listModels(), listProviders(), listAliases()])
       setRoutes(r ?? [])
       setModels(m ?? [])
+      setProviderDtos(p ?? [])
       setProviders((p ?? []).map((x) => x.name).sort())
       setAliases(a ?? [])
     } catch (err) {
@@ -125,6 +131,22 @@ export function Routing() {
     }
   }
 
+  // @sk-task operator-console-v2-1#T3.3: persist provider weights from the strategy view (AC-007)
+  const saveWeights = async (weights: Record<string, number>) => {
+    try {
+      for (const name of Object.keys(weights)) {
+        const dto = providerDtos.find((p) => p.name === name)
+        if (!dto || (dto.weight ?? 0) === weights[name]) continue
+        await upsertProvider({ ...dto, weight: weights[name] })
+      }
+      toast('Weights saved', 'success')
+      setWeightEditing(null)
+      await reload()
+    } catch (e: any) {
+      toast(e?.message ?? 'Save failed', 'error')
+    }
+  }
+
   return (
     <div>
       <div className="card table-card">
@@ -137,11 +159,11 @@ export function Routing() {
         <div className="table-wrap table-flush">
           <table className="tbl">
             <thead>
-              <tr><th>Tenant</th><th>Model</th><th>Providers (fallback order)</th><th className="num">Actions</th></tr>
+              <tr><th>Tenant</th><th>Model</th><th>Providers (fallback order)</th><th>Strategy</th><th className="num">Actions</th></tr>
             </thead>
             <AsyncSection
               as="tbody"
-              colSpan={4}
+              colSpan={5}
               loading={loading}
               error={error}
               onRetry={reload}
@@ -161,6 +183,7 @@ export function Routing() {
                       </span>
                     ))}
                   </td>
+                  <td><StrategyCell strategy={computeRouteStrategy(r, providerDtos)} onEdit={() => setWeightEditing(r)} /></td>
                   <td>
                     <div className="u-actions">
                       <Button size="small" onClick={() => setEditing(r)}>Edit</Button>
@@ -263,6 +286,15 @@ export function Routing() {
         onConfirm={removeAlias}
         onCancel={() => setAliasDeleting(null)}
       />
+
+      {weightEditing && (
+        <WeightEditor
+          route={weightEditing}
+          providers={providerDtos}
+          onClose={() => setWeightEditing(null)}
+          onSave={saveWeights}
+        />
+      )}
 
       {editing && (
         <OverrideModal
@@ -395,6 +427,83 @@ function AliasModal({
       <div className="form-field"><label>Alias (requested model)</label><input value={a.alias} onChange={(e) => set({ alias: e.target.value })} placeholder="gpt-4o" /></div>
       <div className="form-field"><label>Routes to (target model)</label><input value={a.target} onChange={(e) => set({ target: e.target.value })} placeholder="openai/gpt-4o-2024" /></div>
       <div className="muted meta-sm">An alias is single-hop: the target is routed as-is (exact or wildcard).</div>
+    </Modal>
+  )
+}
+
+const STRATEGY_TONE: Record<RouteStrategy['kind'], StatusTone> = {
+  single: 'gray',
+  priority: 'blue',
+  weighted: 'green',
+  fallback: 'amber',
+}
+
+// @sk-task operator-console-v2-1#T3.3: strategy label + weighted distribution (AC-005, AC-006)
+function StrategyCell({ strategy, onEdit }: { strategy: RouteStrategy; onEdit: () => void }) {
+  return (
+    <div className="u-col u-gap4">
+      <div className="u-flex">
+        <StatusPill tone={STRATEGY_TONE[strategy.kind]}>{strategy.kind}</StatusPill>
+        {strategy.kind === 'weighted' && (
+          <button type="button" className="btn-link link-sm" onClick={onEdit}>Edit weights</button>
+        )}
+        {strategy.unknown && <span className="muted meta-sm">unknown provider</span>}
+      </div>
+      {strategy.kind === 'weighted' && (
+        <div className="u-wrap">
+          {strategy.shares.map((s) => (
+            <span key={s.provider} className="chip">{s.provider} {s.pct}%</span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// @sk-task operator-console-v2-1#T3.3: inline provider weight editor (AC-007)
+function WeightEditor({
+  route,
+  providers,
+  onClose,
+  onSave,
+}: {
+  route: RouteDto
+  providers: ProviderDto[]
+  onClose: () => void
+  onSave: (weights: Record<string, number>) => void
+}) {
+  const [weights, setWeights] = useState<Record<string, number>>(() =>
+    Object.fromEntries(route.providers.map((n) => [n, providers.find((p) => p.name === n)?.weight ?? 0])),
+  )
+  const set = (name: string, value: number) => setWeights((w) => ({ ...w, [name]: value }))
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Edit weights · ${route.model}`}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={() => onSave(weights)}>Save</Button>
+        </>
+      }
+    >
+      <p className="muted meta-sm">Weights apply among healthy providers in the same priority tier (0 = unweighted).</p>
+      {route.providers.map((name) => {
+        const p = providers.find((x) => x.name === name)
+        return (
+          <div key={name} className="form-field">
+            <label>{name}{p ? ` · priority ${p.priority ?? 0}` : ' · unknown provider'}</label>
+            <input
+              type="number"
+              min={0}
+              value={weights[name] ?? 0}
+              onChange={(e) => set(name, Number(e.target.value))}
+            />
+          </div>
+        )
+      })}
     </Modal>
   )
 }

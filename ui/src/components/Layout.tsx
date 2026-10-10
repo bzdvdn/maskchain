@@ -18,6 +18,7 @@ import {
   KeyRound,
   Wallet,
   Shield,
+  ShieldAlert,
   Plus,
   Download,
   ChevronDown,
@@ -29,6 +30,7 @@ import { getSystemStatus, logout } from '../api/admin'
 import { listTenants } from '../api/tenants'
 import { useTheme } from '../hooks/useTheme'
 import { useWorkspace } from '../hooks/useWorkspace'
+import { useAttentionState } from './AttentionProvider'
 import { CommandPalette } from './CommandPalette'
 
 interface Props {
@@ -108,6 +110,7 @@ export function Layout({ children, onLogout }: Props) {
   const [workspaces, setWorkspaces] = useState<{ slug: string; name: string }[]>([])
   const [workspace, applyWorkspace] = useWorkspace()
   const [health, setHealth] = useState<'ok' | 'degraded' | 'unknown'>('unknown')
+  const { criticalCount } = useAttentionState()
 
   // @sk-task ui-production-readiness#T4.2: Honest live indicator (AC-010)
   useEffect(() => {
@@ -224,6 +227,18 @@ export function Layout({ children, onLogout }: Props) {
               <span className={`live-dot ${health}`} />
               {health === 'ok' ? 'Healthy' : health === 'degraded' ? 'Degraded' : 'Unknown'}
             </span>
+            {criticalCount > 0 && (
+              <button
+                type="button"
+                className="attention-badge btn-link"
+                onClick={() => navigate('/')}
+                title={`${criticalCount} critical item${criticalCount > 1 ? 's' : ''} need attention`}
+                aria-label={`${criticalCount} critical items`}
+              >
+                <ShieldAlert size={14} strokeWidth={2.2} />
+                {criticalCount}
+              </button>
+            )}
             <button
               type="button"
               className="btn-link command-trigger"
