@@ -62,7 +62,7 @@ function seedEmpty() {
   mockSeries.mockResolvedValue({ series: [seriesPoint] })
   mockBudgets.mockResolvedValue({ data: [] })
   mockProviders.mockResolvedValue([])
-  mockKeys.mockResolvedValue({ data: [] })
+  mockKeys.mockResolvedValue({ data: [{ id: 'k1', tenant_id: 'default', label: 'prod', allowed_models: [], blocked_models: [], spent: 0, enabled: true, created_at: '', updated_at: '' }] as never })
   mockConversations.mockResolvedValue({ items: [], pagination: { page: 1, per_page: 20, total: 0 } as never })
 }
 
@@ -230,5 +230,20 @@ describe('Dashboard page shell', () => {
   it('renders the shared page header', async () => {
     renderDash()
     expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeTruthy()
+  })
+})
+
+// @sk-test hotfix-dashboard-firstrun: onboarding is a stable keyless-install signal
+describe('Dashboard first run', () => {
+  it('shows onboarding only when there are no virtual keys', async () => {
+    mockKeys.mockResolvedValue({ data: [] })
+    renderDash()
+    expect(await screen.findByText('Welcome to MaskChain')).toBeTruthy()
+  })
+
+  it('shows the dashboard when keys exist but there is no usage', async () => {
+    renderDash()
+    expect(await screen.findByText(/Traffic trend/)).toBeTruthy()
+    expect(screen.queryByText('Welcome to MaskChain')).toBeNull()
   })
 })

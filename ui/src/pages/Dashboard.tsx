@@ -12,6 +12,7 @@ import {
   type SeriesPoint,
 } from '../api/analytics'
 import { listConversations } from '../api/conversations'
+import { listKeys } from '../api/keys'
 import { useGatewayBase } from '../hooks/useGatewayBase'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
 import { SNOOZE_OPTIONS } from '../hooks/useAttention'
@@ -91,6 +92,8 @@ export function Dashboard() {
   const [activity, setActivity] = useState<{ id: string; tenant_id: string; model: string; status: string; created_at: string }[]>([])
   const [error, setError] = useState('')
   const [loaded, setLoaded] = useState(false)
+  // @sk-task hotfix-dashboard-firstrun: first-run is a stable install signal, not live metrics
+  const [hasKeys, setHasKeys] = useState<boolean | null>(null)
 
   // @sk-task operator-console-v2-1#T2.1: shared attention inbox (AC-001, AC-002)
   const { items: attention, reload: reloadAttention, ack, snooze } = useAttentionState()
@@ -154,6 +157,21 @@ export function Dashboard() {
   }, [loadKpis, loadActivity])
 
   useEffect(() => {
+    let active = true
+    listKeys()
+      .then((k) => {
+        if (active) setHasKeys((Array.isArray(k?.data) ? k.data.length : 0) > 0)
+      })
+      .catch(() => {
+        // Unknown install state: do not show the first-run onboarding.
+        if (active) setHasKeys(true)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
     loadSeries()
   }, [loadSeries, metric])
 
@@ -195,7 +213,9 @@ export function Dashboard() {
   const costDelta = deltaPct(totalCost, prevTotals.total_cost)
   const requestsDelta = deltaPct(totalRequests, prevRequests)
 
-  const firstRun = series.length === 0 && tokensTotal === 0 && attention.length === 0 && activity.length === 0 && !error
+  // First-run onboarding is a stable install signal (no virtual keys), not a
+  // live-metric state, so it never flickers with usage/polling.
+  const firstRun = hasKeys === false
 
   const scope = workspace ? ` · ${workspace}` : ''
   const rLabel = rangeLabel(range.mode, from, to)
@@ -212,7 +232,7 @@ export function Dashboard() {
   return (
     <div>
       <PageHeader title="Overview" subtitle="Gateway health, spend, and recent activity." />
-      {!loaded ? (
+      {!loaded || hasKeys === null ? (
         <AsyncSection loading error={null}>
           <div />
         </AsyncSection>
