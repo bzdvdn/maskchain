@@ -38,7 +38,7 @@ function renderLayout() {
 beforeEach(() => {
   vi.clearAllMocks()
   localStorage.clear()
-  vi.mocked(getSystemStatus).mockResolvedValue({ health: { status: 'healthy' } } as never)
+  vi.mocked(getSystemStatus).mockResolvedValue({ health: { status: 'ok' } } as never)
   vi.mocked(listProviders).mockResolvedValue([])
   vi.mocked(listKeys).mockResolvedValue({ data: [] })
   vi.mocked(listConversations).mockResolvedValue({ items: [] } as never)
@@ -78,5 +78,29 @@ describe('Layout responsive shell', () => {
     const btn = await screen.findByLabelText(/density/i)
     fireEvent.click(btn)
     await waitFor(() => expect(document.body.dataset.density).toBe('compact'))
+  })
+})
+
+// @sk-test ui-production-readiness#T4.2: live indicator maps backend ok/degraded (AC-010)
+describe('Layout live indicator', () => {
+  it('shows Healthy when the gateway reports ok', async () => {
+    vi.mocked(listBudgets).mockResolvedValue({ data: [] })
+    vi.mocked(getSystemStatus).mockResolvedValue({ health: { status: 'ok' } } as never)
+    renderLayout()
+    expect(await screen.findByText('Healthy')).toBeTruthy()
+  })
+
+  it('shows Degraded when the gateway reports degraded', async () => {
+    vi.mocked(listBudgets).mockResolvedValue({ data: [] })
+    vi.mocked(getSystemStatus).mockResolvedValue({ health: { status: 'degraded' } } as never)
+    renderLayout()
+    expect(await screen.findByText('Degraded')).toBeTruthy()
+  })
+
+  it('shows Down when the gateway reports down', async () => {
+    vi.mocked(listBudgets).mockResolvedValue({ data: [] })
+    vi.mocked(getSystemStatus).mockResolvedValue({ health: { status: 'down' } } as never)
+    renderLayout()
+    expect(await screen.findByText('Down')).toBeTruthy()
   })
 })

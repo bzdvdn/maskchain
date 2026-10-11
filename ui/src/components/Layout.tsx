@@ -114,7 +114,7 @@ export function Layout({ children, onLogout }: Props) {
   const [navOpen, setNavOpen] = useState(false)
   const [workspaces, setWorkspaces] = useState<{ slug: string; name: string }[]>([])
   const [workspace, applyWorkspace] = useWorkspace()
-  const [health, setHealth] = useState<'ok' | 'degraded' | 'unknown'>('unknown')
+  const [health, setHealth] = useState<'ok' | 'degraded' | 'down' | 'unknown'>('unknown')
   const { criticalCount } = useAttentionState()
 
   // @sk-task ui-production-readiness#T4.2: Honest live indicator (AC-010)
@@ -124,7 +124,8 @@ export function Layout({ children, onLogout }: Props) {
       try {
         const status = await getSystemStatus()
         if (!active) return
-        setHealth(status.health?.status === 'healthy' ? 'ok' : 'degraded')
+        const s = status.health?.status
+        setHealth(s === 'ok' ? 'ok' : s === 'down' ? 'down' : s === 'degraded' ? 'degraded' : 'unknown')
       } catch {
         if (active) setHealth('unknown')
       }
@@ -246,10 +247,10 @@ export function Layout({ children, onLogout }: Props) {
             </label>
             <span
               className={`live-pill ${health}`}
-              title={health === 'ok' ? 'Gateway healthy' : health === 'degraded' ? 'Gateway degraded' : 'Gateway status unknown'}
+              title={health === 'ok' ? 'Gateway healthy' : health === 'degraded' ? 'Gateway degraded' : health === 'down' ? 'Gateway down' : 'Gateway status unknown'}
             >
               <span className={`live-dot ${health}`} />
-              {health === 'ok' ? 'Healthy' : health === 'degraded' ? 'Degraded' : 'Unknown'}
+              {health === 'ok' ? 'Healthy' : health === 'degraded' ? 'Degraded' : health === 'down' ? 'Down' : 'Unknown'}
             </span>
             {criticalCount > 0 && (
               <button

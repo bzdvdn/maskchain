@@ -109,6 +109,10 @@
   background: var(--amber);
   animation: none;
 }
+.live-dot.down {
+  background: var(--red);
+  animation: none;
+}
 .live-dot.unknown {
   background: var(--text-muted);
   animation: none;
