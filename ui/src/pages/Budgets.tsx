@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useAsyncData } from '../hooks/useAsyncData'
-import { AsyncSection, Button, EmptyState, Modal, Pagination, ProgressBar, SortHeader, StatusPill, statusTone, TableSkeleton } from '../components/ui'
+import { AsyncSection, Button, EmptyState, Modal, PageHeader, Pagination, ProgressBar, SortHeader, StatusPill, statusTone, TableSkeleton } from '../components/ui'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { useToast } from '../components/Toast'
 import { useSort, sortRows } from '../hooks/useSort'
@@ -169,6 +169,7 @@ export function Budgets() {
 
   return (
     <div>
+      <PageHeader title="Budgets" subtitle="Caps and alerts per tenant, model, or key." />
       <div className="card">
         <div className="card-header-row">
           <h3>Budgets</h3>

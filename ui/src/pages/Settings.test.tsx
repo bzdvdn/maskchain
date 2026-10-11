@@ -67,3 +67,11 @@ describe('Settings live status', () => {
     expect(await screen.findByText(/Live config differs from the file/)).toBeTruthy()
   })
 })
+
+// @sk-test ui-visual-polish#T4.1: shared page shell (AC-004)
+describe('Settings page shell', () => {
+  it('renders the shared page header', async () => {
+    render(<Settings />)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Settings' })).toBeTruthy()
+  })
+})

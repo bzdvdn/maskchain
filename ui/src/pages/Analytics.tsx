@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Download } from 'lucide-react'
 import { TimeRangePicker, useRange, usePersistedRange } from '../components/TimeRangePicker'
 import { TimeSeriesChart } from '../components/TimeSeriesChart'
-import { AsyncSection, Spinner, StatusPill, type StatusTone } from '../components/ui'
+import { AsyncSection, PageHeader, Spinner, StatusPill, type StatusTone } from '../components/ui'
 import { fmtTokens, groupNum, money, rangeSpanMs } from '../utils/format'
 import {
   getAnalyticsCost,
@@ -127,6 +127,7 @@ export function Analytics() {
 
   return (
     <div>
+      <PageHeader title="Analytics" subtitle="Usage, cost, and latency across the gateway." />
       <div className="card tight u-mb16">
         <div className="toolbar u-mb0">
           <span className="toolbar-label">Range</span>

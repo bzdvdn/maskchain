@@ -160,3 +160,11 @@ describe('Providers weight', () => {
     expect(mockUpsert.mock.calls[0][0].weight).toBe(3)
   })
 })
+
+// @sk-test ui-visual-polish#T4.1: shared page shell (AC-004)
+describe('Providers page shell', () => {
+  it('renders the shared page header', async () => {
+    render(<Providers />)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Providers' })).toBeTruthy()
+  })
+})

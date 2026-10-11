@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useAsyncData } from '../hooks/useAsyncData'
-import { AsyncSection, Button, ChipInput, Modal, StatusPill, TableSkeleton, type StatusTone } from '../components/ui'
+import { AsyncSection, Button, ChipInput, Modal, PageHeader, StatusPill, TableSkeleton, type StatusTone } from '../components/ui'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { useToast } from '../components/Toast'
 import { relativeTime } from '../utils/format'
@@ -98,6 +98,7 @@ export function Providers() {
 
   return (
     <div>
+      <PageHeader title="Providers" subtitle="Upstream providers, base URLs, and credentials." />
       <div className="card">
         <div className="card-header-row">
           <h3>Providers</h3>

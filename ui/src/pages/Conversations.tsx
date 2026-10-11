@@ -6,7 +6,7 @@ import {
 } from '../api/conversations'
 import { listTenants } from '../api/tenants'
 import { decodeBase64Utf8 } from '../utils/base64'
-import { AsyncSection, Button, Pagination, SortHeader, StatusPill, TableSkeleton } from '../components/ui'
+import { AsyncSection, Button, PageHeader, Pagination, SortHeader, StatusPill, TableSkeleton } from '../components/ui'
 import { CopyButton } from '../components/CopyButton'
 import { useAsyncData } from '../hooks/useAsyncData'
 import { useSort, sortRows } from '../hooks/useSort'
@@ -134,7 +134,9 @@ export function Conversations() {
   )
 
   return (
-    <div className="card">
+    <div>
+      <PageHeader title="Conversations" subtitle="Recent request/response records." />
+      <div className="card">
       <h3>Conversations</h3>
       <div className="filter-bar" role="search">
         <label className="filter-field">
@@ -271,6 +273,7 @@ export function Conversations() {
           )}
         </div>
       )}
+      </div>
     </div>
   )
 }

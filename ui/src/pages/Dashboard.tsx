@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BarChart3, KeyRound, Shield, Users, Wallet, Zap, AlertTriangle, Plus } from 'lucide-react'
 import { TimeRangePicker, useRange, defaultRange, type RangeValue } from '../components/TimeRangePicker'
-import { AsyncSection, Segmented, StatusPill, Button } from '../components/ui'
+import { AsyncSection, PageHeader, Segmented, StatusPill, Button } from '../components/ui'
 import { TimeSeriesChart, type ChartMetric } from '../components/TimeSeriesChart'
 import { relativeTime, money, fmtTokens, groupNum, rangeLabel, rangeSpanMs } from '../utils/format'
 import {
@@ -211,6 +211,7 @@ export function Dashboard() {
 
   return (
     <div>
+      <PageHeader title="Overview" subtitle="Gateway health, spend, and recent activity." />
       {!loaded ? (
         <AsyncSection loading error={null}>
           <div />

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useAsyncData } from '../hooks/useAsyncData'
 import { useWorkspace } from '../hooks/useWorkspace'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
-import { AsyncSection, Button, Modal, StatusPill, type StatusTone } from '../components/ui'
+import { AsyncSection, Button, Modal, PageHeader, StatusPill, type StatusTone } from '../components/ui'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { useToast } from '../components/Toast'
 import { Link } from 'react-router-dom'
@@ -149,6 +149,7 @@ export function Routing() {
 
   return (
     <div>
+      <PageHeader title="Routing" subtitle="Tenant overrides, aliases, and route strategy." />
       <div className="card table-card">
         <div className="card-header-row">
           <h3>Tenant overrides</h3>

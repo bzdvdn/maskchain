@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
-import { StatusPill, type StatusTone } from '../components/ui'
+import { PageHeader, StatusPill, type StatusTone } from '../components/ui'
 import { getSystemStatus, type SystemStatus } from '../api/admin'
 
 function humanUptime(seconds: number): string {
@@ -44,6 +44,7 @@ export function Settings() {
 
   return (
     <div>
+      <PageHeader title="Settings" subtitle="Server status and runtime configuration." />
       <div className="card">
         <div className="card-header-row">
           <h3>Server</h3>

@@ -1,6 +1,10 @@
+import { PageHeader } from '../components/ui'
+
 export function Swagger() {
   return (
-    <div className="card" style={{ textAlign: 'center', padding: '60px 20px' }}>
+    <div>
+      <PageHeader title="Swagger / OpenAPI" subtitle="Interactive API reference." />
+      <div className="card" style={{ textAlign: 'center', padding: '60px 20px' }}>
       <div style={{ fontSize: 48, opacity: 0.3, marginBottom: 16 }}>⛁</div>
       <h3>Swagger / OpenAPI</h3>
       <p style={{ color: 'var(--color-text-muted)', marginTop: 8 }}>
@@ -14,6 +18,7 @@ export function Swagger() {
       <p style={{ marginTop: 8 }}>
         <code style={{ fontSize: 13 }}>GET /api/v1/openapi.yaml</code>
       </p>
+      </div>
     </div>
   )
 }

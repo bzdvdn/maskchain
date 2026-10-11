@@ -224,3 +224,11 @@ describe('Dashboard semantics and empty states', () => {
     expect(await screen.findByText('No activity in this period')).toBeTruthy()
   })
 })
+
+// @sk-test ui-visual-polish#T4.1: shared page shell (AC-004)
+describe('Dashboard page shell', () => {
+  it('renders the shared page header', async () => {
+    renderDash()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeTruthy()
+  })
+})

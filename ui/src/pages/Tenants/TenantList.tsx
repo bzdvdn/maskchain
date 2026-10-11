@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { listTenantsPage, type TenantListItem } from '../../api/tenants'
-import { AsyncSection, Pagination, Spinner, StatusPill, statusTone } from '../../components/ui'
+import { AsyncSection, PageHeader, Pagination, Spinner, StatusPill, statusTone } from '../../components/ui'
 import { useAsyncData } from '../../hooks/useAsyncData'
 
 const PER_PAGE = 20
@@ -25,12 +25,15 @@ export function TenantList() {
 
   return (
     <div>
-      <div className="card-header-row" style={{ marginBottom: 16 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>All Tenants</h2>
-        <Link to="/tenants/new" className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px' }}>
-          Create Tenant
-        </Link>
-      </div>
+      <PageHeader
+        title="Tenants"
+        subtitle="Workspaces, their policy packs, and routing scope."
+        actions={
+          <Link to="/tenants/new" className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px' }}>
+            Create Tenant
+          </Link>
+        }
+      />
 
       <div className="toolbar">
         <div className="search">

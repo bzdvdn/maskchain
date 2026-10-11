@@ -122,3 +122,11 @@ describe('Keys spend progress', () => {
     expect(container.querySelector('.mc-progress-fill.danger')).toBeTruthy()
   })
 })
+
+// @sk-test ui-visual-polish#T4.1: shared page shell (AC-004)
+describe('Keys page shell', () => {
+  it('renders the shared page header', async () => {
+    renderKeys()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Virtual keys' })).toBeTruthy()
+  })
+})

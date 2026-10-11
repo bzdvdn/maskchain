@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { Layout } from './Layout'
 import { AttentionProvider } from './AttentionProvider'
@@ -56,5 +56,27 @@ describe('Layout attention badge', () => {
     vi.mocked(listBudgets).mockResolvedValue({ data: [{ id: 'b1', tenant_id: 'fintech', spent: 500, hard_limit: 500, type: 'monthly' } as never] })
     renderLayout()
     expect(await screen.findByLabelText('1 critical items')).toBeTruthy()
+  })
+})
+
+// @sk-test ui-visual-polish#T2.3: responsive shell + density toggle (AC-001, AC-002, AC-005)
+describe('Layout responsive shell', () => {
+  it('toggles the nav drawer via the hamburger', async () => {
+    vi.mocked(listBudgets).mockResolvedValue({ data: [] })
+    renderLayout()
+    const btn = await screen.findByLabelText('Toggle navigation')
+    expect(btn.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(btn)
+    expect(btn.getAttribute('aria-expanded')).toBe('true')
+    expect(document.querySelector('.sidebar')?.className).toContain('drawer-open')
+    expect(document.querySelector('.sidebar-backdrop')).toBeTruthy()
+  })
+
+  it('toggles density onto the body', async () => {
+    vi.mocked(listBudgets).mockResolvedValue({ data: [] })
+    renderLayout()
+    const btn = await screen.findByLabelText(/density/i)
+    fireEvent.click(btn)
+    await waitFor(() => expect(document.body.dataset.density).toBe('compact'))
   })
 })

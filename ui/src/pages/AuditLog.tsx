@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useAsyncData } from '../hooks/useAsyncData'
 import { useUrlFilters } from '../hooks/useUrlFilters'
-import { AsyncSection, Card, SortHeader, TableSkeleton } from '../components/ui'
+import { AsyncSection, Card, PageHeader, SortHeader, TableSkeleton } from '../components/ui'
 import { useSort, sortRows } from '../hooks/useSort'
 import { CopyButton } from '../components/CopyButton'
 import { TimeRangePicker, type RangeValue } from '../components/TimeRangePicker'
@@ -49,6 +49,8 @@ export function AuditLog() {
   )
 
   return (
+    <div>
+    <PageHeader title="Audit log" subtitle="Admin actions on the control plane." />
     <Card>
       <div className="card-header-row">
         <h3>Events (last 100)</h3>
@@ -93,5 +95,6 @@ export function AuditLog() {
         </table>
       </div>
     </Card>
+    </div>
   )
 }

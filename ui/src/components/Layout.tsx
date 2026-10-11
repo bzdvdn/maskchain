@@ -25,10 +25,13 @@ import {
   FlaskConical,
   Server,
   Boxes,
+  Menu,
+  SlidersHorizontal,
 } from 'lucide-react'
 import { getSystemStatus, logout } from '../api/admin'
 import { listTenants } from '../api/tenants'
 import { useTheme } from '../hooks/useTheme'
+import { useDensity } from '../hooks/useDensity'
 import { useWorkspace } from '../hooks/useWorkspace'
 import { useAttentionState } from './AttentionProvider'
 import { CommandPalette } from './CommandPalette'
@@ -107,6 +110,8 @@ export function Layout({ children, onLogout }: Props) {
   const location = useLocation()
   const navigate = useNavigate()
   const { theme, toggleTheme } = useTheme()
+  const { density, toggleDensity } = useDensity()
+  const [navOpen, setNavOpen] = useState(false)
   const [workspaces, setWorkspaces] = useState<{ slug: string; name: string }[]>([])
   const [workspace, applyWorkspace] = useWorkspace()
   const [health, setHealth] = useState<'ok' | 'degraded' | 'unknown'>('unknown')
@@ -137,7 +142,11 @@ export function Layout({ children, onLogout }: Props) {
   useEffect(() => {
     const label = navSections.flatMap((s) => s.items).find((i) => i.to === location.pathname)?.label
     document.title = label ? `${label} — MaskChain` : 'MaskChain'
+    setNavOpen(false)
   }, [location.pathname])
+
+  const flatNav = navSections.flatMap((s) => s.items.map((i) => ({ ...i, section: s.label })))
+  const current = flatNav.find((i) => i.to === location.pathname)
 
   useEffect(() => {
     listTenants()
@@ -169,7 +178,7 @@ export function Layout({ children, onLogout }: Props) {
 
   return (
     <div className="app-layout">
-      <aside className="sidebar">
+      <aside className={`sidebar${navOpen ? ' drawer-open' : ''}`}>
         <Logo />
         <nav className="sidebar-nav">
           {navSections.map((section) => (
@@ -200,9 +209,24 @@ export function Layout({ children, onLogout }: Props) {
           </button>
         </div>
       </aside>
+      {navOpen && <div className="sidebar-backdrop" onClick={() => setNavOpen(false)} aria-hidden="true" />}
       <div className="main-area">
         <header className="app-header">
-          <h2>{navSections.flatMap((s) => s.items).find((i) => i.to === location.pathname)?.label ?? 'MaskChain'}</h2>
+          <div className="header-left">
+            <button
+              type="button"
+              className="hamburger"
+              aria-label="Toggle navigation"
+              aria-expanded={navOpen}
+              onClick={() => setNavOpen((v) => !v)}
+            >
+              <Menu size={16} />
+            </button>
+            <nav className="breadcrumbs" aria-label="Breadcrumb">
+              {current?.section && <><span className="crumb">{current.section}</span><span className="crumb-sep">/</span></>}
+              <span className="crumb-current">{current?.label ?? 'MaskChain'}</span>
+            </nav>
+          </div>
           <div className="header-right">
             {headerActions.map((a) => (
               <button key={a.label} type="button" className="header-action-btn btn btn-small" onClick={a.onClick}>
@@ -247,6 +271,15 @@ export function Layout({ children, onLogout }: Props) {
               title="Search (Ctrl+K)"
             >
               <Search size={14} />
+            </button>
+            <button
+              type="button"
+              className="btn-link"
+              onClick={toggleDensity}
+              aria-label={density === 'compact' ? 'Switch to comfortable density' : 'Switch to compact density'}
+              title={density === 'compact' ? 'Comfortable density' : 'Compact density'}
+            >
+              <SlidersHorizontal size={14} />
             </button>
             <button
               type="button"

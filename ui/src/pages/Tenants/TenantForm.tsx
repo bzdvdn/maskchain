@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useToast } from '../../components/Toast'
-import { Spinner } from '../../components/ui'
+import { PageHeader, Spinner } from '../../components/ui'
 import {
   createTenant,
   updateTenant,
@@ -172,7 +172,7 @@ export function TenantForm() {
 
   return (
     <div className="profile-form">
-      <h1>{isEdit ? 'Edit Tenant' : 'Create Tenant'}</h1>
+      <PageHeader title={isEdit ? 'Edit tenant' : 'Create tenant'} />
 
       {errors.server && <div className="error-banner">{errors.server}</div>}
 

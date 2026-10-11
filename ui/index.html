@@ -7,6 +7,19 @@
     <title>MaskChain — Admin</title>
   </head>
   <body>
+    <script>
+      // Pre-paint theme + density so the first render matches the stored choice (no flash).
+      (function () {
+        try {
+          var t = localStorage.getItem('maskchain-theme')
+          if (t !== 'light' && t !== 'dark') {
+            t = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+          }
+          document.body.dataset.theme = t
+          document.body.dataset.density = localStorage.getItem('maskchain-density') === 'compact' ? 'compact' : 'comfortable'
+        } catch (e) {}
+      })()
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAsyncData } from '../hooks/useAsyncData'
-import { AsyncSection, Button, Card, SortHeader, StatusPill, statusTone, TableSkeleton } from '../components/ui'
+import { AsyncSection, Button, Card, PageHeader, SortHeader, StatusPill, statusTone, TableSkeleton } from '../components/ui'
 import { useToast } from '../components/Toast'
 import { useSort, sortRows } from '../hooks/useSort'
 import { useWorkspace } from '../hooks/useWorkspace'
@@ -125,6 +125,8 @@ export function Sessions() {
   )
 
   return (
+    <div>
+    <PageHeader title="Sessions" subtitle="Active admin sessions." />
     <Card>
       <div className="card-header-row">
         <h3 style={{ margin: 0 }}>Active Sessions</h3>
@@ -231,5 +233,6 @@ export function Sessions() {
         onCancel={() => setConfirmTarget(null)}
       />
     </Card>
+    </div>
   )
 }

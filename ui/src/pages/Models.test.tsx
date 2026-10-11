@@ -72,3 +72,11 @@ describe('Models page', () => {
     expect(mockDeleteRoute).toHaveBeenCalledWith({ tenant: '*', model: 'gpt-4o', providers: [] })
   })
 })
+
+// @sk-test ui-visual-polish#T4.1: shared page shell (AC-004)
+describe('Models page shell', () => {
+  it('renders the shared page header', async () => {
+    render(<Models />)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Models' })).toBeTruthy()
+  })
+})

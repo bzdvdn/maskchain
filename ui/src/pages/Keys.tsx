@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Plus, Search, ClipboardCopy, KeyRound } from 'lucide-react'
-import { AsyncSection, Button, ChipInput, ChipTag, Modal, Pagination, ProgressBar, Segmented, StatusPill, Switch, TableSkeleton } from '../components/ui'
+import { AsyncSection, Button, ChipInput, ChipTag, Modal, PageHeader, Pagination, ProgressBar, Segmented, StatusPill, Switch, TableSkeleton } from '../components/ui'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { CopyButton } from '../components/CopyButton'
 import { useToast } from '../components/Toast'
@@ -169,6 +169,7 @@ export function Keys() {
 
   return (
     <div>
+      <PageHeader title="Virtual keys" subtitle="Issue and manage per-tenant keys, limits, and rotation." />
       <div className="card">
         <div className="card-header-row">
           <h3>Connect your app</h3>

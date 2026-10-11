@@ -55,3 +55,11 @@ describe('Analytics compare', () => {
     expect(await screen.findByText('$500.00')).toBeTruthy()
   })
 })
+
+// @sk-test ui-visual-polish#T4.1: shared page shell (AC-004)
+describe('Analytics page shell', () => {
+  it('renders the shared page header', async () => {
+    render(<Analytics />)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Analytics' })).toBeTruthy()
+  })
+})

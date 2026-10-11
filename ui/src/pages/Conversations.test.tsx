@@ -182,3 +182,11 @@ describe('decodeBase64Utf8', () => {
     expect(decodeBase64Utf8(b64(src))).toBe(src)
   })
 })
+
+// @sk-test ui-visual-polish#T4.2: legacy page migrated to shared shell (AC-004, AC-006)
+describe('Conversations page shell', () => {
+  it('renders the shared page header', async () => {
+    renderConversations()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Conversations' })).toBeTruthy()
+  })
+})

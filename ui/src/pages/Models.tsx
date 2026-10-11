@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useAsyncData } from '../hooks/useAsyncData'
-import { AsyncSection, Button, Modal, StatusPill } from '../components/ui'
+import { AsyncSection, Button, Modal, PageHeader, StatusPill } from '../components/ui'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { useToast } from '../components/Toast'
 import {
@@ -83,6 +83,7 @@ export function Models() {
 
   return (
     <div>
+      <PageHeader title="Models" subtitle="Registry of models and their per-1k pricing." />
       <div className="card table-card">
         <div className="card-header-row">
           <h3>Models</h3>
