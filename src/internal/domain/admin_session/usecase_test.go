@@ -123,6 +123,9 @@ type mockAdminSessionStore struct {
 	getByHashErr        error
 	deletedID           string
 	deleteExpiredResult int64
+	updatedID           string
+	updatedExpiry       time.Time
+	updateCalls         int
 }
 
 func (m *mockAdminSessionStore) Save(_ context.Context, s *AdminSession) error {
@@ -145,6 +148,79 @@ func (m *mockAdminSessionStore) Delete(_ context.Context, id string) error {
 	return nil
 }
 
+func (m *mockAdminSessionStore) UpdateExpiry(_ context.Context, id string, expiresAt time.Time) error {
+	m.updatedID = id
+	m.updatedExpiry = expiresAt
+	m.updateCalls++
+	return nil
+}
+
 func (m *mockAdminSessionStore) DeleteExpired(_ context.Context) (int64, error) {
 	return m.deleteExpiredResult, nil
+}
+
+// @sk-test admin-session-sliding#T3.1: active session is extended and persisted (AC-001)
+func TestAdminSessionUseCaseValidateRenews(t *testing.T) {
+	now := time.Now()
+	sess := &AdminSession{
+		ID:        "s1",
+		Username:  "admin",
+		TokenHash: "h",
+		CreatedAt: now.Add(-20 * time.Minute),
+		ExpiresAt: now.Add(10 * time.Minute),
+	}
+	store := &mockAdminSessionStore{getByHashResult: sess}
+	uc := NewAdminSessionUseCase(store)
+
+	got, err := uc.Validate(context.Background(), "tok")
+	if err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	if store.updateCalls != 1 {
+		t.Fatalf("expected 1 expiry update, got %d", store.updateCalls)
+	}
+	if store.updatedID != "s1" {
+		t.Errorf("expected update for s1, got %s", store.updatedID)
+	}
+	if !got.ExpiresAt.After(now.Add(25 * time.Minute)) {
+		t.Errorf("expected expiry extended to ~now+30m, got %s", got.ExpiresAt)
+	}
+}
+
+// @sk-test admin-session-sliding#T3.1: fresh session does not churn the store (AC-004)
+func TestAdminSessionUseCaseValidateFreshNoUpdate(t *testing.T) {
+	now := time.Now()
+	sess := &AdminSession{
+		ID:        "s2",
+		CreatedAt: now,
+		ExpiresAt: now.Add(30 * time.Minute),
+	}
+	store := &mockAdminSessionStore{getByHashResult: sess}
+	uc := NewAdminSessionUseCase(store)
+
+	if _, err := uc.Validate(context.Background(), "tok"); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	if store.updateCalls != 0 {
+		t.Errorf("expected no expiry update for a fresh session, got %d", store.updateCalls)
+	}
+}
+
+// @sk-test admin-session-sliding#T3.1: expired session is rejected and never extended (AC-003)
+func TestAdminSessionUseCaseValidateExpiredNoRenew(t *testing.T) {
+	now := time.Now()
+	sess := &AdminSession{
+		ID:        "s3",
+		CreatedAt: now.Add(-40 * time.Minute),
+		ExpiresAt: now.Add(-10 * time.Minute),
+	}
+	store := &mockAdminSessionStore{getByHashResult: sess}
+	uc := NewAdminSessionUseCase(store)
+
+	if _, err := uc.Validate(context.Background(), "tok"); err != ErrSessionExpired {
+		t.Fatalf("expected ErrSessionExpired, got %v", err)
+	}
+	if store.updateCalls != 0 {
+		t.Errorf("expected no update for an expired session, got %d", store.updateCalls)
+	}
 }

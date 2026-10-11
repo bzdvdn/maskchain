@@ -50,6 +50,16 @@ func (s *PostgresAdminSessionStore) GetByTokenHash(ctx context.Context, tokenHas
 	return &sess, nil
 }
 
+// @sk-task admin-session-sliding#T1.2: Persist a slid session expiry (AC-001)
+func (s *PostgresAdminSessionStore) UpdateExpiry(ctx context.Context, sessionID string, expiresAt time.Time) error {
+	q := getQuerier(ctx, s.pool)
+	_, err := q.Exec(ctx, `UPDATE admin_sessions SET expires_at = $2 WHERE id = $1`, sessionID, expiresAt)
+	if err != nil {
+		return fmt.Errorf("update admin session expiry: %w", err)
+	}
+	return nil
+}
+
 func (s *PostgresAdminSessionStore) Delete(ctx context.Context, sessionID string) error {
 	q := getQuerier(ctx, s.pool)
 	_, err := q.Exec(ctx, `DELETE FROM admin_sessions WHERE id = $1`, sessionID)

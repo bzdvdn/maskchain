@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -39,6 +40,31 @@ func AdminAuth(cfg *config.DebugConfig) gin.HandlerFunc {
 	}
 }
 
+// @sk-task admin-session-sliding#T2.2: Keep the session cookie alive on activity (AC-002, AC-005)
+//
+// refreshAdminCookie re-issues the admin_token cookie with the session's
+// remaining lifetime so the browser keeps it alive while the operator is
+// active. It is a no-op for an already-expired session.
+func refreshAdminCookie(c *gin.Context, rawToken string, expiresAt time.Time) {
+	remaining := int(time.Until(expiresAt).Seconds())
+	if remaining <= 0 {
+		return
+	}
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie("admin_token", rawToken, remaining, "/", "", secureRequest(c), true)
+}
+
+func secureRequest(c *gin.Context) bool {
+	if c.Request.TLS != nil {
+		return true
+	}
+	if proto := c.GetHeader("X-Forwarded-Proto"); proto != "" {
+		first := strings.TrimSpace(strings.Split(proto, ",")[0])
+		return strings.EqualFold(first, "https")
+	}
+	return false
+}
+
 // @sk-task admin-ui-design#T2.1: AdminSessionAuth middleware validates admin session cookie/header (AC-001, AC-004)
 //
 // AdminSessionAuth handles the operation.
@@ -66,6 +92,7 @@ func AdminSessionAuth(useCase *admin_session.AdminSessionUseCase) gin.HandlerFun
 			return
 		}
 
+		refreshAdminCookie(c, rawToken, sess.ExpiresAt)
 		c.Set("admin_username", sess.Username)
 		c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), AdminSessionKey, sess))
 		c.Next()
@@ -92,6 +119,7 @@ func AdminSessionOrTokenAuth(useCase *admin_session.AdminSessionUseCase, cfg *co
 			rawToken = strings.TrimPrefix(token, "Bearer ")
 			sess, err := useCase.Validate(c.Request.Context(), rawToken)
 			if err == nil {
+				refreshAdminCookie(c, rawToken, sess.ExpiresAt)
 				c.Set("admin_username", sess.Username)
 				c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), AdminSessionKey, sess))
 				c.Next()

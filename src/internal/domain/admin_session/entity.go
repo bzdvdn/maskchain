@@ -57,3 +57,24 @@ func NewAdminSessionID() string {
 	rand.Read(b)
 	return hex.EncodeToString(b)
 }
+
+// @sk-task admin-session-sliding#T1.1: Sliding renewal once past half-lifetime (AC-001, AC-003)
+//
+// Renew extends the session back to its original lifetime when less than half
+// of that lifetime remains. It returns false for expired sessions and for
+// sessions that are still fresh (more than half remaining), so the store is not
+// written on every request.
+func (s *AdminSession) Renew(now time.Time) bool {
+	lifetime := s.ExpiresAt.Sub(s.CreatedAt)
+	if lifetime <= 0 {
+		return false
+	}
+	if !now.Before(s.ExpiresAt) {
+		return false
+	}
+	if s.ExpiresAt.Sub(now) >= lifetime/2 {
+		return false
+	}
+	s.ExpiresAt = now.Add(lifetime)
+	return true
+}

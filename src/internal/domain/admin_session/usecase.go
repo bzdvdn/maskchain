@@ -28,14 +28,20 @@ func (uc *AdminSessionUseCase) Create(ctx context.Context, username string, ttl 
 	return session, token, nil
 }
 
+// @sk-task admin-session-sliding#T2.1: Validate renews an active session (AC-001, AC-004)
 func (uc *AdminSessionUseCase) Validate(ctx context.Context, rawToken string) (*AdminSession, error) {
 	tokenHash := HashToken(rawToken)
 	s, err := uc.store.GetByTokenHash(ctx, tokenHash)
 	if err != nil {
 		return nil, fmt.Errorf("validate admin session: %w", err)
 	}
-	if time.Now().After(s.ExpiresAt) {
+	now := time.Now()
+	if now.After(s.ExpiresAt) {
 		return nil, ErrSessionExpired
+	}
+	if s.Renew(now) {
+		// Best-effort: a failed persist must not break an otherwise valid request.
+		_ = uc.store.UpdateExpiry(ctx, s.ID, s.ExpiresAt)
 	}
 	return s, nil
 }

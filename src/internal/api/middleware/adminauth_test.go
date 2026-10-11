@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -140,4 +141,40 @@ func (m *mockAdminSessionStore) GetByTokenHash(_ context.Context, _ string) (*ad
 	return nil, admin_session.ErrSessionNotFound
 }
 func (m *mockAdminSessionStore) Delete(_ context.Context, _ string) error       { return nil }
+func (m *mockAdminSessionStore) UpdateExpiry(_ context.Context, _ string, _ time.Time) error {
+	return nil
+}
 func (m *mockAdminSessionStore) DeleteExpired(_ context.Context) (int64, error) { return 0, nil }
+
+// @sk-test admin-session-sliding#T3.2: a validated session refreshes the cookie (AC-002)
+func TestAdminSessionAuthRefreshesCookie(t *testing.T) {
+	w := adminSessionAuthRequest("valid-token", "", &mockAdminSessionStore{allow: true})
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	sc := w.Header().Get("Set-Cookie")
+	if !strings.Contains(sc, "admin_token=valid-token") {
+		t.Errorf("expected refreshed admin_token cookie, got %q", sc)
+	}
+}
+
+// @sk-test admin-session-sliding#T3.2: tenant-key fallback sets no session cookie (AC-005)
+func TestAdminSessionOrTokenAuthTenantKeyNoCookie(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	_, engine := gin.CreateTestContext(w)
+	uc := admin_session.NewAdminSessionUseCase(&mockAdminSessionStore{})
+	engine.Use(AdminSessionOrTokenAuth(uc, nil, func(context.Context, string) bool { return true }))
+	engine.GET("/api/v1/tenants", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	req, _ := http.NewRequest("GET", "/api/v1/tenants", nil)
+	req.Header.Set("Authorization", "Bearer tenant-key")
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if sc := w.Header().Get("Set-Cookie"); strings.Contains(sc, "admin_token") {
+		t.Errorf("expected no session cookie for tenant-key auth, got %q", sc)
+	}
+}
