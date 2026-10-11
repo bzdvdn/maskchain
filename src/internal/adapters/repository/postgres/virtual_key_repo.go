@@ -162,6 +162,18 @@ func (r *PostgresVirtualKeyRepository) Delete(ctx context.Context, id string) er
 	return nil
 }
 
+// @sk-task key-permanent-delete#T1.1: Hard-delete a virtual key (AC-001)
+func (r *PostgresVirtualKeyRepository) Purge(ctx context.Context, id string) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM virtual_keys WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("purge virtual key: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return virtualkey.ErrNotFound
+	}
+	return nil
+}
+
 // @sk-task 300-virtual-keys#T1.4: BackfillFromLegacy creates keys for raw tenant api keys (AC-004)
 func (r *PostgresVirtualKeyRepository) BackfillFromLegacy(ctx context.Context, legacy map[string][]string) (int, error) {
 	created := 0

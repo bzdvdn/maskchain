@@ -83,6 +83,11 @@ export function deleteKey(id: string): Promise<void> {
   return apiFetch(`${BASE}/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
+// @sk-task key-permanent-delete#T2.2: purgeKey permanently deletes a key (AC-005)
+export function purgeKey(id: string): Promise<void> {
+  return apiFetch(`${BASE}/${encodeURIComponent(id)}/purge`, { method: 'DELETE' })
+}
+
 // rotateKey issues a new secret for an existing key; the plaintext is returned once.
 export function rotateKey(id: string): Promise<CreateKeyResponse> {
   return apiFetch(`${BASE}/${encodeURIComponent(id)}/rotate`, { method: 'POST' })

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Plus, Search, ClipboardCopy, KeyRound, Eye } from 'lucide-react'
+import { Plus, Search, ClipboardCopy, KeyRound, Eye, Trash2 } from 'lucide-react'
 import { AsyncSection, Button, ChipInput, ChipTag, Modal, PageHeader, Pagination, ProgressBar, Segmented, StatusPill, Switch, TableSkeleton } from '../components/ui'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { CopyButton } from '../components/CopyButton'
 import { useToast } from '../components/Toast'
 import { relativeTime, money } from '../utils/format'
-import { createKey, deleteKey, listKeysPage, revealKey, rotateKey, updateKey, type CreateKeyRequest, type VirtualKeyDto } from '../api/keys'
+import { createKey, deleteKey, listKeysPage, purgeKey, revealKey, rotateKey, updateKey, type CreateKeyRequest, type VirtualKeyDto } from '../api/keys'
 import { ApiError } from '../api/client'
 import { listTenants } from '../api/tenants'
 import { useWorkspace } from '../hooks/useWorkspace'
@@ -49,6 +49,7 @@ export function Keys() {
   const drawerOpenedRef = useRef(false)
   const [createdKey, setCreatedKey] = useState<{ key: string; label: string } | null>(null)
   const [deleting, setDeleting] = useState<VirtualKeyDto | null>(null)
+  const [purging, setPurging] = useState<VirtualKeyDto | null>(null)
   const [rotating, setRotating] = useState<VirtualKeyDto | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -116,6 +117,22 @@ export function Keys() {
       await reload()
     } catch (e: any) {
       toast(e?.message ?? 'Revoke failed', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // @sk-task key-permanent-delete#T2.3: permanently delete a key (AC-005)
+  const doPurge = async () => {
+    if (!purging) return
+    setBusy(true)
+    try {
+      await purgeKey(purging.id)
+      toast(`Key "${purging.label || purging.id}" deleted`, 'success')
+      setPurging(null)
+      await reload()
+    } catch (e: any) {
+      toast(e?.message ?? 'Delete failed', 'error')
     } finally {
       setBusy(false)
     }
@@ -317,6 +334,9 @@ export function Keys() {
                           <Eye size={13} />
                         </button>
                         <Button size="small" variant="danger" onClick={() => setDeleting(k)}>Revoke</Button>
+                        <button className="icon-btn sm" title="Delete permanently" aria-label={`Delete key ${k.label || k.id}`} onClick={() => setPurging(k)}>
+                          <Trash2 size={13} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -375,6 +395,16 @@ export function Keys() {
         busy={busy}
         onConfirm={doDelete}
         onCancel={() => setDeleting(null)}
+      />
+
+      <ConfirmModal
+        open={!!purging}
+        title="Delete key permanently"
+        message={`Permanently delete "${purging?.label || purging?.id}"? This removes the key and its budgets and cannot be undone.`}
+        confirmLabel="Delete"
+        busy={busy}
+        onConfirm={doPurge}
+        onCancel={() => setPurging(null)}
       />
     </div>
   )

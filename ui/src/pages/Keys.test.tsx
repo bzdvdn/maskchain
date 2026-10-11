@@ -9,6 +9,7 @@ vi.mock('../api/keys', () => ({
   createKey: vi.fn(),
   updateKey: vi.fn(),
   deleteKey: vi.fn(),
+  purgeKey: vi.fn(),
   rotateKey: vi.fn(),
   revealKey: vi.fn(),
 }))
@@ -24,13 +25,14 @@ vi.mock('../components/Toast', async (importOriginal) => {
   }
 })
 
-import { listKeysPage, createKey, revealKey } from '../api/keys'
+import { listKeysPage, createKey, revealKey, purgeKey } from '../api/keys'
 import { listTenants } from '../api/tenants'
 import { ApiError } from '../api/client'
 
 const mockList = vi.mocked(listKeysPage)
 const mockCreate = vi.mocked(createKey)
 const mockReveal = vi.mocked(revealKey)
+const mockPurge = vi.mocked(purgeKey)
 const mockTenants = vi.mocked(listTenants)
 
 function keyDto(over: Record<string, unknown>) {
@@ -154,5 +156,19 @@ describe('Keys reveal secret', () => {
     fireEvent.click(await screen.findByLabelText('Reveal secret for web-chat'))
 
     expect(await screen.findByText('Rotate key')).toBeTruthy()
+  })
+})
+
+// @sk-test key-permanent-delete#T3.2: the Delete action purges after confirmation (AC-005)
+describe('Keys permanent delete', () => {
+  it('calls purgeKey after the operator confirms', async () => {
+    mockPurge.mockResolvedValue(undefined as never)
+    renderKeys()
+
+    fireEvent.click(await screen.findByLabelText('Delete key web-chat'))
+    expect(await screen.findByText('Delete key permanently')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    await waitFor(() => expect(mockPurge).toHaveBeenCalledWith('key-1'))
   })
 })

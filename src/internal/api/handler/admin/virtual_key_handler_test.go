@@ -106,6 +106,16 @@ func (f *fakeVirtualKeyRepo) BackfillFromLegacy(_ context.Context, _ map[string]
 	return 0, nil
 }
 
+func (f *fakeVirtualKeyRepo) Purge(_ context.Context, id string) error {
+	for i, k := range f.keys {
+		if k.ID == id {
+			f.keys = append(f.keys[:i], f.keys[i+1:]...)
+			return nil
+		}
+	}
+	return virtualkey.ErrNotFound
+}
+
 func adminFakeKey(id, hash, tenantID string) *virtualkey.VirtualKey {
 	now := time.Now().UTC()
 	return &virtualkey.VirtualKey{
@@ -495,5 +505,58 @@ func TestVirtualKeyHandlerRevealNilEncryptor(t *testing.T) {
 	router.ServeHTTP(rw, httptest.NewRequest(http.MethodGet, "/api/v1/keys/"+created.ID+"/secret", nil))
 	if rw.Code != http.StatusConflict {
 		t.Fatalf("expected 409 without encryptor, got %d: %s", rw.Code, rw.Body.String())
+	}
+}
+
+// @sk-test key-permanent-delete#T3.1: purge removes the key, invalidates the cache, audits (AC-001, AC-003, AC-004)
+func TestVirtualKeyHandlerPurge(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &fakeVirtualKeyRepo{keys: []*virtualkey.VirtualKey{adminFakeKey("k1", "hash-1", "acme")}}
+	audit := &recordAudit{}
+	logger := slog.New(slog.NewTextHandler(nil, nil))
+	cache := middleware.NewVirtualKeyCache(repo, logger)
+	if err := cache.Refresh(context.Background()); err != nil {
+		t.Fatalf("warmup: %v", err)
+	}
+
+	h := NewVirtualKeyHandler(repo, audit, cache)
+	router := gin.New()
+	router.DELETE("/api/v1/keys/:id/purge", h.Purge)
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/api/v1/keys/k1/purge", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if _, err := repo.GetById(context.Background(), "k1"); err == nil {
+		t.Error("expected the key to be removed from the repository")
+	}
+	if _, ok := cache.Get("hash-1"); ok {
+		t.Error("expected the purged key to be invalidated in the cache")
+	}
+
+	var audited bool
+	for _, e := range audit.events {
+		if e.Action == "purge_key" && e.Target == "k1" {
+			audited = true
+		}
+	}
+	if !audited {
+		t.Error("expected a purge_key audit entry")
+	}
+}
+
+// @sk-test key-permanent-delete#T3.1: purge of an unknown id returns 404 (AC-002)
+func TestVirtualKeyHandlerPurgeNotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &fakeVirtualKeyRepo{}
+	h := NewVirtualKeyHandler(repo, nil)
+	router := gin.New()
+	router.DELETE("/api/v1/keys/:id/purge", h.Purge)
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/api/v1/keys/missing/purge", nil))
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
 	}
 }

@@ -87,6 +87,16 @@ func (f *fakeVirtualKeyRepo) BackfillFromLegacy(_ context.Context, _ map[string]
 	return 0, nil
 }
 
+func (f *fakeVirtualKeyRepo) Purge(_ context.Context, id string) error {
+	for i, k := range f.keys {
+		if k.ID == id {
+			f.keys = append(f.keys[:i], f.keys[i+1:]...)
+			return nil
+		}
+	}
+	return virtualkey.ErrNotFound
+}
+
 // fakeKey builds a virtual key with the given hash for a tenant with slug.
 func fakeKey(hash, tenantID string, allowed, blocked []string) *virtualkey.VirtualKey {
 	now := time.Now().UTC()

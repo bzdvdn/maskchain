@@ -20,6 +20,8 @@ type VirtualKeyRepository interface {
 	Update(ctx context.Context, key *VirtualKey) error
 	// Delete soft-deletes a key (revokes it).
 	Delete(ctx context.Context, id string) error
+	// @sk-task key-permanent-delete#T1.1: Purge hard-deletes a key (AC-001)
+	Purge(ctx context.Context, id string) error
 	// BackfillFromLegacy creates virtual keys for raw tenant keys that have no
 	// matching virtual key yet. It is idempotent.
 	BackfillFromLegacy(ctx context.Context, legacy map[string][]string) (int, error)

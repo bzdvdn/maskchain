@@ -292,6 +292,25 @@ func (h *VirtualKeyHandler) Delete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// @sk-task key-permanent-delete#T2.1: Purge permanently deletes a key (AC-001, AC-002, AC-003, AC-004)
+//
+// Purge hard-deletes the key row (its budgets cascade). Unlike Delete, the key
+// cannot be recovered; the auth cache is invalidated and the action is audited.
+func (h *VirtualKeyHandler) Purge(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.repo.Purge(c.Request.Context(), id); err != nil {
+		if errors.Is(err, virtualkey.ErrNotFound) {
+			middleware.AbortWithError(c, http.StatusNotFound, middleware.ErrorCodeNotFound, "key not found")
+			return
+		}
+		middleware.AbortWithError(c, http.StatusInternalServerError, middleware.ErrorCodeInternal, "failed to delete key")
+		return
+	}
+	h.invalidateKey(id)
+	h.writeKeyAudit(c, "purge_key", id, nil)
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 // @sk-task key-secret-reveal#T2.1: Reveal returns the stored plaintext secret to an admin (AC-001, AC-004, AC-005)
 // @sk-task key-secret-reveal#T2.2: Reveal is audit-logged (AC-006)
 func (h *VirtualKeyHandler) Reveal(c *gin.Context) {

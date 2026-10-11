@@ -252,6 +252,8 @@ func (s *AdminServer) RegisterVirtualKeyHandler(h *admin.VirtualKeyHandler) {
 	group.GET("/:id", h.Get)
 	group.PATCH("/:id", h.Update)
 	group.DELETE("/:id", h.Delete)
+	// @sk-task key-permanent-delete#T2.1: Permanently delete a key (AC-001)
+	group.DELETE("/:id/purge", h.Purge)
 	group.POST("/:id/rotate", h.Rotate)
 	// @sk-task key-secret-reveal#T2.1: Reveal a stored key secret (AC-001)
 	group.GET("/:id/secret", h.Reveal)

@@ -56,6 +56,7 @@ func (f *selfFakeRepo) ListPaged(_ context.Context, limit, offset int, _ string)
 func (f *selfFakeRepo) Create(_ context.Context, _ *virtualkey.VirtualKey) error { return nil }
 func (f *selfFakeRepo) Update(_ context.Context, _ *virtualkey.VirtualKey) error { return nil }
 func (f *selfFakeRepo) Delete(_ context.Context, _ string) error                 { return nil }
+func (f *selfFakeRepo) Purge(_ context.Context, _ string) error                  { return nil }
 func (f *selfFakeRepo) BackfillFromLegacy(_ context.Context, _ map[string][]string) (int, error) {
 	return 0, nil
 }

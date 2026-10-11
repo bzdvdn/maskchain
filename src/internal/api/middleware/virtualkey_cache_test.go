@@ -84,6 +84,10 @@ func (c *countingKeyRepo) Delete(ctx context.Context, id string) error {
 	return c.repo.Delete(ctx, id)
 }
 
+func (c *countingKeyRepo) Purge(ctx context.Context, id string) error {
+	return c.repo.Purge(ctx, id)
+}
+
 func (c *countingKeyRepo) BackfillFromLegacy(ctx context.Context, m map[string][]string) (int, error) {
 	return c.repo.BackfillFromLegacy(ctx, m)
 }

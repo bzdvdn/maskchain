@@ -101,6 +101,16 @@ func (r *integrationVirtualKeyRepo) BackfillFromLegacy(_ context.Context, _ map[
 	return 0, nil
 }
 
+func (r *integrationVirtualKeyRepo) Purge(_ context.Context, id string) error {
+	for i, item := range r.keys {
+		if item.ID == id {
+			r.keys = append(r.keys[:i], r.keys[i+1:]...)
+			return nil
+		}
+	}
+	return virtualkey.ErrNotFound
+}
+
 type integrationMockScanner struct {
 	resp *appshield.ScanResponse
 	err  error
