@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"github.com/bzdvdn/maskchain/src/internal/api/dto"
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/domain/virtualkey"
+	infraCrypto "github.com/bzdvdn/maskchain/src/internal/infra/crypto"
 )
 
 // @sk-task 300-virtual-keys#T3.1: VirtualKeyHandler manages virtual keys via admin API (AC-001)
@@ -19,17 +21,53 @@ type VirtualKeyHandler struct {
 	repo     virtualkey.VirtualKeyRepository
 	auditLog AuditLogger
 	cache    *middleware.VirtualKeyCache
+	enc      *infraCrypto.Encryptor
 }
 
 // NewVirtualKeyHandler builds a handler. A non-nil cache is invalidated after
 // create/update/delete so gateway auth does not serve stale keys (revoked keys
 // stop authenticating immediately in-process).
 func NewVirtualKeyHandler(repo virtualkey.VirtualKeyRepository, auditLog AuditLogger, cache ...*middleware.VirtualKeyCache) *VirtualKeyHandler {
+	return NewVirtualKeyHandlerWithEncryptor(repo, auditLog, nil, cache...)
+}
+
+// @sk-task key-secret-reveal#T2.1: NewVirtualKeyHandlerWithEncryptor enables reveal (AC-001, AC-005)
+//
+// NewVirtualKeyHandlerWithEncryptor builds a handler that can store and reveal
+// key secrets. A nil encryptor leaves secrets unrecoverable (reveal returns
+// SECRET_UNAVAILABLE) and never stores plaintext.
+func NewVirtualKeyHandlerWithEncryptor(repo virtualkey.VirtualKeyRepository, auditLog AuditLogger, enc *infraCrypto.Encryptor, cache ...*middleware.VirtualKeyCache) *VirtualKeyHandler {
 	var vkCache *middleware.VirtualKeyCache
 	if len(cache) > 0 {
 		vkCache = cache[0]
 	}
-	return &VirtualKeyHandler{repo: repo, auditLog: auditLog, cache: vkCache}
+	return &VirtualKeyHandler{repo: repo, auditLog: auditLog, cache: vkCache, enc: enc}
+}
+
+func (h *VirtualKeyHandler) sealSecret(raw string) string {
+	if h.enc == nil || raw == "" {
+		return ""
+	}
+	sealed, err := h.enc.Encrypt([]byte(raw))
+	if err != nil {
+		return ""
+	}
+	return base64.StdEncoding.EncodeToString(sealed)
+}
+
+func (h *VirtualKeyHandler) openSecret(encoded string) (string, bool) {
+	if h.enc == nil || encoded == "" {
+		return "", false
+	}
+	raw, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return "", false
+	}
+	plain, err := h.enc.Decrypt(raw)
+	if err != nil {
+		return "", false
+	}
+	return string(plain), true
 }
 
 // @sk-task 300-virtual-keys#T3.1: Create generates a key and returns plaintext once (AC-001)
@@ -61,6 +99,7 @@ func (h *VirtualKeyHandler) Create(c *gin.Context) {
 		ID:            id,
 		TenantID:      req.TenantID,
 		KeyHash:       virtualkey.KeyHash(raw),
+		SecretEncrypted: h.sealSecret(raw),
 		Label:         req.Label,
 		AllowedModels: req.AllowedModels,
 		BlockedModels: req.BlockedModels,
@@ -216,6 +255,7 @@ func (h *VirtualKeyHandler) Rotate(c *gin.Context) {
 	}
 
 	key.KeyHash = virtualkey.KeyHash(raw)
+	key.SecretEncrypted = h.sealSecret(raw)
 	key.UpdatedAt = time.Now().UTC()
 
 	if err := h.repo.Update(c.Request.Context(), key); err != nil {
@@ -250,6 +290,30 @@ func (h *VirtualKeyHandler) Delete(c *gin.Context) {
 	h.invalidateKey(c.Param("id"))
 	h.writeKeyAudit(c, "revoke_key", c.Param("id"), nil)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// @sk-task key-secret-reveal#T2.1: Reveal returns the stored plaintext secret to an admin (AC-001, AC-004, AC-005)
+// @sk-task key-secret-reveal#T2.2: Reveal is audit-logged (AC-006)
+func (h *VirtualKeyHandler) Reveal(c *gin.Context) {
+	key, err := h.repo.GetById(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		if errors.Is(err, virtualkey.ErrNotFound) {
+			middleware.AbortWithError(c, http.StatusNotFound, middleware.ErrorCodeNotFound, "key not found")
+			return
+		}
+		middleware.AbortWithError(c, http.StatusInternalServerError, middleware.ErrorCodeInternal, "failed to get key")
+		return
+	}
+
+	secret, ok := h.openSecret(key.SecretEncrypted)
+	if !ok {
+		middleware.AbortWithError(c, http.StatusConflict, middleware.ErrorCodeSecretUnavailable,
+			"secret is not available for this key; rotate it to store a retrievable secret")
+		return
+	}
+
+	h.writeKeyAudit(c, "reveal_key_secret", key.ID, map[string]any{"tenant_id": key.TenantID, "label": key.Label})
+	c.JSON(http.StatusOK, dto.RevealVirtualKeySecretResponse{Key: secret})
 }
 
 func (h *VirtualKeyHandler) invalidateKey(keyID string) {

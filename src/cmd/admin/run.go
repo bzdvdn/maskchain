@@ -110,6 +110,13 @@ func run() {
 		pgTenantRepo := postgres.NewPostgresTenantRepo(b.PGPool, txMgr)
 		tenantHandler := admin.NewTenantHandler(pgTenantRepo, dictCache, auditAdapter)
 		vkRepo := postgres.NewPostgresVirtualKeyRepository(b.PGPool)
+		// @sk-task key-secret-reveal#T2.3: enable reveal when at-rest encryption is configured (AC-001, AC-005)
+		keyEnc, keyErr := crypto.New(os.Getenv(config.KeysKeyEnvVar))
+		if keyErr != nil {
+			logger.Warn("at-rest encryption key unavailable — key secrets will not be revealable",
+				slog.String("env", config.KeysKeyEnvVar), slog.String("error", keyErr.Error()))
+			keyEnc = nil
+		}
 		tenantMw := middleware.AdminSessionOrTokenAuth(adminSessionUC, cfg.Debug, func(ctx context.Context, apiKey string) bool {
 			if apiKey == "" {
 				return false
@@ -125,7 +132,7 @@ func run() {
 			srv.RegisterComplianceHandler(complianceHandler, tenantMw)
 		}
 
-		vkHandler := admin.NewVirtualKeyHandler(vkRepo, auditAdapter)
+		vkHandler := admin.NewVirtualKeyHandlerWithEncryptor(vkRepo, auditAdapter, keyEnc)
 		srv.RegisterVirtualKeyHandler(vkHandler)
 
 		// @sk-task shield-detector-catalog#T2.2: expose the shield catalog (AC-001, AC-002)

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Plus, Search, ClipboardCopy, KeyRound } from 'lucide-react'
+import { Plus, Search, ClipboardCopy, KeyRound, Eye } from 'lucide-react'
 import { AsyncSection, Button, ChipInput, ChipTag, Modal, PageHeader, Pagination, ProgressBar, Segmented, StatusPill, Switch, TableSkeleton } from '../components/ui'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { CopyButton } from '../components/CopyButton'
 import { useToast } from '../components/Toast'
 import { relativeTime, money } from '../utils/format'
-import { createKey, deleteKey, listKeysPage, rotateKey, updateKey, type CreateKeyRequest, type VirtualKeyDto } from '../api/keys'
+import { createKey, deleteKey, listKeysPage, revealKey, rotateKey, updateKey, type CreateKeyRequest, type VirtualKeyDto } from '../api/keys'
+import { ApiError } from '../api/client'
 import { listTenants } from '../api/tenants'
 import { useWorkspace } from '../hooks/useWorkspace'
 import { useUrlFilters } from '../hooks/useUrlFilters'
@@ -143,6 +144,21 @@ export function Keys() {
       await reload()
     } catch (e: any) {
       toast(e?.message ?? 'Create failed', 'error')
+    }
+  }
+
+  // @sk-task key-secret-reveal#T3.2: reveal a stored secret, fall back to rotate (AC-001, AC-004)
+  const doReveal = async (k: VirtualKeyDto) => {
+    try {
+      const resp = await revealKey(k.id)
+      setCreatedKey({ key: resp.key, label: k.label || k.id })
+    } catch (e: any) {
+      if (e instanceof ApiError && e.status === 409) {
+        toast('Secret is not stored for this key — rotate it to issue a retrievable one.', 'error')
+        setRotating(k)
+      } else {
+        toast(e?.message ?? 'Reveal failed', 'error')
+      }
     }
   }
 
@@ -297,6 +313,9 @@ export function Keys() {
                           <ClipboardCopy size={13} />
                         </button>
                         <Button size="small" onClick={() => setRotating(k)}>Rotate</Button>
+                        <button className="icon-btn sm" title="Reveal secret" aria-label={`Reveal secret for ${k.label || k.id}`} onClick={() => doReveal(k)}>
+                          <Eye size={13} />
+                        </button>
                         <Button size="small" variant="danger" onClick={() => setDeleting(k)}>Revoke</Button>
                       </div>
                     </td>

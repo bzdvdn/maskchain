@@ -22,6 +22,8 @@ const (
 	ErrorCodeTokenBudgetExceeded ErrorCode = "TOKEN_BUDGET_EXCEEDED"
 	// @sk-task 301-budget-enforcement#T2.1: Add budget exceeded error code (AC-002)
 	ErrorCodeBudgetExceeded ErrorCode = "BUDGET_EXCEEDED"
+	// @sk-task key-secret-reveal#T2.1: Add secret-unavailable error code (AC-004, AC-005)
+	ErrorCodeSecretUnavailable ErrorCode = "SECRET_UNAVAILABLE"
 )
 
 // @sk-task 40-profiles-api#T1.1: Implement error middleware and helpers (AC-011)

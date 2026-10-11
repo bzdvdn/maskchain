@@ -26,7 +26,7 @@ func NewPostgresVirtualKeyRepository(pool *pgxpool.Pool) *PostgresVirtualKeyRepo
 }
 
 const virtualKeySelect = `
-	SELECT id, key_hash, tenant_id, label, allowed_models, blocked_models,
+	SELECT id, key_hash, secret_encrypted, tenant_id, label, allowed_models, blocked_models,
 	       budget_cap, spent, expires_at, metadata, enabled, created_at, updated_at
 	FROM virtual_keys`
 
@@ -105,10 +105,10 @@ func (r *PostgresVirtualKeyRepository) Create(ctx context.Context, key *virtualk
 	}
 
 	_, err = r.pool.Exec(ctx, `
-		INSERT INTO virtual_keys (id, key_hash, tenant_id, label, allowed_models, blocked_models,
+		INSERT INTO virtual_keys (id, key_hash, secret_encrypted, tenant_id, label, allowed_models, blocked_models,
 		                          budget_cap, spent, expires_at, metadata, enabled, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-		key.ID, key.KeyHash, key.TenantID, key.Label, allowed, blocked,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+		key.ID, key.KeyHash, key.SecretEncrypted, key.TenantID, key.Label, allowed, blocked,
 		key.BudgetCap, key.Spent, key.ExpiresAt, meta, key.Enabled,
 		key.CreatedAt, key.UpdatedAt)
 	if err != nil {
@@ -135,10 +135,11 @@ func (r *PostgresVirtualKeyRepository) Update(ctx context.Context, key *virtualk
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE virtual_keys
 		SET label = $2, allowed_models = $3, blocked_models = $4, budget_cap = $5,
-		    spent = $6, expires_at = $7, metadata = $8, enabled = $9, updated_at = $10
+		    spent = $6, expires_at = $7, metadata = $8, enabled = $9, updated_at = $10,
+		    key_hash = $11, secret_encrypted = $12
 		WHERE id = $1`,
 		key.ID, key.Label, allowed, blocked, key.BudgetCap, key.Spent,
-		key.ExpiresAt, meta, key.Enabled, time.Now().UTC())
+		key.ExpiresAt, meta, key.Enabled, time.Now().UTC(), key.KeyHash, key.SecretEncrypted)
 	if err != nil {
 		return fmt.Errorf("update virtual key: %w", err)
 	}
@@ -230,7 +231,7 @@ func collectVirtualKeys(rows pgx.Rows) ([]*virtualkey.VirtualKey, error) {
 
 func scanVirtualKey(row interface{ Scan(dest ...any) error }) (*virtualkey.VirtualKey, error) {
 	var (
-		id, hash, tenantID, label string
+		id, hash, secretEncrypted, tenantID, label string
 		allowedRaw, blockedRaw    []byte
 		budgetCap, spent          *float64
 		expiresAt                 *time.Time
@@ -238,7 +239,7 @@ func scanVirtualKey(row interface{ Scan(dest ...any) error }) (*virtualkey.Virtu
 		enabled                   bool
 		createdAt, updatedAt      time.Time
 	)
-	err := row.Scan(&id, &hash, &tenantID, &label, &allowedRaw, &blockedRaw,
+	err := row.Scan(&id, &hash, &secretEncrypted, &tenantID, &label, &allowedRaw, &blockedRaw,
 		&budgetCap, &spent, &expiresAt, &metaRaw, &enabled, &createdAt, &updatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -265,6 +266,7 @@ func scanVirtualKey(row interface{ Scan(dest ...any) error }) (*virtualkey.Virtu
 	key := &virtualkey.VirtualKey{
 		ID:            id,
 		KeyHash:       hash,
+		SecretEncrypted: secretEncrypted,
 		TenantID:      tenantID,
 		Label:         label,
 		AllowedModels: allowed,

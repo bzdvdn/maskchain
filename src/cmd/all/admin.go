@@ -148,6 +148,13 @@ func buildAdminServer(
 		dictCache := dictionaryrepo.NewValkeyDictionaryCache(vkClient, 5*time.Minute)
 		tenantHandler := adminhandler.NewTenantHandler(pgTenantRepo, dictCache, auditAdapter)
 		vkRepo := postgres.NewPostgresVirtualKeyRepository(pgPool)
+		// @sk-task key-secret-reveal#T2.3: enable reveal when at-rest encryption is configured (AC-001, AC-005)
+		keyEnc, keyErr := crypto.New(os.Getenv(config.KeysKeyEnvVar))
+		if keyErr != nil {
+			logger.Warn("at-rest encryption key unavailable — key secrets will not be revealable",
+				slog.String("env", config.KeysKeyEnvVar), slog.String("error", keyErr.Error()))
+			keyEnc = nil
+		}
 		tenantMw := middleware.AdminSessionOrTokenAuth(adminSessionUC, cfg.Debug, func(ctx context.Context, apiKey string) bool {
 			if apiKey == "" {
 				return false
@@ -164,7 +171,7 @@ func buildAdminServer(
 		}
 
 		// @sk-task 403-key-at-rest-encryption#T3.3: Wire auth cache into key handler for invalidation (AC-005)
-		vkHandler := adminhandler.NewVirtualKeyHandler(vkRepo, auditAdapter, vkCache)
+		vkHandler := adminhandler.NewVirtualKeyHandlerWithEncryptor(vkRepo, auditAdapter, keyEnc, vkCache)
 		srv.RegisterVirtualKeyHandler(vkHandler)
 
 		// @sk-task shield-detector-catalog#T2.2: expose the shield catalog (AC-001, AC-002)

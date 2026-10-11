@@ -48,6 +48,12 @@ type CreateVirtualKeyResponse struct {
 	Key string `json:"key"`
 }
 
+// @sk-task key-secret-reveal#T2.1: RevealVirtualKeySecretResponse returns a decrypted secret (AC-001)
+type RevealVirtualKeySecretResponse struct {
+	// Key is the plaintext secret, returned only to an authenticated admin.
+	Key string `json:"key"`
+}
+
 func VirtualKeyToResponse(k *virtualkey.VirtualKey) VirtualKeyResponse {
 	return VirtualKeyResponse{
 		ID:            k.ID,

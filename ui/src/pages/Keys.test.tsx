@@ -9,6 +9,8 @@ vi.mock('../api/keys', () => ({
   createKey: vi.fn(),
   updateKey: vi.fn(),
   deleteKey: vi.fn(),
+  rotateKey: vi.fn(),
+  revealKey: vi.fn(),
 }))
 vi.mock('../api/tenants', () => ({
   listTenants: vi.fn(),
@@ -22,11 +24,13 @@ vi.mock('../components/Toast', async (importOriginal) => {
   }
 })
 
-import { listKeysPage, createKey } from '../api/keys'
+import { listKeysPage, createKey, revealKey } from '../api/keys'
 import { listTenants } from '../api/tenants'
+import { ApiError } from '../api/client'
 
 const mockList = vi.mocked(listKeysPage)
 const mockCreate = vi.mocked(createKey)
+const mockReveal = vi.mocked(revealKey)
 const mockTenants = vi.mocked(listTenants)
 
 function keyDto(over: Record<string, unknown>) {
@@ -128,5 +132,27 @@ describe('Keys page shell', () => {
   it('renders the shared page header', async () => {
     renderKeys()
     expect(await screen.findByRole('heading', { level: 1, name: 'Virtual keys' })).toBeTruthy()
+  })
+})
+
+// @sk-test key-secret-reveal#T4.3: reveal a stored secret, fall back on 409 (AC-001, AC-004)
+describe('Keys reveal secret', () => {
+  it('shows the revealed secret', async () => {
+    mockReveal.mockResolvedValue({ key: 'sk-mc_revealed-secret' })
+    renderKeys()
+
+    fireEvent.click(await screen.findByLabelText('Reveal secret for web-chat'))
+
+    expect(await screen.findByText('sk-mc_revealed-secret')).toBeTruthy()
+    expect(mockReveal).toHaveBeenCalledWith('key-1')
+  })
+
+  it('offers rotate when the secret is unavailable', async () => {
+    mockReveal.mockRejectedValue(new ApiError(409, { error: { code: 'SECRET_UNAVAILABLE' } }))
+    renderKeys()
+
+    fireEvent.click(await screen.findByLabelText('Reveal secret for web-chat'))
+
+    expect(await screen.findByText('Rotate key')).toBeTruthy()
   })
 })

@@ -3,6 +3,7 @@ package admin
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/bzdvdn/maskchain/src/internal/api/middleware"
 	"github.com/bzdvdn/maskchain/src/internal/domain/virtualkey"
+	infraCrypto "github.com/bzdvdn/maskchain/src/internal/infra/crypto"
 )
 
 // fakeVirtualKeyRepo is the admin-package in-memory virtual key repository used
@@ -314,5 +316,184 @@ func TestVirtualKeyHandlerWithoutCache(t *testing.T) {
 	}
 	if len(repo.keys) != 1 {
 		t.Errorf("expected 1 key created, got %d", len(repo.keys))
+	}
+}
+
+type recordAudit struct{ events []*AuditEvent }
+
+func (r *recordAudit) Write(_ context.Context, e *AuditEvent) error {
+	r.events = append(r.events, e)
+	return nil
+}
+
+func testEncryptor(t *testing.T) *infraCrypto.Encryptor {
+	t.Helper()
+	enc, err := infraCrypto.New(base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")))
+	if err != nil {
+		t.Fatalf("build encryptor: %v", err)
+	}
+	return enc
+}
+
+// @sk-test key-secret-reveal#T4.1: create + reveal returns the same secret and audits (AC-001, AC-006)
+func TestVirtualKeyHandlerRevealStoredSecret(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &fakeVirtualKeyRepo{}
+	audit := &recordAudit{}
+	h := NewVirtualKeyHandlerWithEncryptor(repo, audit, testEncryptor(t))
+	router := gin.New()
+	router.POST("/api/v1/keys", h.Create)
+	router.GET("/api/v1/keys/:id/secret", h.Reveal)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/keys", bytes.NewBufferString(`{"tenant_id":"acme","label":"prod"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var created struct {
+		ID  string `json:"id"`
+		Key string `json:"key"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create: %v", err)
+	}
+	if created.Key == "" {
+		t.Fatal("expected a plaintext secret at creation")
+	}
+
+	stored, err := repo.GetById(context.Background(), created.ID)
+	if err != nil {
+		t.Fatalf("get key: %v", err)
+	}
+	if stored.SecretEncrypted == "" || stored.SecretEncrypted == created.Key {
+		t.Fatalf("expected stored secret to be ciphertext, got %q", stored.SecretEncrypted)
+	}
+
+	w2 := httptest.NewRecorder()
+	router.ServeHTTP(w2, httptest.NewRequest(http.MethodGet, "/api/v1/keys/"+created.ID+"/secret", nil))
+	if w2.Code != http.StatusOK {
+		t.Fatalf("expected 200 reveal, got %d: %s", w2.Code, w2.Body.String())
+	}
+	var revealed struct {
+		Key string `json:"key"`
+	}
+	if err := json.Unmarshal(w2.Body.Bytes(), &revealed); err != nil {
+		t.Fatalf("decode reveal: %v", err)
+	}
+	if revealed.Key != created.Key {
+		t.Errorf("expected revealed secret %q, got %q", created.Key, revealed.Key)
+	}
+
+	var audited bool
+	for _, e := range audit.events {
+		if e.Action == "reveal_key_secret" && e.Target == created.ID {
+			audited = true
+		}
+	}
+	if !audited {
+		t.Error("expected a reveal_key_secret audit entry")
+	}
+}
+
+// @sk-test key-secret-reveal#T4.1: rotate refreshes the revealable secret (AC-003)
+func TestVirtualKeyHandlerRevealAfterRotate(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &fakeVirtualKeyRepo{}
+	h := NewVirtualKeyHandlerWithEncryptor(repo, nil, testEncryptor(t))
+	router := gin.New()
+	router.POST("/api/v1/keys", h.Create)
+	router.POST("/api/v1/keys/:id/rotate", h.Rotate)
+	router.GET("/api/v1/keys/:id/secret", h.Reveal)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/keys", bytes.NewBufferString(`{"tenant_id":"acme"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	var created struct {
+		ID  string `json:"id"`
+		Key string `json:"key"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &created)
+
+	rw := httptest.NewRecorder()
+	router.ServeHTTP(rw, httptest.NewRequest(http.MethodPost, "/api/v1/keys/"+created.ID+"/rotate", nil))
+	if rw.Code != http.StatusOK {
+		t.Fatalf("expected 200 rotate, got %d: %s", rw.Code, rw.Body.String())
+	}
+	var rotated struct {
+		Key string `json:"key"`
+	}
+	_ = json.Unmarshal(rw.Body.Bytes(), &rotated)
+	if rotated.Key == "" || rotated.Key == created.Key {
+		t.Fatalf("expected a new secret after rotate, got %q", rotated.Key)
+	}
+
+	vw := httptest.NewRecorder()
+	router.ServeHTTP(vw, httptest.NewRequest(http.MethodGet, "/api/v1/keys/"+created.ID+"/secret", nil))
+	var revealed struct {
+		Key string `json:"key"`
+	}
+	_ = json.Unmarshal(vw.Body.Bytes(), &revealed)
+	if revealed.Key != rotated.Key {
+		t.Errorf("expected reveal to return the rotated secret %q, got %q", rotated.Key, revealed.Key)
+	}
+}
+
+// @sk-test key-secret-reveal#T4.1: legacy/unavailable secret returns 409 SECRET_UNAVAILABLE (AC-004)
+func TestVirtualKeyHandlerRevealUnavailable(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &fakeVirtualKeyRepo{keys: []*virtualkey.VirtualKey{adminFakeKey("k1", "hash-1", "acme")}}
+	h := NewVirtualKeyHandlerWithEncryptor(repo, nil, testEncryptor(t))
+	router := gin.New()
+	router.GET("/api/v1/keys/:id/secret", h.Reveal)
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/keys/k1/secret", nil))
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", w.Code, w.Body.String())
+	}
+	var errResp struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &errResp)
+	if errResp.Error.Code != "SECRET_UNAVAILABLE" {
+		t.Errorf("expected SECRET_UNAVAILABLE, got %q", errResp.Error.Code)
+	}
+}
+
+// @sk-test key-secret-reveal#T4.1: nil encryptor stores nothing and degrades to 409 (AC-005)
+func TestVirtualKeyHandlerRevealNilEncryptor(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &fakeVirtualKeyRepo{}
+	h := NewVirtualKeyHandler(repo, nil)
+	router := gin.New()
+	router.POST("/api/v1/keys", h.Create)
+	router.GET("/api/v1/keys/:id/secret", h.Reveal)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/keys", bytes.NewBufferString(`{"tenant_id":"acme"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201 create without encryptor, got %d: %s", w.Code, w.Body.String())
+	}
+	var created struct {
+		ID string `json:"id"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &created)
+
+	stored, _ := repo.GetById(context.Background(), created.ID)
+	if stored.SecretEncrypted != "" {
+		t.Errorf("expected no stored secret without an encryptor, got %q", stored.SecretEncrypted)
+	}
+
+	rw := httptest.NewRecorder()
+	router.ServeHTTP(rw, httptest.NewRequest(http.MethodGet, "/api/v1/keys/"+created.ID+"/secret", nil))
+	if rw.Code != http.StatusConflict {
+		t.Fatalf("expected 409 without encryptor, got %d: %s", rw.Code, rw.Body.String())
 	}
 }

@@ -26,6 +26,7 @@ type VirtualKey struct {
 	ID            string
 	TenantID      string
 	KeyHash       string
+	SecretEncrypted string
 	Label         string
 	AllowedModels []string
 	BlockedModels []string

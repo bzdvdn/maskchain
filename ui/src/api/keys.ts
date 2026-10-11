@@ -87,3 +87,8 @@ export function deleteKey(id: string): Promise<void> {
 export function rotateKey(id: string): Promise<CreateKeyResponse> {
   return apiFetch(`${BASE}/${encodeURIComponent(id)}/rotate`, { method: 'POST' })
 }
+
+// @sk-task key-secret-reveal#T3.1: revealKey returns the stored secret (AC-001)
+export function revealKey(id: string): Promise<{ key: string }> {
+  return apiFetch(`${BASE}/${encodeURIComponent(id)}/secret`)
+}

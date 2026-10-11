@@ -253,6 +253,8 @@ func (s *AdminServer) RegisterVirtualKeyHandler(h *admin.VirtualKeyHandler) {
 	group.PATCH("/:id", h.Update)
 	group.DELETE("/:id", h.Delete)
 	group.POST("/:id/rotate", h.Rotate)
+	// @sk-task key-secret-reveal#T2.1: Reveal a stored key secret (AC-001)
+	group.GET("/:id/secret", h.Reveal)
 	group.GET("/tenants/:slug", h.ListByTenant)
 }
 
