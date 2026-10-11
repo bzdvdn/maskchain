@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useToast } from '../../components/Toast'
 import { PageHeader, Spinner } from '../../components/ui'
+import { DictionaryEditor } from '../../components/DictionaryEditor'
 import {
   createTenant,
   updateTenant,
@@ -51,6 +52,7 @@ export function TenantForm() {
     retention_mode: 'full',
   })
   const [errors, setErrors] = useState<FormErrors>({})
+  const [dictErrors, setDictErrors] = useState<Record<number, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const [loading, setLoading] = useState(isEdit)
 
@@ -85,7 +87,25 @@ export function TenantForm() {
       }
     }
     setErrors(e)
-    return Object.keys(e).length === 0
+
+    const dErr: Record<number, string> = {}
+    const seen = new Set<string>()
+    form.dictionaries.forEach((d, i) => {
+      const name = d.name.trim().toLowerCase()
+      if (!name) {
+        dErr[i] = 'Name is required'
+      } else if (seen.has(name)) {
+        dErr[i] = 'Duplicate name'
+      } else {
+        seen.add(name)
+      }
+      if (!Array.isArray(d.entries) || d.entries.length === 0) {
+        dErr[i] = dErr[i] ? `${dErr[i]}; at least one entry required` : 'At least one entry is required'
+      }
+    })
+    setDictErrors(dErr)
+
+    return Object.keys(e).length === 0 && Object.keys(dErr).length === 0
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -308,6 +328,12 @@ export function TenantForm() {
             </button>
           </div>
         </div>
+
+        <DictionaryEditor
+          value={form.dictionaries}
+          onChange={(d) => setField('dictionaries', d)}
+          errors={dictErrors}
+        />
 
         <div className="form-actions">
           <button
