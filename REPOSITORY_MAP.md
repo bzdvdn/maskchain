@@ -137,6 +137,13 @@
 
 ## Modules & Context
 - `ui/` — operator console (SPA, design system, API clients, attention inbox); details in `ui/CONTEXT.md`
+- `src/internal/ports/` — cross-layer provider contracts; details in `src/internal/ports/CONTEXT.md`
+- `src/internal/domain/` — bounded contexts, entities and repository ports; details in `src/internal/domain/CONTEXT.md`
+- `src/internal/app/` — use cases, pipelines and background workers; details in `src/internal/app/CONTEXT.md`
+- `src/internal/api/` — HTTP data plane + admin control plane, middleware, DTOs; details in `src/internal/api/CONTEXT.md`
+- `src/internal/infra/` — config, crypto, logging, metrics, telemetry; details in `src/internal/infra/CONTEXT.md`
+- `src/internal/adapters/` — provider/egress adapters, log-export sinks, PostgreSQL/Valkey repositories; details in `src/internal/adapters/CONTEXT.md`
+- `src/cmd/` — binaries (gateway/admin/all/debug) and composition root; details in `src/cmd/CONTEXT.md`
 
 ## Excluded
 - `.speckeep/**` — excluded from indexing (agent workflow config)
